@@ -1,7 +1,6 @@
 #include <iostream>
 
 #include <omp.h>
-#include <arm_neon.h>
 
 #include <SDL/SDL.h>
 

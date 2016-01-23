@@ -3,16 +3,16 @@ CONFIG += console
 CONFIG -= app_bundle
 CONFIG -= qt
 
-QMAKE_CXXFLAGS += \
-	-mcpu=cortex-a7 \
-	-mfloat-abi=hard \
-	-mfpu=neon-vfpv4 \
-	-fopenmp \
-	-pthread
+#QMAKE_CXXFLAGS += \
+#	-mcpu=cortex-a7 \
+#	-mfloat-abi=hard \
+#	-mfpu=neon-vfpv4 \
+#	-fopenmp \
+#	-pthread
 
-QMAKE_LFLAGS += -fopenmp -pthread
+#QMAKE_LFLAGS += -fopenmp -pthread
 
-LIBS += -fopenmp -pthread
+#LIBS += -fopenmp -pthread
 
 SOURCES += \
 	main.cpp \

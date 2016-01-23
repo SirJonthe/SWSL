@@ -247,6 +247,14 @@ bool EmitOperand(CompileInstance &inst, const mtlChars &operand, int lane)
 	return true;
 }
 
+#include <iostream>
+void print_ch(const mtlChars &str)
+{
+	for (int i = 0; i < str.GetSize(); ++i) {
+		std::cout << str.GetChars()[i];
+	}
+}
+
 bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr)
 {
 	Definition *type = GetType(inst, name);
@@ -264,24 +272,29 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 	mtlString order_str;
 	const int stack_size = inst.evaluator.GetOrderOfOperations(expr, order_str, true);
 
+	std::cout << "Order of ops: ";
+	print_ch(order_str);
+	std::cout << std::endl;
+
 	inst.program.Append(UPUSH_I);
 	inst.program.Append(stack_size);
 
+	Parser parser;
+	mtlList<mtlChars> m;
+	mtlChars seq;
+
 	for (int addr_offset = 0; addr_offset < type->type.size; ++addr_offset) {
 
-		Parser parser;
 		parser.SetBuffer(order_str);
-		mtlList<mtlChars> m;
-		mtlChars seq;
 
 		while (!parser.IsEnd()) {
 
-			switch (parser.Match("%s+=%s%|%s-=%s%|%s*=%s%|%s/=%s%|%s=%s", m, &seq)) {
-			case 0: inst.program.Append(FADD_MM); break;
-			case 1: inst.program.Append(FSUB_MM); break;
-			case 2: inst.program.Append(FMUL_MM); break;
-			case 3: inst.program.Append(FDIV_MM); break;
-			case 4: inst.program.Append(FSET_MM); break;
+			switch (parser.Match("%s+=%s;%|%s-=%s;%|%s*=%s;%|%s/=%s;%|%s=%s;", m, &seq)) {
+			case 0: inst.program.Append(FADD_MM); print_ch(seq); std::cout << std::endl; break;
+			case 1: inst.program.Append(FSUB_MM); print_ch(seq); std::cout << std::endl; break;
+			case 2: inst.program.Append(FMUL_MM); print_ch(seq); std::cout << std::endl; break;
+			case 3: inst.program.Append(FDIV_MM); print_ch(seq); std::cout << std::endl; break;
+			case 4: inst.program.Append(FSET_MM); print_ch(seq); std::cout << std::endl; break;
 			default:
 				inst.errors.AddLast(CompilerMessage("Invalid syntax", seq));
 				return false;
@@ -296,8 +309,6 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 				inst.program.GetChars()[inst.program.GetSize() - 1] += 1;
 			}
 			EmitOperand(inst, src, addr_offset);
-
-			parser.Match(";", m);
 		}
 	}
 
