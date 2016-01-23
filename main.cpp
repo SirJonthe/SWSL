@@ -273,10 +273,10 @@ int main(int, char**)
 	SDL_WM_SetCaption("SWSL test", NULL);
 
 	mtlString file;
-	if (!mtlParser::BufferFile("../shader.swsl", file)) {
+	if (!mtlParser::BufferFile("../swsl_samples/interp_color.swsl", file)) {
 		Printer p;
 		p.SetColor(255, 0, 0);
-		p.Print("Could not open file ../shader.swsl");
+		p.Print("Could not open file ../swsl_samples/interp_color.swsl");
 	} else {
 		if (!compiler.Compile(file, shader)) {
 			Printer p;

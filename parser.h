@@ -4,8 +4,6 @@
 #include "MiniLib/MTL/mtlString.h"
 #include "MiniLib/MTL/mtlList.h"
 
-void PrintChars(const mtlChars &ch);
-
 class Parser
 {
 private:

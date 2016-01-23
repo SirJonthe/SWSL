@@ -3,16 +3,16 @@ CONFIG += console
 CONFIG -= app_bundle
 CONFIG -= qt
 
-#QMAKE_CXXFLAGS += \
-#	-mcpu=cortex-a7 \
-#	-mfloat-abi=hard \
-#	-mfpu=neon-vfpv4 \
-#	-fopenmp \
-#	-pthread
+QMAKE_CXXFLAGS += \
+	-mcpu=cortex-a7 \
+	-mfloat-abi=hard \
+	-mfpu=neon-vfpv4 \
+	-fopenmp \
+	-pthread
 
-#QMAKE_LFLAGS += -fopenmp -pthread
+QMAKE_LFLAGS += -fopenmp -pthread
 
-#LIBS += -fopenmp -pthread
+LIBS += -fopenmp -pthread
 
 SOURCES += \
 	main.cpp \
@@ -38,7 +38,9 @@ SOURCES += \
     MiniLib/MTL/mtlRandom.cpp \
 	MiniLib/MTL/mtlString.cpp \
 	parser.cpp \
-    compiler.cpp
+    compiler.cpp \
+    shader.cpp \
+    gfx.cpp
 
 HEADERS += \
     swsl_simd.h \
@@ -91,7 +93,10 @@ HEADERS += \
     MiniLib/MTL/mtlStringMap.h \
     MiniLib/MTL/mtlType.h \
     parser.h \
-    compiler.h
+    compiler.h \
+    shader.h \
+    gfx.h \
+    instr.h
 
 macx: {
 	OBJECTIVE_SOURCES += \

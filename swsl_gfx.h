@@ -1,8 +1,6 @@
 #ifndef SWSL_GFX_H
 #define SWSL_GFX_H
 
-#include <omp.h>
-
 #include "swsl_wide.h"
 #include "swsl_buffers.h"
 #include "swsl_vmach.h"

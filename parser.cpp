@@ -1,5 +1,4 @@
 #include "parser.h"
-#include <iostream>
 
 #define OpenBraces   "([{"
 #define ClosedBraces ")]}"
@@ -8,13 +7,6 @@
 #define Whitespaces  " \t\n\r"
 #define EndOfStream  256
 #define Escape       '\\'
-
-void PrintChars(const mtlChars &ch)
-{
-	for (int i = 0; i < ch.GetSize(); ++i) {
-		std::cout << ch.GetChars()[i];
-	}
-}
 
 bool Parser::IsFormat(char ch, const mtlChars &format) const
 {
@@ -82,8 +74,9 @@ short Parser::ReadChar( void )
 	char ch = m_buffer[m_reader++];
 
 	int quote_index = -1;
-	if (mtlChars::SameAsAny(ch, Newlines, sizeof(Newlines))) {
-		++m_line;
+	if (mtlChars::SameAsAny(ch, Whitespaces, sizeof(Whitespaces))) {
+		ch = ' ';
+		SkipWhitespaces();
 	} else if ((quote_index = mtlChars::SameAsWhich(ch, Quotes, sizeof(Quotes))) != -1) {
 		if (!InQuote()) {
 			m_quote_char = Quotes[quote_index];
@@ -101,11 +94,6 @@ short Parser::ReadChar( void )
 				m_brace_stack.RemoveLast();
 			}
 		}
-	}
-
-	if (mtlChars::SameAsAny(ch, Whitespaces, sizeof(Whitespaces))) {
-		ch = ' '; // return the same type of white space
-		SkipWhitespaces();
 	}
 
 	return (short)ch;
@@ -164,7 +152,10 @@ mtlChars Parser::ReadTo(char ch)
 
 int Parser::MatchSingle(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *seq)
 {
-	m_brace_stack.RemoveAll();
+	//m_brace_stack.RemoveAll();
+
+	mtlItem<char> *brace_item = m_brace_stack.GetLast();
+
 	if (!VerifyBraces(expr)) {
 		return (int)ExpressionInputError;
 	}
@@ -188,52 +179,57 @@ int Parser::MatchSingle(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *
 		if (b.Compare("%") && !ep.IsEnd()) {
 			b = ep.Read("");
 			switch (b[0]) {
-				case 'c':
-					out.AddLast(Read(""));
-					break;
-				case 'a':
-					out.AddLast(Read("%a"));
-					break;
-				case 'f': {
-						mtlChars sf = Read("%d.f");
-						if (!sf.IsFloat()) {
-							result = (int)ExpressionNotFound;
-						} else {
-							out.AddLast(sf);
-						}
+			case 'c':
+				out.AddLast(Read(""));
+				break;
+			case 'a':
+				out.AddLast(Read("%a"));
+				break;
+			case 'f': {
+					mtlChars sf = Read("%d.f");
+					if (!sf.IsFloat()) {
+						result = (int)ExpressionNotFound;
+					} else {
+						out.AddLast(sf);
 					}
-					break;
-				case 'd':
-					out.AddLast(Read("%d"));
-					break;
-				case 'w':
-					out.AddLast(Read("%a%d_"));
-					break;
-				case 's':
-					out.AddLast(ReadTo((char)ep.PeekChar()));
-					break;
-				case '0':
-					if (ep.PeekChar() != EndOfStream) { result = (int)ExpressionNotFound; }
-					break;
-				default: {
-						mtlList<mtlChars> m;
-						mtlChars s;
-						switch (ep.Match("(%s)%|<%s>%|[%c-%c]", m, &s)) {
-						case 0:
-							out.AddLast(Read(m.GetFirst()->GetItem()));
-							break;
-						case 1:
-							out.AddLast(Read(s));
-							break;
-						case 2:
-							out.AddLast(Read(s));
-							break;
-						default:
-							result = (int)ExpressionInputError;
-							break;
-						}
-					}
-					break;
+				}
+				break;
+			case 'i':
+				out.AddLast(Read("%d"));
+				break;
+			case 'r':
+			case 'd':
+				out.AddLast(Read("%d."));
+				break;
+			case 'w':
+				out.AddLast(Read("%a%d_"));
+				break;
+			case 's':
+				out.AddLast(ReadTo((char)ep.PeekChar()));
+				break;
+			case '0':
+				if (ep.PeekChar() != EndOfStream) { result = (int)ExpressionNotFound; }
+				break;
+			default: {
+					/*mtlList<mtlChars> m;
+					mtlChars s;
+					switch (ep.Match("(%s)%|<%s>%|[%c-%c]", m, &s)) {
+					case 0:
+						out.AddLast(Read(m.GetFirst()->GetItem()));
+						break;
+					case 1:
+						out.AddLast(Read(s));
+						break;
+					case 2:
+						out.AddLast(Read(s));
+						break;
+					default:
+						result = (int)ExpressionInputError;
+						break;
+					}*/
+					result = (int)ExpressionInputError;
+				}
+				break;
 			}
 			if (out.GetLast()->GetItem().GetSize() < 1) {
 				result = (int)ExpressionNotFound;
@@ -254,6 +250,11 @@ int Parser::MatchSingle(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *
 		*seq = this->m_buffer.GetSubstring(start, m_reader);
 		seq->Trim();
 	}
+
+	while (m_brace_stack.GetLast() != brace_item && m_brace_stack.GetSize() > 0) {
+		m_brace_stack.RemoveLast();
+	}
+
 	return result;
 }
 

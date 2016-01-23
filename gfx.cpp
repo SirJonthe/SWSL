@@ -1,44 +1,44 @@
 #include <omp.h>
 
-#include "swsl_gfx.h"
+#include "gfx.h"
 
-bool swsl::Rasterizer::IsTopLeft(const swsl::Point2D &a, const swsl::Point2D &b) const
+bool Rasterizer::IsTopLeft(const Point2D &a, const Point2D &b) const
 {
 	// strictly connected to winding order
 	return (a.x < b.x && b.y == a.y) || (a.y > b.y);
 }
 
-int swsl::Rasterizer::Orient2D(const swsl::Point2D &a, const swsl::Point2D &b, const swsl::Point2D &c) const
+int Rasterizer::Orient2D(const Point2D &a, const Point2D &b, const Point2D &c) const
 {
 	return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 }
 
-swsl::Rasterizer::gfx_float swsl::Rasterizer::Orient2D(const swsl::Point2D &a, const swsl::Point2D &b, const swsl::Rasterizer::wide_Point2D &c) const
+Rasterizer::gfx_float Rasterizer::Orient2D(const Point2D &a, const Point2D &b, const Rasterizer::wide_Point2D &c) const
 {
 	wide_Point2D A = { a.x, a.y }, B = { b.x, b.y };
 	return (B.x - A.x) * (c.y - A.y) - (B.y - A.y) * (c.x - A.x);
 }
 
-swsl::Rasterizer::Rasterizer( void ) : m_width(0), m_height(0) {}
+Rasterizer::Rasterizer( void ) : m_width(0), m_height(0) {}
 
-bool swsl::Rasterizer::SetShaderProgram(const mtlArray<char> &program)
+bool Rasterizer::SetShaderProgram(const mtlArray<char> &program)
 {
 	return m_shader.LoadProgram(program);
 }
 
-void swsl::Rasterizer::CreateBuffers(int width, int height, int components)
+void Rasterizer::CreateBuffers(int width, int height, int components)
 {
 	m_width = width;
 	m_height = height;
 	m_out_buffer.Create(width, height, components); // RGB + depth = 4 components
 }
 
-void swsl::Rasterizer::ClearBuffers( void )
+void Rasterizer::ClearBuffers( void )
 {
 	mtlClear(m_out_buffer.GetComponent(0, 0, 0), m_out_buffer.GetTotalComponentCount());
 }
 
-void swsl::Rasterizer::ClearBuffers(const float *component_data)
+void Rasterizer::ClearBuffers(const float *component_data)
 {
 #ifndef _OPENMP
 	int        buffer_area   = m_out_buffer.GetWidth() * m_out_buffer.GetHeight();
@@ -70,7 +70,7 @@ void swsl::Rasterizer::ClearBuffers(const float *component_data)
 #endif
 }
 
-void swsl::Rasterizer::WriteColorBuffer(int src_r_idx, int src_g_idx, int src_b_idx, mtlByte *dst_pixels, int dst_bytes_per_pixel, mglByteOrder32 dst_byte_order)
+void Rasterizer::WriteColorBuffer(int src_r_idx, int src_g_idx, int src_b_idx, mtlByte *dst_pixels, int dst_bytes_per_pixel, mglByteOrder32 dst_byte_order)
 {
 #ifndef _OPENMP
 	int        buffer_area   = m_out_buffer.GetWidth() * m_out_buffer.GetHeight();
@@ -134,12 +134,12 @@ void swsl::Rasterizer::WriteColorBuffer(int src_r_idx, int src_g_idx, int src_b_
 #endif
 }
 
-void swsl::Rasterizer::WriteColorBuffer(mtlByte *dst_pixels, int dst_bytes_per_pixel, mglByteOrder32 dst_byte_order)
+void Rasterizer::WriteColorBuffer(mtlByte *dst_pixels, int dst_bytes_per_pixel, mglByteOrder32 dst_byte_order)
 {
 	WriteColorBuffer(0, 1, 2, dst_pixels, dst_bytes_per_pixel, dst_byte_order);
 }
 
-void swsl::Rasterizer::FillTriangle(const swsl::Point2D &a, const swsl::Point2D &b, const swsl::Point2D &c)
+void Rasterizer::FillTriangle(const Point2D &a, const Point2D &b, const Point2D &c)
 {
 	mmlVector<0> a_attr, b_attr, c_attr, const_attr;
 	FillTriangle(a, b, c, a_attr, b_attr, c_attr, const_attr);
@@ -210,3 +210,4 @@ void FillTriangle(mtlByte *pixels, int bytes_per_pixel, int width, int height, c
 	}
 }
 */
+

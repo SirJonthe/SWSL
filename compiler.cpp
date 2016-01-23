@@ -1,40 +1,17 @@
 #include "compiler.h"
+#include "instr.h"
 
 #include "swsl_wide.h"
 
 #include "MiniLib/MTL/mtlArray.h"
 #include "MiniLib/MTL/mtlMathParser.h"
 
-void Shader::Delete( void )
+#include <iostream>
+void print_ch(const mtlChars &str)
 {
-	m_program.Free();
-	m_errors.RemoveAll();
-	m_warnings.RemoveAll();
-}
-
-bool Shader::IsValid( void ) const
-{
-	return m_program.GetSize() > 0 && m_errors.GetSize() == 0;
-}
-
-int Shader::GetErrorCount( void ) const
-{
-	return m_errors.GetSize();
-}
-
-int Shader::GetWarningCount( void ) const
-{
-	return m_warnings.GetSize();
-}
-
-const mtlItem<CompilerMessage> *Shader::GetErrors( void ) const
-{
-	return m_errors.GetFirst();
-}
-
-const mtlItem<CompilerMessage> *Shader::GetWarnings( void ) const
-{
-	return m_warnings.GetFirst();
+	for (int i = 0; i < str.GetSize(); ++i) {
+		std::cout << str.GetChars()[i];
+	}
 }
 
 enum Type
@@ -92,6 +69,7 @@ struct CompileInstance
 	mtlList<Scope>           scopes;
 	mtlMathParser            evaluator;
 	int                      stack_ptr;
+	int                      main;
 };
 
 const TypeInfo gTypes[TYPE_COUNT] = {
@@ -101,66 +79,6 @@ const TypeInfo gTypes[TYPE_COUNT] = {
 	{ mtlChars("float2"), Float2, 2 },
 	{ mtlChars("float3"), Float3, 3 },
 	{ mtlChars("float4"), Float4, 4 }
-};
-
-enum Instruction
-{
-	NOP,
-	END,
-
-	FPUSH_M,
-	FPUSH_I,
-	UPUSH_I,
-
-	FPOP_M,
-	UPOP_I,
-
-	UJMP_I,
-
-	FSET_MM,
-	FSET_MI,
-
-	FADD_MM,
-	FADD_MI,
-
-	FSUB_MM,
-	FSUB_MI,
-
-	FMUL_MM,
-	FMUL_MI,
-
-	FDIV_MM,
-	FDIV_MI,
-
-	INSTR_COUNT
-};
-
-struct InstructionInfo
-{
-	mtlChars    name;
-	Instruction instr;
-	int         params;
-};
-
-const InstructionInfo gInstr[INSTR_COUNT] = {
-	{ mtlChars("nop"),     NOP,    0 },
-	{ mtlChars("end"),     END,    0 },
-	{ mtlChars("fpush_m"), FPUSH_M, 1 },
-	{ mtlChars("fpush_i"), FPUSH_I, 1 },
-	{ mtlChars("upush_i"), UPUSH_I, 1 },
-	{ mtlChars("fpop_m"),  FPOP_M,  1 },
-	{ mtlChars("upop_i"),  UPOP_I,  1 },
-	{ mtlChars("ujmp_i"),  UJMP_I,  1 },
-	{ mtlChars("fset_mm"), FSET_MM, 2 },
-	{ mtlChars("fset_mi"), FSET_MI, 2 },
-	{ mtlChars("fadd_mm"), FADD_MM, 2 },
-	{ mtlChars("fadd_mi"), FADD_MI, 2 },
-	{ mtlChars("fsub_mm"), FSUB_MM, 2 },
-	{ mtlChars("fsub_mi"), FSUB_MI, 2 },
-	{ mtlChars("fmul_mm"), FMUL_MM, 2 },
-	{ mtlChars("fmul_mi"), FMUL_MI, 2 },
-	{ mtlChars("fdiv_mm"), FDIV_MM, 2 },
-	{ mtlChars("fdiv_mi"), FDIV_MI, 2 }
 };
 
 Definition *GetType(CompileInstance &inst, const mtlChars &name);
@@ -247,13 +165,7 @@ bool EmitOperand(CompileInstance &inst, const mtlChars &operand, int lane)
 	return true;
 }
 
-#include <iostream>
-void print_ch(const mtlChars &str)
-{
-	for (int i = 0; i < str.GetSize(); ++i) {
-		std::cout << str.GetChars()[i];
-	}
-}
+
 
 bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr)
 {
@@ -421,11 +333,24 @@ bool CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlC
 {
 	PushScope(inst);
 	bool result = true;
+	bool is_main = false;
 	result &= DeclareVar(inst, ret_type, name, "");
+
+	if (name.Compare("main", true)) {
+		++inst.main;
+		if (inst.main > 1) {
+			inst.errors.AddLast(CompilerMessage("Multiple entry points", ""));
+			return false;
+		}
+		inst.program.GetChars()[UENTRY_I] = inst.program.GetSize();
+		is_main = true;
+	}
+
 	Parser p;
 	p.SetBuffer(params);
 	mtlList<mtlChars> m;
 	mtlChars seq;
+	int stack_start = inst.stack_ptr;
 	while (!p.IsEnd()) {
 		if (p.Match("%w%w", m, &seq) == 0) {
 			result &= DeclareVar(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem(), "");
@@ -434,6 +359,10 @@ bool CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlC
 			return false;
 		}
 		p.Match(",", m);
+	}
+	int stack_end = inst.stack_ptr;
+	if (is_main) {
+		inst.program.GetChars()[UINPUT_I] = stack_end - stack_start;
 	}
 	result &= CompileScope(inst, body);
 	PopScope(inst);
@@ -499,6 +428,11 @@ bool Compiler::Compile(const mtlChars &input, Shader &output)
 {
 	CompileInstance inst;
 	inst.stack_ptr = 0;
+	inst.main = 0;
+	inst.program.Append(UINPUT_I);
+	inst.program.Append(0);
+	inst.program.Append(UENTRY_I);
+	inst.program.Append(4);
 	bool result = CompileScope(inst, input);
 	output.m_program.Copy(inst.program);
 	output.m_errors.Copy(inst.errors);
