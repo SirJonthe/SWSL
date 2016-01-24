@@ -68,7 +68,7 @@ struct CompileInstance
 	mtlList<CompilerMessage> warnings;
 	mtlList<Scope>           scopes;
 	mtlMathParser            evaluator;
-	int                      stack_ptr;
+	int                      base_sptr;
 	int                      main;
 };
 
@@ -154,13 +154,13 @@ bool EmitOperand(CompileInstance &inst, const mtlChars &operand, int lane)
 			if (p.Match("[%i]", m) == 0) {
 				int stack_offset;
 				m.GetFirst()->GetItem().ToInt(stack_offset);
-				inst.program.Append(inst.stack_ptr + stack_offset - 1);
+				inst.program.Append(inst.scopes.GetLast()->GetItem().size - stack_offset);
 			} else {
 				return false;
 			}
 		}
 	} else {
-		inst.program.Append(type->values[lane].var_addr);
+		inst.program.Append(inst.base_sptr - type->values[lane].var_addr); // this is wrong
 	}
 	return true;
 }
@@ -288,7 +288,7 @@ bool DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &nam
 	def.type = *type_info;
 	def.values.Create(type_info->size);
 	for (int addr_offset = 0; addr_offset < type_info->size; ++addr_offset) {
-		def.values[addr_offset].var_addr = inst.stack_ptr + addr_offset;
+		def.values[addr_offset].var_addr = inst.base_sptr + addr_offset;
 	}
 
 	inst.scopes.GetLast()->GetItem().size += type_info->size;
@@ -296,7 +296,6 @@ bool DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &nam
 
 	inst.program.Append(UPUSH_I);
 	inst.program.Append(type_info->size);
-	inst.stack_ptr += type_info->size;
 
 	return (expr.GetSize() > 0) ? AssignVar(inst, name, expr) : true;
 }
@@ -350,7 +349,7 @@ bool CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlC
 	p.SetBuffer(params);
 	mtlList<mtlChars> m;
 	mtlChars seq;
-	int stack_start = inst.stack_ptr;
+	int stack_start = inst.scopes.GetLast()->GetItem().size;
 	while (!p.IsEnd()) {
 		if (p.Match("%w%w", m, &seq) == 0) {
 			result &= DeclareVar(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem(), "");
@@ -360,7 +359,7 @@ bool CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlC
 		}
 		p.Match(",", m);
 	}
-	int stack_end = inst.stack_ptr;
+	int stack_end = inst.scopes.GetLast()->GetItem().size;
 	if (is_main) {
 		inst.program.GetChars()[UINPUT_I] = stack_end - stack_start;
 	}
@@ -407,6 +406,9 @@ bool CompileStatement(CompileInstance &inst, const mtlChars &statement)
 
 Scope &PushScope(CompileInstance &inst)
 {
+	if (inst.scopes.GetLast() != NULL) {
+		inst.base_sptr += inst.scopes.GetLast()->GetItem().size;
+	}
 	Scope &scope = inst.scopes.AddLast();
 	scope.size = 0;
 	inst.evaluator.PushScope();
@@ -417,23 +419,28 @@ void PopScope(CompileInstance &inst)
 {
 	if (inst.scopes.GetSize() <= 0) { return; }
 	Scope &scope = inst.scopes.GetLast()->GetItem();
-	inst.stack_ptr -= scope.size;
 	inst.program.Append(UPOP_I);
 	inst.program.Append(scope.size);
 	inst.scopes.RemoveLast();
 	inst.evaluator.PopScope();
+	if (inst.scopes.GetLast() != NULL) {
+		inst.base_sptr -= inst.scopes.GetLast()->GetItem().size;
+	}
 }
 
 bool Compiler::Compile(const mtlChars &input, Shader &output)
 {
 	CompileInstance inst;
-	inst.stack_ptr = 0;
+	inst.base_sptr = 0;
 	inst.main = 0;
 	inst.program.Append(UINPUT_I);
 	inst.program.Append(0);
 	inst.program.Append(UENTRY_I);
-	inst.program.Append(4);
+	inst.program.Append(UENTRY_I + 1); // we assume
 	bool result = CompileScope(inst, input);
+	if (inst.main == 0) {
+		inst.errors.AddLast(CompilerMessage("Missing \'main\'", ""));
+	}
 	output.m_program.Copy(inst.program);
 	output.m_errors.Copy(inst.errors);
 	output.m_warnings.Copy(inst.warnings);

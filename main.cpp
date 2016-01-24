@@ -255,9 +255,12 @@ void Printer::SetColor(unsigned char _r, unsigned char _g, unsigned char _b)
 }*/
 
 #include "compiler.h"
+#include <limits>
 
 int main(int, char**)
 {
+	std::cout << sizeof(char*) * CHAR_BIT << " bit system" << std::endl;
+
 	Compiler compiler;
 	Shader shader;
 

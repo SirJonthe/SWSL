@@ -19,11 +19,11 @@ Rasterizer::gfx_float Rasterizer::Orient2D(const Point2D &a, const Point2D &b, c
 	return (B.x - A.x) * (c.y - A.y) - (B.y - A.y) * (c.x - A.x);
 }
 
-Rasterizer::Rasterizer( void ) : m_width(0), m_height(0) {}
+Rasterizer::Rasterizer( void ) : m_shader(NULL), m_width(0), m_height(0) {}
 
-bool Rasterizer::SetShaderProgram(const mtlArray<char> &program)
+bool Rasterizer::SetShader(Shader *shader)
 {
-	return m_shader.LoadProgram(program);
+	m_shader = shader;
 }
 
 void Rasterizer::CreateBuffers(int width, int height, int components)

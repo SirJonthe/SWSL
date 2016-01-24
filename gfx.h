@@ -31,10 +31,10 @@ private:
 	};
 
 private:
-	Shader              m_shader; // only temp until we compile programs natively
-	swsl::FrameBuffer   m_out_buffer; // RGB + depth
-	int                 m_width;
-	int                 m_height;
+	Shader            *m_shader; // only temp until we compile programs natively
+	swsl::FrameBuffer  m_out_buffer; // RGB + depth
+	int                m_width;
+	int                m_height;
 
 private:
 	bool      IsTopLeft(const Point2D &a, const Point2D &b) const;
@@ -44,7 +44,7 @@ private:
 public:
 	Rasterizer( void );
 
-	bool SetShaderProgram(const mtlArray<char> &program);
+	bool SetShader(Shader *shader);
 	void CreateBuffers(int width, int height, int components = 4);
 	void ClearBuffers( void );
 	void ClearBuffers(const float *component_data);
@@ -84,6 +84,8 @@ void Rasterizer::FillTriangle(const Point2D &a, const Point2D &b, const Point2D 
 	// ISSUES
 	// Interpolated values seem to overflow at the edges
 
+	if (m_shader == NULL) { return; }
+
 	gfx_float varying_arr[var];
 	gfx_float constants_arr[cnst];
 	Shader::InputArrays shader_input = {
@@ -91,8 +93,8 @@ void Rasterizer::FillTriangle(const Point2D &a, const Point2D &b, const Point2D 
 		{ varying_arr, var },               // varying register
 		{ NULL, m_out_buffer.GetYawSize() } // fragment register
 	};
-	m_shader.SetInputArrays(shader_input);
-	if (!m_shader.IsValid()) { return; }
+	m_shader->SetInputArrays(shader_input);
+	if (!m_shader->IsValid()) { return; }
 
 	// Copy constant data to register
 	for (int i = 0; i < cnst; ++i) {
@@ -157,7 +159,7 @@ void Rasterizer::FillTriangle(const Point2D &a, const Point2D &b, const Point2D 
 					varying_arr[i] = (a_reg[i] * w0 + b_reg[i] * w1 + c_reg[i] * w2) * sum_inv_area_x2;
 				}
 
-				m_shader.Run(fragment_mask);
+				m_shader->Run(fragment_mask);
 			}
 
 			w0 += A12;
