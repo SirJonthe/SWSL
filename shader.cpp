@@ -38,7 +38,7 @@ void Shader::Delete( void )
 
 bool Shader::IsValid( void ) const
 {
-	return m_program.GetSize() > 0 && m_errors.GetSize() == 0 && (m_inputs->constant.count + m_inputs->varying.count + m_inputs->fragments.count == (byte_t)m_program[UINPUT_I]);
+	return m_program.GetSize() > 0 && m_errors.GetSize() == 0 && (m_inputs->constant.count + m_inputs->varying.count + m_inputs->fragments.count == (byte_t)m_program[gMetaData_InputIndex]);
 }
 
 int Shader::GetErrorCount( void ) const
@@ -70,11 +70,11 @@ bool Shader::Run(const swsl::wide_cmpmask &frag_mask) const
 {
 	swsl::wide_float stack[STACK_SIZE];
 
-	byte_t iptr = 0;
-	byte_t sptr  = (byte_t)m_program.GetChars()[UINPUT_I];
+	byte_t iptr = (byte_t)m_program.GetChars()[gMetaData_EntryIndex];
+	byte_t sptr = (byte_t)m_program.GetChars()[gMetaData_InputIndex];
 
-	const byte_t *program = (const byte_t*)m_program.GetChars();
-	const byte_t program_size = (byte_t)m_program.GetSize();
+	const byte_t *program      = (const byte_t*)m_program.GetChars();
+	const byte_t  program_size = (byte_t)m_program.GetSize();
 
 	void       *reg_a;
 	const void *reg_b;
@@ -102,27 +102,27 @@ bool Shader::Run(const swsl::wide_cmpmask &frag_mask) const
 		}
 
 		case FPUSH_M:
-			stack[sptr++] = stack[sptr - program[iptr++]];
+			stack[sptr++] = stack[sptr - (byte_t)program[iptr++]];
 			break;
 
 		case FPUSH_I:
-			stack[sptr++] = to_const_float(program[iptr]);
+			stack[sptr++] = to_const_float(program + iptr);
 			iptr += sizeof(float);
 			break;
 
 		case UPUSH_I:
-			sptr += to_const_instr(program[iptr++]);
+			sptr += (byte_t)program[iptr++];
 			break;
 
 		case FPOP_M:
 		{
-			byte_t addr = sptr - program[iptr++];
+			byte_t addr = sptr - (byte_t)program[iptr++];
 			stack[addr] = stack[--sptr];
 			break;
 		}
 
 		case UPOP_I:
-			sptr -= program[iptr++];
+			sptr -= (byte_t)program[iptr++];
 			break;
 
 		case UJMP_I:
@@ -131,65 +131,65 @@ bool Shader::Run(const swsl::wide_cmpmask &frag_mask) const
 			break;
 
 		case FSET_MM:
-			reg_a = stack + sptr - program[iptr++];
-			reg_b = stack + sptr - program[iptr++];
+			reg_a = stack + sptr - (byte_t)program[iptr++];
+			reg_b = stack + sptr - (byte_t)program[iptr++];
 			to_ref_float(reg_a) = to_ref_float(reg_b);
 			break;
 
 		case FSET_MI:
-			reg_a = stack + sptr - program[iptr++];
+			reg_a = stack + sptr - (byte_t)program[iptr++];
 			reg_b = &program[iptr];
 			iptr += sizeof(float);
 			to_ref_float(reg_a) = to_const_float(reg_b);
 			break;
 
 		case FADD_MM:
-			reg_a = stack + sptr - program[iptr++];
-			reg_b = stack + sptr - program[iptr++];
+			reg_a = stack + sptr - (byte_t)program[iptr++];
+			reg_b = stack + sptr - (byte_t)program[iptr++];
 			to_ref_float(reg_a) += to_ref_float(reg_b);
 			break;
 
 		case FADD_MI:
-			reg_a = stack + sptr - program[iptr++];
+			reg_a = stack + sptr - (byte_t)program[iptr++];
 			reg_b = &program[iptr];
 			iptr += sizeof(float);
 			to_ref_float(reg_a) += to_const_float(reg_b);
 			break;
 
 		case FSUB_MM:
-			reg_a = stack + sptr - program[iptr++];
-			reg_b = stack + sptr - program[iptr++];
+			reg_a = stack + sptr - (byte_t)program[iptr++];
+			reg_b = stack + sptr - (byte_t)program[iptr++];
 			to_ref_float(reg_a) -= to_ref_float(reg_b);
 			break;
 
 		case FSUB_MI:
-			reg_a = stack + sptr - program[iptr++];
+			reg_a = stack + sptr - (byte_t)program[iptr++];
 			reg_b = &program[iptr];
 			iptr += sizeof(float);
 			to_ref_float(reg_a) -= to_const_float(reg_b);
 			break;
 
 		case FMUL_MM:
-			reg_a = stack + sptr - program[iptr++];
-			reg_b = stack + sptr - program[iptr++];
+			reg_a = stack + sptr - (byte_t)program[iptr++];
+			reg_b = stack + sptr - (byte_t)program[iptr++];
 			to_ref_float(reg_a) *= to_ref_float(reg_b);
 			break;
 
 		case FMUL_MI:
-			reg_a = stack + sptr - program[iptr++];
+			reg_a = stack + sptr - (byte_t)program[iptr++];
 			reg_b = &program[iptr];
 			iptr += sizeof(float);
 			to_ref_float(reg_a) *= to_const_float(reg_b);
 			break;
 
 		case FDIV_MM:
-			reg_a = stack + sptr - program[iptr++];
-			reg_b = stack + sptr - program[iptr++];
+			reg_a = stack + sptr - (byte_t)program[iptr++];
+			reg_b = stack + sptr - (byte_t)program[iptr++];
 			to_ref_float(reg_a) /= to_ref_float(reg_b);
 			break;
 
 		case FDIV_MI:
-			reg_a = stack + sptr - program[iptr++];
+			reg_a = stack + sptr - (byte_t)program[iptr++];
 			reg_b = &program[iptr];
 			iptr += sizeof(float);
 			to_ref_float(reg_a) /= to_const_float(reg_b);

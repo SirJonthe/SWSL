@@ -15,6 +15,13 @@
 
 #define video SDL_GetVideoSurface()
 
+void print_chars(mtlChars s)
+{
+	for (int i = 0; i < s.GetSize(); ++i) {
+		std::cout << s.GetChars()[i];
+	}
+}
+
 template < int n >
 struct Vertex
 {
@@ -275,17 +282,21 @@ int main(int, char**)
 	}
 	SDL_WM_SetCaption("SWSL test", NULL);
 
+	Printer p;
+	p.SetSize(2);
+
 	mtlString file;
 	if (!mtlParser::BufferFile("../swsl_samples/interp_color.swsl", file)) {
-		Printer p;
 		p.SetColor(255, 0, 0);
 		p.Print("Could not open file ../swsl_samples/interp_color.swsl");
 	} else {
 		if (!compiler.Compile(file, shader)) {
-			Printer p;
 			const mtlItem<CompilerMessage> *msg = shader.GetErrors();
 			p.SetColor(255, 0, 0);
+			p.Print("Compilation failed:");
+			p.Newline();
 			while (msg != NULL) {
+				p.Print("    ");
 				p.Print(msg->GetItem().msg);
 				p.Print(": ");
 				p.Print(msg->GetItem().ref);
@@ -302,11 +313,56 @@ int main(int, char**)
 				msg = msg->GetNext();
 			}
 		} else {
-			Printer p;
 			p.SetColor(0, 255, 0);
-			p.Print("Success");
+			p.Print("Compilation successful");
+			p.Newline();
 		}
 	}
+
+	swsl::wide_float vary[3] = { 1.0f, 0.0f, 0.5f };
+	swsl::wide_float frag[4];
+
+	Shader::InputArrays inputs = {
+		{ NULL, 0 },
+		{ vary, sizeof(vary)/sizeof(swsl::wide_float) },
+		{ frag, sizeof(frag)/sizeof(swsl::wide_float) }
+	};
+	shader.SetInputArrays(inputs);
+	if (!shader.Run(swsl::wide_float(0.0f) < swsl::wide_float(1.0f))) {
+		p.SetColor(255, 0, 0);
+		p.Print("Shader failed to run");
+		p.Newline();
+	} else {
+		p.SetColor(0, 255, 0);
+		p.Print("Shader execution successful");
+		p.Newline();
+	}
+
+	for (int i = 0; i < sizeof(frag)/sizeof(swsl::wide_float); ++i) {
+		float frag_comp[SWSL_WIDTH];
+		frag[i].to_scalar(frag_comp);
+		std::cout << "(";
+		for (int j = 0; j < SWSL_WIDTH; ++j) {
+			std::cout << frag_comp[j] << " ";
+		}
+		std::cout << ") ";
+	}
+	std::cout << std::endl;
+
+	Disassembler disassembler;
+	mtlString disassembly;
+	if (!disassembler.Disassemble(shader, disassembly)) {
+		p.SetColor(255, 0, 0);
+		p.Print("Disassembly failed");
+		p.Newline();
+	} else {
+		p.SetColor(0, 255, 0);
+		p.Print("Disassembly successful");
+		p.Newline();
+	}
+
+	print_chars(disassembly);
+	std::cout << std::endl;
 
 	SDL_Flip(video);
 

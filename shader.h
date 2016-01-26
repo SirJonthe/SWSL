@@ -7,6 +7,7 @@
 #include "swsl_wide.h"
 
 class Compiler;
+class Disassembler;
 
 struct CompilerMessage
 {
@@ -19,6 +20,7 @@ struct CompilerMessage
 class Shader
 {
 	friend class Compiler;
+	friend class Disassembler;
 
 public:
 	struct InputArray

@@ -6,12 +6,7 @@
 enum Instruction
 {
 	NOP,
-
-	UINPUT_I,
-
 	END,
-
-	UENTRY_I,
 
 	FPUSH_M,
 	FPUSH_I,
@@ -45,29 +40,31 @@ struct InstructionInfo
 	mtlChars    name;
 	Instruction instr;
 	int         params;
+	bool        const_float_src;
 };
 
 const InstructionInfo gInstr[INSTR_COUNT] = {
-	{ mtlChars("nop"),     NOP,      0 },
-	{ mtlChars("end"),     END,      0 },
-	{ mtlChars("uinput_i"),UINPUT_I, 1 },
-	{ mtlChars("uentry_i"),UENTRY_I, 1 },
-	{ mtlChars("fpush_m"), FPUSH_M,  1 },
-	{ mtlChars("fpush_i"), FPUSH_I,  1 },
-	{ mtlChars("upush_i"), UPUSH_I,  1 },
-	{ mtlChars("fpop_m"),  FPOP_M,   1 },
-	{ mtlChars("upop_i"),  UPOP_I,   1 },
-	{ mtlChars("ujmp_i"),  UJMP_I,   1 },
-	{ mtlChars("fset_mm"), FSET_MM,  2 },
-	{ mtlChars("fset_mi"), FSET_MI,  2 },
-	{ mtlChars("fadd_mm"), FADD_MM,  2 },
-	{ mtlChars("fadd_mi"), FADD_MI,  2 },
-	{ mtlChars("fsub_mm"), FSUB_MM,  2 },
-	{ mtlChars("fsub_mi"), FSUB_MI,  2 },
-	{ mtlChars("fmul_mm"), FMUL_MM,  2 },
-	{ mtlChars("fmul_mi"), FMUL_MI,  2 },
-	{ mtlChars("fdiv_mm"), FDIV_MM,  2 },
-	{ mtlChars("fdiv_mi"), FDIV_MI,  2 }
+	{ mtlChars("nop"),     NOP,      0, false },
+	{ mtlChars("end"),     END,      0, false },
+	{ mtlChars("fpush_m"), FPUSH_M,  1, false },
+	{ mtlChars("fpush_i"), FPUSH_I,  1, true  },
+	{ mtlChars("upush_i"), UPUSH_I,  1, false },
+	{ mtlChars("fpop_m"),  FPOP_M,   1, false },
+	{ mtlChars("upop_i"),  UPOP_I,   1, false },
+	{ mtlChars("ujmp_i"),  UJMP_I,   1, false },
+	{ mtlChars("fset_mm"), FSET_MM,  2, false },
+	{ mtlChars("fset_mi"), FSET_MI,  2, true  },
+	{ mtlChars("fadd_mm"), FADD_MM,  2, false },
+	{ mtlChars("fadd_mi"), FADD_MI,  2, true  },
+	{ mtlChars("fsub_mm"), FSUB_MM,  2, false },
+	{ mtlChars("fsub_mi"), FSUB_MI,  2, true  },
+	{ mtlChars("fmul_mm"), FMUL_MM,  2, false },
+	{ mtlChars("fmul_mi"), FMUL_MI,  2, true  },
+	{ mtlChars("fdiv_mm"), FDIV_MM,  2, false },
+	{ mtlChars("fdiv_mi"), FDIV_MI,  2, true  }
 };
+
+const int gMetaData_InputIndex = 0;
+const int gMetaData_EntryIndex = 1;
 
 #endif // INSTR_H

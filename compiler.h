@@ -10,4 +10,10 @@ public:
 	bool Compile(const mtlChars &file, Shader &output);
 };
 
+class Disassembler
+{
+public:
+	bool Disassemble(const Shader &shader, mtlString &output);
+};
+
 #endif // COMPILER_H

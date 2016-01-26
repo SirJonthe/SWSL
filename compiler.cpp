@@ -341,7 +341,7 @@ bool CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlC
 			inst.errors.AddLast(CompilerMessage("Multiple entry points", ""));
 			return false;
 		}
-		inst.program.GetChars()[UENTRY_I] = inst.program.GetSize();
+		inst.program.GetChars()[gMetaData_EntryIndex] = (char)inst.program.GetSize();
 		is_main = true;
 	}
 
@@ -360,11 +360,12 @@ bool CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlC
 		p.Match(",", m);
 	}
 	int stack_end = inst.scopes.GetLast()->GetItem().size;
-	if (is_main) {
-		inst.program.GetChars()[UINPUT_I] = stack_end - stack_start;
-	}
 	result &= CompileScope(inst, body);
 	PopScope(inst);
+	if (is_main) {
+		inst.program.GetChars()[gMetaData_InputIndex] = stack_end - stack_start;
+		inst.program.Append(END);
+	}
 	return result;
 }
 
@@ -433,16 +434,72 @@ bool Compiler::Compile(const mtlChars &input, Shader &output)
 	CompileInstance inst;
 	inst.base_sptr = 0;
 	inst.main = 0;
-	inst.program.Append(UINPUT_I);
-	inst.program.Append(0);
-	inst.program.Append(UENTRY_I);
-	inst.program.Append(UENTRY_I + 1); // we assume
+	inst.program.Append(0); // number of inputs
+	inst.program.Append(2); // entry point (only a guess, is modified later)
 	bool result = CompileScope(inst, input);
 	if (inst.main == 0) {
 		inst.errors.AddLast(CompilerMessage("Missing \'main\'", ""));
 	}
+	inst.program.Append(END); // precautionary END
 	output.m_program.Copy(inst.program);
 	output.m_errors.Copy(inst.errors);
 	output.m_warnings.Copy(inst.warnings);
 	return result;
+}
+
+const InstructionInfo *GetInstructionInfo(Instruction instr)
+{
+	for (int i = 0; i < INSTR_COUNT; ++i) {
+		if (gInstr[i].instr == instr) {
+			return gInstr+i;
+		}
+	}
+	return NULL;
+}
+
+bool Disassembler::Disassemble(const Shader &shader, mtlString &output)
+{
+	output.Free();
+	output.Reserve(4096);
+	mtlString num;
+
+	output.Append("inputs   ");
+	num.FromInt(shader.m_program.GetChars()[0]);
+	output.Append(num);
+	output.Append("\n");
+	output.Append("entry    ");
+	num.FromInt(shader.m_program.GetChars()[1]);
+	output.Append(num);
+	output.Append("\n");
+
+	for (int iptr = 2; iptr < shader.m_program.GetSize(); ) {
+		const InstructionInfo *instr = GetInstructionInfo((Instruction)shader.m_program.GetChars()[iptr++]);
+		if (instr != NULL) {
+			output.Append(instr->name);
+			for (int i =0; i < (9 - instr->name.GetSize()); ++i) {
+				output.Append(" ");
+			}
+			if (iptr + instr->params - 1 >= shader.m_program.GetSize()) {
+				output.Append("<<Parameter corruption. Abort.>>");
+				return false;
+			}
+			for (int i = 0; i < instr->params; ++i) {
+				if (i == instr->params - 1 && instr->const_float_src) {
+					const float *val = (const float*)(shader.m_program.GetChars() + iptr);
+					num.FromFloat(*val);
+					output.Append(num);
+					iptr += sizeof(float);
+				} else {
+					num.FromInt(shader.m_program[iptr++]);
+					output.Append(num);
+				}
+				output.Append("  ");
+			}
+			output.Append("\n");
+		} else {
+			output.Append("<<Unknown instruction. Abort.>>");
+			return false;
+		}
+	}
+	return shader.GetErrorCount() == 0;
 }
