@@ -102,7 +102,8 @@ bool Shader::Run(const swsl::wide_cmpmask &frag_mask) const
 		}
 
 		case FPUSH_M:
-			stack[sptr++] = stack[sptr - (byte_t)program[iptr++]];
+			stack[sptr] = stack[sptr - (byte_t)program[iptr++]];
+			++sptr;
 			break;
 
 		case FPUSH_I:

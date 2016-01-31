@@ -184,31 +184,33 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 	mtlString order_str;
 	const int stack_size = inst.evaluator.GetOrderOfOperations(expr, order_str, true);
 
-	std::cout << "Order of ops: ";
-	print_ch(order_str);
-	std::cout << std::endl;
-
-	inst.program.Append(UPUSH_I);
-	inst.program.Append(stack_size);
+	if (stack_size > 0) {
+		inst.program.Append(UPUSH_I);
+		inst.program.Append(stack_size);
+	}
 
 	Parser parser;
+	mtlList<mtlChars> ops;
+	order_str.SplitByChar(ops, ';');
 	mtlList<mtlChars> m;
 	mtlChars seq;
 
 	for (int addr_offset = 0; addr_offset < type->type.size; ++addr_offset) {
 
-		parser.SetBuffer(order_str);
+		mtlItem<mtlChars> *op = ops.GetFirst();
 
-		while (!parser.IsEnd()) {
+		while (op != NULL && op->GetItem().GetSize() > 0) {
 
-			switch (parser.Match("%s+=%s;%|%s-=%s;%|%s*=%s;%|%s/=%s;%|%s=%s;", m, &seq)) {
-			case 0: inst.program.Append(FADD_MM); print_ch(seq); std::cout << std::endl; break;
-			case 1: inst.program.Append(FSUB_MM); print_ch(seq); std::cout << std::endl; break;
-			case 2: inst.program.Append(FMUL_MM); print_ch(seq); std::cout << std::endl; break;
-			case 3: inst.program.Append(FDIV_MM); print_ch(seq); std::cout << std::endl; break;
-			case 4: inst.program.Append(FSET_MM); print_ch(seq); std::cout << std::endl; break;
+			parser.SetBuffer(op->GetItem());
+
+			switch (parser.Match("%s+=%s%|%s-=%s%|%s*=%s%|%s/=%s%|%s=%s", m, &seq)) {
+			case 0: inst.program.Append(FADD_MM); break;
+			case 1: inst.program.Append(FSUB_MM); break;
+			case 2: inst.program.Append(FMUL_MM); break;
+			case 3: inst.program.Append(FDIV_MM); break;
+			case 4: inst.program.Append(FSET_MM); break;
 			default:
-				inst.errors.AddLast(CompilerMessage("Invalid syntax", seq));
+				inst.errors.AddLast(CompilerMessage("Invalid syntax", op->GetItem()));
 				return false;
 				break;
 			}
@@ -221,11 +223,15 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 				inst.program.GetChars()[inst.program.GetSize() - 1] += 1;
 			}
 			EmitOperand(inst, src, addr_offset);
+
+			op = op->GetNext();
 		}
 	}
 
-	inst.program.Append(UPOP_I);
-	inst.program.Append(stack_size);
+	if (stack_size > 0) {
+		inst.program.Append(UPOP_I);
+		inst.program.Append(stack_size);
+	}
 
 	return result;
 }
@@ -258,9 +264,11 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 	inst.scopes.GetLast()->GetItem().size += type_info->size;
 	inst.evaluator.SetVariable(name, 0.0f);
 
-	inst.program.Append(UPUSH_I);
-	inst.program.Append(type_info->size);
-	inst.stack_ptr += type_info->size;
+	if (type_info->size > 0) {
+		inst.program.Append(UPUSH_I);
+		inst.program.Append(type_info->size);
+		inst.stack_ptr += type_info->size;
+	}
 
 	bool result = (expr.GetSize() > 0) ? AssignVar(inst, name, expr) : true;
 
@@ -294,8 +302,10 @@ bool DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &nam
 	inst.scopes.GetLast()->GetItem().size += type_info->size;
 	inst.evaluator.SetVariable(name, 0.0f);
 
-	inst.program.Append(UPUSH_I);
-	inst.program.Append(type_info->size);
+	if (type_info->size > 0) {
+		inst.program.Append(UPUSH_I);
+		inst.program.Append(type_info->size);
+	}
 
 	return (expr.GetSize() > 0) ? AssignVar(inst, name, expr) : true;
 }
@@ -420,8 +430,10 @@ void PopScope(CompileInstance &inst)
 {
 	if (inst.scopes.GetSize() <= 0) { return; }
 	Scope &scope = inst.scopes.GetLast()->GetItem();
-	inst.program.Append(UPOP_I);
-	inst.program.Append(scope.size);
+	if (scope.size > 0) {
+		inst.program.Append(UPOP_I);
+		inst.program.Append(scope.size);
+	}
 	inst.scopes.RemoveLast();
 	inst.evaluator.PopScope();
 	if (inst.scopes.GetLast() != NULL) {
