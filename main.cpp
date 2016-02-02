@@ -186,7 +186,7 @@ int main(int, char**)
 		{ frag, sizeof(frag)/sizeof(swsl::wide_float) }
 	};
 	shader.SetInputArrays(inputs);
-	if (!shader.IsValid() || !shader.Run(swsl::wide_float(0.0f) < swsl::wide_float(1.0f))) {
+	/*if (!shader.IsValid() || !shader.Run(swsl::wide_float(0.0f) < swsl::wide_float(1.0f))) {
 		p.SetColor(255, 0, 0);
 		p.Print("Shader failed to run");
 		p.Newline();
@@ -194,7 +194,9 @@ int main(int, char**)
 		p.SetColor(0, 255, 0);
 		p.Print("Shader execution successful");
 		p.Newline();
-	}
+	}*/
+	p.Print("No shader execution");
+	p.Newline();
 
 	for (int i = 0; i < sizeof(frag)/sizeof(swsl::wide_float); ++i) {
 		float frag_comp[SWSL_WIDTH];

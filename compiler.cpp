@@ -67,7 +67,6 @@ struct CompileInstance
 	mtlList<CompilerMessage> errors;
 	mtlList<CompilerMessage> warnings;
 	mtlList<Scope>           scopes;
-	mtlMathParser            evaluator;
 	int                      base_sptr;
 	int                      main;
 };
@@ -81,19 +80,215 @@ const TypeInfo gTypes[TYPE_COUNT] = {
 	{ mtlChars("float4"), Float4, 4 }
 };
 
-Definition *GetType(CompileInstance &inst, const mtlChars &name);
-bool IsValidName(const mtlChars &name);
+struct ExpressionNode
+{
+	virtual ~ExpressionNode( void ) {}
+	virtual int  Evaluate(const mtlChars &dst, mtlString &out, int lane, int depth) = 0;
+	virtual bool IsLeaf( void ) const = 0;
+	virtual void AppendValue(mtlString &out) = 0;
+	virtual bool IsConstant( void ) const = 0;
+};
+
+struct OperationNode : public ExpressionNode
+{
+	char            operation;
+	ExpressionNode *left;
+	ExpressionNode *right;
+
+	OperationNode( void ) : left(NULL), right(NULL) {}
+	~OperationNode( void ) { delete left; delete right; }
+	int  Evaluate(const mtlChars &dst, mtlString &out, int lane, int depth);
+	bool IsLeaf( void ) const { return false; }
+	void AppendValue(mtlString &out);
+	bool IsConstant( void ) const { return left->IsConstant() && right->IsConstant(); }
+};
+
+struct ValueNode : public ExpressionNode
+{
+	mtlString term;
+	int       size;
+
+	int  Evaluate(const mtlChars &dst, mtlString &out, int lane, int depth);
+	bool IsLeaf( void ) const { return true; }
+	void AppendValue(mtlString &out);
+	bool IsConstant( void ) const { return term.IsFloat(); }
+};
+
+int OperationNode::Evaluate(const mtlChars &dst, mtlString &out, int lane, int depth)
+{
+	int ldepth = left->Evaluate(dst, out, lane, depth);
+	int rdepth = right->IsLeaf() ? 0 : right->Evaluate(dst, out, lane, depth+1);
+	int mdepth = 0;
+
+	mtlString addr_str;
+	if (depth > 0 || dst.GetSize() == 0) {
+		out.Append('[');
+		addr_str.FromInt(depth);
+		out.Append(addr_str);
+		out.Append(']');
+		mdepth = depth;
+	} else {
+		out.Append(dst);
+	}
+
+	AppendValue(out);
+	out.Append('=');
+
+	if (right->IsLeaf()) {
+		right->AppendValue(out);
+	} else {
+		addr_str.FromInt(depth+1);
+		out.Append('[');
+		out.Append(addr_str);
+		out.Append(']');
+	}
+	out.Append(';');
+
+	return mmlMax3(ldepth, mdepth, rdepth);
+}
+
+void OperationNode::AppendValue(mtlString &out)
+{
+	out.Append(operation);
+}
+
+int ValueNode::Evaluate(const mtlChars &dst, mtlString &out, int lane, int depth)
+{
+	int out_depth = 0;
+	if (depth > 0 || dst.GetSize() == 0) {
+		out.Append('[');
+		mtlString addr_str;
+		addr_str.FromInt(depth);
+		out.Append(addr_str);
+		out.Append(']');
+		out_depth = depth;
+	} else {
+		out.Append(dst);
+		out_depth = 0;
+	}
+	out.Append("=");
+	AppendValue(out);
+	out.Append(';');
+
+	return out_depth;
+}
+
+void ValueNode::AppendValue(mtlString &out)
+{
+	out.Append(term);
+}
+
+bool IsBraceBalanced(const mtlChars &expr)
+{
+	int stack = 0;
+	for (int i = 0; i < expr.GetSize(); ++i) {
+		char ch = expr.GetChars()[i];
+		if (ch == '(') {
+			++stack;
+		} else if (ch == ')') {
+			if (stack > 0) {
+				--stack;
+			} else {
+				return false;
+			}
+		}
+	}
+	return stack == 0;
+}
+
+int FindOperation(const mtlChars &operations, const mtlChars &expression)
+{
+	int braceStack = 0;
+	for (int i = 0; i < expression.GetSize(); ++i) {
+		char ch = expression.GetChars()[i];
+		if (ch == '(') {
+			++braceStack;
+		} else if (ch == ')') {
+			--braceStack;
+		} else if (braceStack == 0 && operations.SameAsAny(ch)) { // contents of parenthesis are not parsed
+			return i;
+		}
+	}
+	return -1;
+}
+
+bool GenerateTree(ExpressionNode *&node, mtlChars expr)
+{
+	static const char zero_str[] = "0";
+	static const int OperationClasses = 2;
+	static const char *Operations[OperationClasses] = {
+		"+-", "*/" //,"|&"
+	};
+
+	expr.TrimBraces();
+
+	if (expr.GetSize() == 0) {
+		node = NULL;
+		return false;
+	}
+
+	bool retval = true;
+	int opIndex = -1;
+
+	for (int i = 0; i < OperationClasses; ++i) {
+		mtlChars ops = mtlChars::FromDynamic(Operations[i]);
+		opIndex = FindOperation(ops, expr);
+		if (opIndex != -1) {
+			break;
+		}
+	}
+
+	if (opIndex != -1) {
+
+		OperationNode *op_node = new OperationNode;
+		op_node->operation = expr[opIndex];
+		op_node->left = NULL;
+		op_node->right = NULL;
+
+		mtlChars lexpr = mtlChars(expr, 0, opIndex);
+		mtlChars rexpr = mtlChars(expr, opIndex + 1, expr.GetSize());
+
+		if (expr[opIndex] == '-' && lexpr.GetSize() == 0) {
+			lexpr = zero_str;
+		}
+
+		retval = GenerateTree(op_node->left, lexpr) && GenerateTree(op_node->right, rexpr);
+
+		node = op_node;
+	} else { // STOPPING CONDITION
+
+		ValueNode *val_node = new ValueNode;
+		val_node->term.Copy(expr);
+
+		node = val_node;
+	}
+	return retval;
+}
+
+ExpressionNode *GenerateTree(const mtlChars &expr)
+{
+	ExpressionNode *tree = NULL;
+	if (!GenerateTree(tree, expr)) {
+		if (tree != NULL) {
+			delete tree;
+			tree = NULL;
+		}
+	}
+	return tree;
+}
+
+Definition     *GetType(CompileInstance &inst, const mtlChars &name);
+bool            IsValidName(const mtlChars &name);
 const TypeInfo *GetTypeInfo(const mtlChars &type);
-bool EmitOperand(CompileInstance &inst, const mtlChars &operand, int lane);
-bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr);
-//bool DeclareConst(CompileInstance &inst, const mtlChars &type, const mtlChars &name, const mtlChars &expr);
-bool DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &name, const mtlChars &expr);
-bool CompileScope(CompileInstance &inst, const mtlChars &input);
-bool CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlChars &name, const mtlChars &params, const mtlChars &body);
-bool CompileCondition(CompileInstance &inst, const mtlChars &cond, const mtlChars &body);
-bool CompileStatement(CompileInstance &inst, const mtlChars &statement);
-Scope &PushScope(CompileInstance &inst);
-void PopScope(CompileInstance &inst);
+bool            EmitOperand(CompileInstance &inst, const mtlChars &operand, int lane);
+bool            AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr);
+bool            DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &name, const mtlChars &expr);
+bool            CompileScope(CompileInstance &inst, const mtlChars &input);
+bool            CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlChars &name, const mtlChars &params, const mtlChars &body);
+bool            CompileCondition(CompileInstance &inst, const mtlChars &cond, const mtlChars &body);
+bool            CompileStatement(CompileInstance &inst, const mtlChars &statement);
+Scope          &PushScope(CompileInstance &inst);
+void            PopScope(CompileInstance &inst);
 
 Definition *GetType(CompileInstance &inst, const mtlChars &name)
 {
@@ -165,8 +360,6 @@ bool EmitOperand(CompileInstance &inst, const mtlChars &operand, int lane)
 	return true;
 }
 
-
-
 bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr)
 {
 	Definition *type = GetType(inst, name);
@@ -179,103 +372,77 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 		return false;
 	}
 
-	bool result = true;
-
-	mtlString order_str;
-	const int stack_size = inst.evaluator.GetOrderOfOperations(expr, order_str, true);
-
-	if (stack_size > 0) {
-		inst.program.Append(UPUSH_I);
-		inst.program.Append(stack_size);
+	ExpressionNode *tree = GenerateTree(expr);
+	if (tree == NULL) {
+		inst.errors.AddLast(CompilerMessage("Malformed expression", expr));
+		return false;
 	}
 
-	Parser parser;
+	bool              result = true;
+	Parser            parser;
 	mtlList<mtlChars> ops;
-	order_str.SplitByChar(ops, ';');
 	mtlList<mtlChars> m;
-	mtlChars seq;
+	mtlChars          seq;
+	mtlString         order_str;
 
 	for (int addr_offset = 0; addr_offset < type->type.size; ++addr_offset) {
 
+		std::cout << "lane=" << addr_offset << std::endl;
+
+		order_str.Free();
+		const int stack_size = tree->Evaluate(name, order_str, addr_offset, 0);
+
+		if (stack_size > 0) {
+			inst.program.Append(UPUSH_I);
+			inst.program.Append(stack_size);
+		}
+
+		order_str.SplitByChar(ops, ';');
 		mtlItem<mtlChars> *op = ops.GetFirst();
+		std::cout << "ops=" << ops.GetSize()-1 << std::endl;
 
 		while (op != NULL && op->GetItem().GetSize() > 0) {
 
 			parser.SetBuffer(op->GetItem());
 
+			const int instr_index = inst.program.GetSize();
+
 			switch (parser.Match("%s+=%s%|%s-=%s%|%s*=%s%|%s/=%s%|%s=%s", m, &seq)) {
-			case 0: inst.program.Append(FADD_MM); break;
-			case 1: inst.program.Append(FSUB_MM); break;
-			case 2: inst.program.Append(FMUL_MM); break;
-			case 3: inst.program.Append(FDIV_MM); break;
-			case 4: inst.program.Append(FSET_MM); break;
+			case 0: inst.program.Append(FADD_MM); std::cout << "add: "; break;
+			case 1: inst.program.Append(FSUB_MM); std::cout << "sub: "; break;
+			case 2: inst.program.Append(FMUL_MM); std::cout << "mul: "; break;
+			case 3: inst.program.Append(FDIV_MM); std::cout << "div: "; break;
+			case 4: inst.program.Append(FSET_MM); std::cout << "set: "; break;
 			default:
 				inst.errors.AddLast(CompilerMessage("Invalid syntax", op->GetItem()));
 				return false;
 				break;
 			}
 
+			print_ch(op->GetItem()); std::cout << std::endl;
+
 			mtlChars dst = m.GetFirst()->GetItem();
 			mtlChars src = m.GetFirst()->GetNext()->GetItem();
 
 			EmitOperand(inst, dst, addr_offset);
 			if (src.IsFloat()) {
-				inst.program.GetChars()[inst.program.GetSize() - 1] += 1;
+				inst.program.GetChars()[instr_index] += 1;
 			}
 			EmitOperand(inst, src, addr_offset);
 
 			op = op->GetNext();
 		}
+
+		if (stack_size > 0) {
+			inst.program.Append(UPOP_I);
+			inst.program.Append(stack_size);
+		}
 	}
 
-	if (stack_size > 0) {
-		inst.program.Append(UPOP_I);
-		inst.program.Append(stack_size);
-	}
+	delete tree;
 
 	return result;
 }
-
-/*bool DeclareConst(CompileInstance &inst, const mtlChars &type, const mtlChars &name, const mtlChars &expr)
-{
-	// determine if true imm, or readonly
-	// if true imm, eval answer in a VM
-
-	const TypeInfo *type_info = GetTypeInfo(type);
-	if (type_info == NULL) {
-		inst.errors.AddLast(CompilerMessage("Unknown type", type));
-		return false;
-	}
-
-	if (!IsValidName(name)) {
-		inst.errors.AddLast(CompilerMessage("Invalid name", name));
-		return false;
-	}
-
-	Definition &def = inst.scopes.GetLast()->GetItem().defs.AddLast();
-	def.mut = Mutable; // set mutable so AssignVar can emit necessary instructions
-	def.name = name;
-	def.type = *type_info;
-	def.values.Create(type_info->size);
-	for (int addr_offset = 0; addr_offset < type_info->size; ++addr_offset) {
-		def.values[addr_offset].var_addr = inst.stack_ptr + addr_offset;
-	}
-
-	inst.scopes.GetLast()->GetItem().size += type_info->size;
-	inst.evaluator.SetVariable(name, 0.0f);
-
-	if (type_info->size > 0) {
-		inst.program.Append(UPUSH_I);
-		inst.program.Append(type_info->size);
-		inst.stack_ptr += type_info->size;
-	}
-
-	bool result = (expr.GetSize() > 0) ? AssignVar(inst, name, expr) : true;
-
-	def.mut = Readonly; // set to readonly so no subsequent calls to AssignVar succeeds
-
-	return result;
-}*/
 
 bool DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &name, const mtlChars &expr)
 {
@@ -290,6 +457,12 @@ bool DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &nam
 		return false;
 	}
 
+	const Definition *prev_def = GetType(inst, name);
+	if (prev_def != NULL) {
+		inst.errors.AddLast(CompilerMessage("Redeclaration: ", name));
+		return false;
+	}
+
 	Definition &def = inst.scopes.GetLast()->GetItem().defs.AddLast();
 	def.mut = Mutable;
 	def.name = name;
@@ -300,7 +473,6 @@ bool DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &nam
 	}
 
 	inst.scopes.GetLast()->GetItem().size += type_info->size;
-	inst.evaluator.SetVariable(name, 0.0f);
 
 	if (type_info->size > 0) {
 		inst.program.Append(UPUSH_I);
@@ -422,7 +594,6 @@ Scope &PushScope(CompileInstance &inst)
 	}
 	Scope &scope = inst.scopes.AddLast();
 	scope.size = 0;
-	inst.evaluator.PushScope();
 	return scope;
 }
 
@@ -435,7 +606,6 @@ void PopScope(CompileInstance &inst)
 		inst.program.Append(scope.size);
 	}
 	inst.scopes.RemoveLast();
-	inst.evaluator.PopScope();
 	if (inst.scopes.GetLast() != NULL) {
 		inst.base_sptr -= inst.scopes.GetLast()->GetItem().size;
 	}
@@ -486,32 +656,35 @@ bool Disassembler::Disassemble(const Shader &shader, mtlString &output)
 
 	for (int iptr = 2; iptr < shader.m_program.GetSize(); ) {
 		const InstructionInfo *instr = GetInstructionInfo((Instruction)shader.m_program.GetChars()[iptr++]);
-		if (instr != NULL) {
-			output.Append(instr->name);
-			for (int i =0; i < (9 - instr->name.GetSize()); ++i) {
-				output.Append(" ");
-			}
-			if (iptr + instr->params - 1 >= shader.m_program.GetSize()) {
-				output.Append("<<Parameter corruption. Abort.>>");
-				return false;
-			}
-			for (int i = 0; i < instr->params; ++i) {
-				if (i == instr->params - 1 && instr->const_float_src) {
-					const float *val = (const float*)(shader.m_program.GetChars() + iptr);
-					num.FromFloat(*val);
-					output.Append(num);
-					iptr += sizeof(float);
-				} else {
-					num.FromInt(shader.m_program[iptr++]);
-					output.Append(num);
-				}
-				output.Append("  ");
-			}
-			output.Append("\n");
-		} else {
+		if (instr == NULL) {
 			output.Append("<<Unknown instruction. Abort.>>");
 			return false;
 		}
+		output.Append(instr->name);
+		for (int i =0; i < (9 - instr->name.GetSize()); ++i) {
+			output.Append(' ');
+		}
+		if (iptr + instr->params - 1 >= shader.m_program.GetSize()) {
+			output.Append("<<Parameter corruption. Abort.>>");
+			return false;
+		}
+		for (int i = 0; i < instr->params; ++i) {
+			if (i == instr->params - 1 && instr->const_float_src) {
+				float val;
+				for (int j = 0; j < sizeof(float); ++j) {
+					((char*)(&val))[j] = shader.m_program.GetChars()[iptr++];
+				}
+				num.FromFloat(val);
+				output.Append(num);
+			} else {
+				num.FromInt(shader.m_program[iptr++]);
+				output.Append(num);
+			}
+			for (int j = 0; j < (4 - num.GetSize()); ++j) {
+				output.Append(' ');
+			}
+		}
+		output.Append("\n");
 	}
 	return shader.GetErrorCount() == 0;
 }
