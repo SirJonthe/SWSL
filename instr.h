@@ -3,7 +3,7 @@
 
 #include "MiniLib/MTL/mtlString.h"
 
-enum Instruction
+enum InstructionSet
 {
 	NOP,
 	END,
@@ -37,10 +37,10 @@ enum Instruction
 
 struct InstructionInfo
 {
-	mtlChars    name;
-	Instruction instr;
-	int         params;
-	bool        const_float_src;
+	mtlChars       name;
+	InstructionSet instr;
+	int            params;
+	bool           const_float_src;
 };
 
 const InstructionInfo gInstr[INSTR_COUNT] = {
@@ -62,6 +62,15 @@ const InstructionInfo gInstr[INSTR_COUNT] = {
 	{ mtlChars("fmul_mi"), FMUL_MI,  2, true  },
 	{ mtlChars("fdiv_mm"), FDIV_MM,  2, false },
 	{ mtlChars("fdiv_mi"), FDIV_MI,  2, true  }
+};
+
+typedef unsigned short addr_t;
+
+union Instruction
+{
+	InstructionSet instr;
+	float          fl_imm;
+	addr_t         u_addr;
 };
 
 const int gMetaData_InputIndex = 0;

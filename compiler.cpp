@@ -63,12 +63,14 @@ struct Scope
 
 struct CompileInstance
 {
-	mtlString                program;
-	mtlList<CompilerMessage> errors;
-	mtlList<CompilerMessage> warnings;
-	mtlList<Scope>           scopes;
-	int                      base_sptr;
-	int                      main;
+	mtlList<Instruction>      program;
+	addr_t                   *prog_entry;
+	addr_t                   *prog_inputs;
+	mtlList<CompilerMessage>  errors;
+	mtlList<CompilerMessage>  warnings;
+	mtlList<Scope>            scopes;
+	int                       base_sptr;
+	int                       main;
 };
 
 const TypeInfo gTypes[TYPE_COUNT] = {
@@ -289,6 +291,9 @@ bool            CompileCondition(CompileInstance &inst, const mtlChars &cond, co
 bool            CompileStatement(CompileInstance &inst, const mtlChars &statement);
 Scope          &PushScope(CompileInstance &inst);
 void            PopScope(CompileInstance &inst);
+void            EmitInstruction(CompileInstance &inst, InstructionSet instr);
+void            EmitImmutable(CompileInstance &inst, float fl);
+void            EmitAddress(CompileInstance &inst, addr_t addr);
 
 Definition *GetType(CompileInstance &inst, const mtlChars &name)
 {
@@ -339,9 +344,7 @@ bool EmitOperand(CompileInstance &inst, const mtlChars &operand, int lane)
 	if (type == NULL) {
 		float fl_val;
 		if (operand.ToFloat(fl_val)) {
-			for (int i = 0; i < sizeof(fl_val); ++i) {
-				inst.program.Append(((char*)(&fl_val))[i]);
-			}
+			EmitImmutable(inst, fl_val);
 		} else {
 			Parser p;
 			p.SetBuffer(operand);
@@ -349,13 +352,13 @@ bool EmitOperand(CompileInstance &inst, const mtlChars &operand, int lane)
 			if (p.Match("[%i]", m) == 0) {
 				int stack_offset;
 				m.GetFirst()->GetItem().ToInt(stack_offset);
-				inst.program.Append(inst.scopes.GetLast()->GetItem().size - stack_offset);
+				EmitAddress(inst, inst.scopes.GetLast()->GetItem().size - stack_offset);
 			} else {
 				return false;
 			}
 		}
 	} else {
-		inst.program.Append(inst.base_sptr - type->values[lane].var_addr); // this is wrong
+		EmitAddress(inst, inst.base_sptr - type->values[lane].var_addr); // this is wrong
 	}
 	return true;
 }
@@ -393,8 +396,8 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 		const int stack_size = tree->Evaluate(name, order_str, addr_offset, 0);
 
 		if (stack_size > 0) {
-			inst.program.Append(UPUSH_I);
-			inst.program.Append(stack_size);
+			EmitInstruction(inst, UPUSH_I);
+			EmitAddress(inst, stack_size);
 		}
 
 		order_str.SplitByChar(ops, ';');
@@ -405,19 +408,19 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 
 			parser.SetBuffer(op->GetItem());
 
-			const int instr_index = inst.program.GetSize();
-
 			switch (parser.Match("%s+=%s%|%s-=%s%|%s*=%s%|%s/=%s%|%s=%s", m, &seq)) {
-			case 0: inst.program.Append(FADD_MM); std::cout << "add: "; break;
-			case 1: inst.program.Append(FSUB_MM); std::cout << "sub: "; break;
-			case 2: inst.program.Append(FMUL_MM); std::cout << "mul: "; break;
-			case 3: inst.program.Append(FDIV_MM); std::cout << "div: "; break;
-			case 4: inst.program.Append(FSET_MM); std::cout << "set: "; break;
+			case 0: EmitInstruction(inst, FADD_MM); std::cout << "add: "; break;
+			case 1: EmitInstruction(inst, FSUB_MM); std::cout << "sub: "; break;
+			case 2: EmitInstruction(inst, FMUL_MM); std::cout << "mul: "; break;
+			case 3: EmitInstruction(inst, FDIV_MM); std::cout << "div: "; break;
+			case 4: EmitInstruction(inst, FSET_MM); std::cout << "set: "; break;
 			default:
 				inst.errors.AddLast(CompilerMessage("Invalid syntax", op->GetItem()));
 				return false;
 				break;
 			}
+
+			mtlItem<Instruction> *instr_item = inst.program.GetLast();
 
 			print_ch(op->GetItem()); std::cout << std::endl;
 
@@ -426,7 +429,7 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 
 			EmitOperand(inst, dst, addr_offset);
 			if (src.IsFloat()) {
-				inst.program.GetChars()[instr_index] += 1;
+				*((int*)(&instr_item->GetItem().instr)) += 1;
 			}
 			EmitOperand(inst, src, addr_offset);
 
@@ -434,8 +437,8 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 		}
 
 		if (stack_size > 0) {
-			inst.program.Append(UPOP_I);
-			inst.program.Append(stack_size);
+			EmitInstruction(inst, UPOP_I);
+			EmitAddress(inst, stack_size);
 		}
 	}
 
@@ -475,8 +478,8 @@ bool DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &nam
 	inst.scopes.GetLast()->GetItem().size += type_info->size;
 
 	if (type_info->size > 0) {
-		inst.program.Append(UPUSH_I);
-		inst.program.Append(type_info->size);
+		EmitInstruction(inst, UPUSH_I);
+		EmitAddress(inst, type_info->size);
 	}
 
 	return (expr.GetSize() > 0) ? AssignVar(inst, name, expr) : true;
@@ -523,7 +526,7 @@ bool CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlC
 			inst.errors.AddLast(CompilerMessage("Multiple entry points", ""));
 			return false;
 		}
-		inst.program.GetChars()[gMetaData_EntryIndex] = (char)inst.program.GetSize();
+		*inst.prog_entry = (char)inst.program.GetSize();
 		is_main = true;
 	}
 
@@ -545,8 +548,8 @@ bool CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlC
 	result &= CompileScope(inst, body);
 	PopScope(inst);
 	if (is_main) {
-		inst.program.GetChars()[gMetaData_InputIndex] = stack_end - stack_start;
-		inst.program.Append(END);
+		*inst.prog_inputs = stack_end - stack_start;
+		EmitInstruction(inst, END);
 	}
 	return result;
 }
@@ -602,8 +605,8 @@ void PopScope(CompileInstance &inst)
 	if (inst.scopes.GetSize() <= 0) { return; }
 	Scope &scope = inst.scopes.GetLast()->GetItem();
 	if (scope.size > 0) {
-		inst.program.Append(UPOP_I);
-		inst.program.Append(scope.size);
+		EmitInstruction(inst, UPOP_I);
+		EmitAddress(inst, scope.size);
 	}
 	inst.scopes.RemoveLast();
 	if (inst.scopes.GetLast() != NULL) {
@@ -611,25 +614,53 @@ void PopScope(CompileInstance &inst)
 	}
 }
 
+void EmitInstruction(CompileInstance &inst, InstructionSet instr)
+{
+	Instruction i;
+	i.instr = instr;
+	inst.program.AddLast(i);
+}
+
+void EmitImmutable(CompileInstance &inst, float fl)
+{
+	Instruction i;
+	i.fl_imm = fl;
+	inst.program.AddLast(i);
+}
+
+void EmitAddress(CompileInstance &inst, addr_t addr)
+{
+	Instruction i;
+	i.u_addr = addr;
+	inst.program.AddLast(i);
+}
+
 bool Compiler::Compile(const mtlChars &input, Shader &output)
 {
 	CompileInstance inst;
 	inst.base_sptr = 0;
 	inst.main = 0;
-	inst.program.Append(0); // number of inputs
-	inst.program.Append(2); // entry point (only a guess, is modified later)
+	EmitAddress(inst, 0); // number of inputs
+	inst.prog_inputs = &(inst.program.GetLast()->GetItem().u_addr);
+	EmitAddress(inst, 2); // entry point (only a guess, is modified later)
+	inst.prog_entry = &(inst.program.GetLast()->GetItem().u_addr);
 	bool result = CompileScope(inst, input);
 	if (inst.main == 0) {
 		inst.errors.AddLast(CompilerMessage("Missing \'main\'", ""));
 	}
-	inst.program.Append(END); // precautionary END
-	output.m_program.Copy(inst.program);
+	EmitInstruction(inst, END); // precautionary END
+	output.m_program.Create(inst.program.GetSize());
+	mtlItem<Instruction> *j = inst.program.GetFirst();
+	for (int i = 0; i < output.m_program.GetSize(); ++i) {
+		output.m_program[i] = j->GetItem();
+		j = j->GetNext();
+	}
 	output.m_errors.Copy(inst.errors);
 	output.m_warnings.Copy(inst.warnings);
 	return result;
 }
 
-const InstructionInfo *GetInstructionInfo(Instruction instr)
+const InstructionInfo *GetInstructionInfo(InstructionSet instr)
 {
 	for (int i = 0; i < INSTR_COUNT; ++i) {
 		if (gInstr[i].instr == instr) {
@@ -646,16 +677,16 @@ bool Disassembler::Disassemble(const Shader &shader, mtlString &output)
 	mtlString num;
 
 	output.Append("inputs   ");
-	num.FromInt(shader.m_program.GetChars()[0]);
+	num.FromInt(shader.m_program[0].u_addr);
 	output.Append(num);
 	output.Append("\n");
 	output.Append("entry    ");
-	num.FromInt(shader.m_program.GetChars()[1]);
+	num.FromInt(shader.m_program[1].u_addr);
 	output.Append(num);
 	output.Append("\n");
 
 	for (int iptr = 2; iptr < shader.m_program.GetSize(); ) {
-		const InstructionInfo *instr = GetInstructionInfo((Instruction)shader.m_program.GetChars()[iptr++]);
+		const InstructionInfo *instr = GetInstructionInfo((InstructionSet)shader.m_program[iptr++].instr);
 		if (instr == NULL) {
 			output.Append("<<Unknown instruction. Abort.>>");
 			return false;
@@ -670,14 +701,10 @@ bool Disassembler::Disassemble(const Shader &shader, mtlString &output)
 		}
 		for (int i = 0; i < instr->params; ++i) {
 			if (i == instr->params - 1 && instr->const_float_src) {
-				float val;
-				for (int j = 0; j < sizeof(float); ++j) {
-					((char*)(&val))[j] = shader.m_program.GetChars()[iptr++];
-				}
-				num.FromFloat(val);
+				num.FromFloat(shader.m_program[iptr++].fl_imm);
 				output.Append(num);
 			} else {
-				num.FromInt(shader.m_program[iptr++]);
+				num.FromInt(shader.m_program[iptr++].u_addr);
 				output.Append(num);
 			}
 			for (int j = 0; j < (4 - num.GetSize()); ++j) {
