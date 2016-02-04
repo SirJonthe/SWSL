@@ -294,6 +294,8 @@ void            PopScope(CompileInstance &inst);
 void            EmitInstruction(CompileInstance &inst, InstructionSet instr);
 void            EmitImmutable(CompileInstance &inst, float fl);
 void            EmitAddress(CompileInstance &inst, addr_t addr);
+void            PushStack(CompileInstance &inst, int size);
+void            PopStack(CompileInstance &inst, int size);
 
 Definition *GetType(CompileInstance &inst, const mtlChars &name)
 {
@@ -390,30 +392,24 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 
 	for (int addr_offset = 0; addr_offset < type->type.size; ++addr_offset) {
 
-		std::cout << "lane=" << addr_offset << std::endl;
-
 		order_str.Free();
 		const int stack_size = tree->Evaluate(name, order_str, addr_offset, 0);
 
-		if (stack_size > 0) {
-			EmitInstruction(inst, UPUSH_I);
-			EmitAddress(inst, stack_size);
-		}
+		PushStack(inst, stack_size);
 
 		order_str.SplitByChar(ops, ';');
 		mtlItem<mtlChars> *op = ops.GetFirst();
-		std::cout << "ops=" << ops.GetSize()-1 << std::endl;
 
 		while (op != NULL && op->GetItem().GetSize() > 0) {
 
 			parser.SetBuffer(op->GetItem());
 
 			switch (parser.Match("%s+=%s%|%s-=%s%|%s*=%s%|%s/=%s%|%s=%s", m, &seq)) {
-			case 0: EmitInstruction(inst, FADD_MM); std::cout << "add: "; break;
-			case 1: EmitInstruction(inst, FSUB_MM); std::cout << "sub: "; break;
-			case 2: EmitInstruction(inst, FMUL_MM); std::cout << "mul: "; break;
-			case 3: EmitInstruction(inst, FDIV_MM); std::cout << "div: "; break;
-			case 4: EmitInstruction(inst, FSET_MM); std::cout << "set: "; break;
+			case 0: EmitInstruction(inst, FADD_MM); break;
+			case 1: EmitInstruction(inst, FSUB_MM); break;
+			case 2: EmitInstruction(inst, FMUL_MM); break;
+			case 3: EmitInstruction(inst, FDIV_MM); break;
+			case 4: EmitInstruction(inst, FSET_MM); break;
 			default:
 				inst.errors.AddLast(CompilerMessage("Invalid syntax", op->GetItem()));
 				return false;
@@ -421,8 +417,6 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 			}
 
 			mtlItem<Instruction> *instr_item = inst.program.GetLast();
-
-			print_ch(op->GetItem()); std::cout << std::endl;
 
 			mtlChars dst = m.GetFirst()->GetItem();
 			mtlChars src = m.GetFirst()->GetNext()->GetItem();
@@ -436,10 +430,7 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 			op = op->GetNext();
 		}
 
-		if (stack_size > 0) {
-			EmitInstruction(inst, UPOP_I);
-			EmitAddress(inst, stack_size);
-		}
+		PopStack(inst, stack_size);
 	}
 
 	delete tree;
@@ -471,16 +462,12 @@ bool DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &nam
 	def.name = name;
 	def.type = *type_info;
 	def.values.Create(type_info->size);
+
 	for (int addr_offset = 0; addr_offset < type_info->size; ++addr_offset) {
-		def.values[addr_offset].var_addr = inst.base_sptr + addr_offset;
+		def.values[addr_offset].var_addr = inst.base_sptr + inst.scopes.GetLast()->GetItem().size + addr_offset;
 	}
 
-	inst.scopes.GetLast()->GetItem().size += type_info->size;
-
-	if (type_info->size > 0) {
-		EmitInstruction(inst, UPUSH_I);
-		EmitAddress(inst, type_info->size);
-	}
+	PushStack(inst, type_info->size);
 
 	return (expr.GetSize() > 0) ? AssignVar(inst, name, expr) : true;
 }
@@ -604,10 +591,7 @@ void PopScope(CompileInstance &inst)
 {
 	if (inst.scopes.GetSize() <= 0) { return; }
 	Scope &scope = inst.scopes.GetLast()->GetItem();
-	if (scope.size > 0) {
-		EmitInstruction(inst, UPOP_I);
-		EmitAddress(inst, scope.size);
-	}
+	PopStack(inst, scope.size);
 	inst.scopes.RemoveLast();
 	if (inst.scopes.GetLast() != NULL) {
 		inst.base_sptr -= inst.scopes.GetLast()->GetItem().size;
@@ -635,6 +619,24 @@ void EmitAddress(CompileInstance &inst, addr_t addr)
 	inst.program.AddLast(i);
 }
 
+void PushStack(CompileInstance &inst, int size)
+{
+	if (size > 0) {
+		EmitInstruction(inst, UPUSH_I);
+		EmitAddress(inst, size);
+		inst.scopes.GetLast()->GetItem().size += size;
+	}
+}
+
+void PopStack(CompileInstance &inst, int size)
+{
+	if (size > 0) {
+		EmitInstruction(inst, UPOP_I);
+		EmitAddress(inst, size);
+		inst.scopes.GetLast()->GetItem().size -= size;
+	}
+}
+
 bool Compiler::Compile(const mtlChars &input, Shader &output)
 {
 	CompileInstance inst;
@@ -648,7 +650,6 @@ bool Compiler::Compile(const mtlChars &input, Shader &output)
 	if (inst.main == 0) {
 		inst.errors.AddLast(CompilerMessage("Missing \'main\'", ""));
 	}
-	EmitInstruction(inst, END); // precautionary END
 	output.m_program.Create(inst.program.GetSize());
 	mtlItem<Instruction> *j = inst.program.GetFirst();
 	for (int i = 0; i < output.m_program.GetSize(); ++i) {

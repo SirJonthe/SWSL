@@ -8,26 +8,15 @@
 // Points to an instruction in the instruction cache.
 #define read_1_instr(reg) reg = &program[iptr++]
 #define read_2_instr(reg_a, reg_b) read_1_instr(reg_a); read_1_instr(reg_b)
-#define read_3_instr(reg_a, reg_b, reg_c) read_2_instr(reg_a, reg_b); read_1_instr(reg_c)
-
-#define fread_m(a) a = &program[iptr++]
-#define fread_i(a) a = &program[iptr]; iptr += sizeof(float);
-#define fread_mm(a, b) fread_m(a); fread_m(b)
-#define fread_mi(a, b) fread_m(a); fread_i(b)
 
 // Convert an instruction pointer to a value, or dereference the pointer to a value stored in the data cache.
-#define to_const_instr(reg)    (*(addr_t*)(reg))
-#define to_const_float(reg)    (swsl::wide_float(*(float*)(reg)))
-#define to_ref_float(reg)      (stack[to_const_instr(reg) & STACK_SIZE_MASK])
-#define to_ref_float_x(reg, x) (stack[(to_const_instr(reg) + (x)) & STACK_SIZE_MASK])
+#define to_addr(reg)             (*(addr_t*)(reg))
+#define to_wide_float(reg)       (swsl::wide_float(*(float*)(reg)))
+#define to_stack_float(reg)      (stack[to_addr(reg)])
+#define to_stack_float_x(reg, x) (stack[(to_addr(reg) + (x))])
 
 #define topstack_to_cmpmask     (*(swsl::wide_cmpmask*)&stack[sptr-1])
 #define pushstack_cmpmask(mask) (*(swsl::wide_cmpmask*)&stack[sptr++] = (mask))
-
-#define word_size 1
-#define vec2_size 2
-#define vec3_size 3
-#define vec4_size 4
 
 void Shader::Delete( void )
 {
@@ -65,13 +54,13 @@ const mtlItem<CompilerMessage> *Shader::GetWarnings( void ) const
 {
 	return m_warnings.GetFirst();
 }
-
+#include <iostream>
 bool Shader::Run(const swsl::wide_cmpmask &frag_mask) const
 {
 	swsl::wide_float stack[STACK_SIZE];
 
 	addr_t iptr = m_program[gMetaData_EntryIndex].u_addr;
-	addr_t sptr = m_program[gMetaData_InputIndex].u_addr;
+	addr_t sptr = 0;
 
 	const Instruction *program      = (const Instruction*)(&m_program[0]);
 	const addr_t       program_size = (addr_t)m_program.GetSize();
@@ -107,7 +96,7 @@ bool Shader::Run(const swsl::wide_cmpmask &frag_mask) const
 			break;
 
 		case FPUSH_I:
-			stack[sptr++] = to_const_float(program + iptr);
+			stack[sptr++] = to_wide_float(program + iptr);
 			++iptr;
 			break;
 
@@ -115,8 +104,7 @@ bool Shader::Run(const swsl::wide_cmpmask &frag_mask) const
 			sptr += program[iptr++].u_addr;
 			break;
 
-		case FPOP_M:
-		{
+		case FPOP_M: {
 			addr_t addr = sptr - program[iptr++].u_addr;
 			stack[addr] = stack[--sptr];
 			break;
@@ -134,61 +122,61 @@ bool Shader::Run(const swsl::wide_cmpmask &frag_mask) const
 		case FSET_MM:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = stack + sptr - program[iptr++].u_addr;
-			to_ref_float(reg_a) = to_ref_float(reg_b);
+			*(swsl::wide_float*)(reg_a) = *(swsl::wide_float*)(reg_b);
 			break;
 
 		case FSET_MI:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = &program[iptr++];
-			to_ref_float(reg_a) = to_const_float(reg_b);
+			*(swsl::wide_float*)(reg_a) = to_wide_float(reg_b);
 			break;
 
 		case FADD_MM:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = stack + sptr - program[iptr++].u_addr;
-			to_ref_float(reg_a) += to_ref_float(reg_b);
+			*(swsl::wide_float*)(reg_a) += *(swsl::wide_float*)(reg_b);
 			break;
 
 		case FADD_MI:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = &program[iptr++];
-			to_ref_float(reg_a) += to_const_float(reg_b);
+			*(swsl::wide_float*)(reg_a) += to_wide_float(reg_b);
 			break;
 
 		case FSUB_MM:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = stack + sptr - program[iptr++].u_addr;
-			to_ref_float(reg_a) -= to_ref_float(reg_b);
+			*(swsl::wide_float*)(reg_a) -= *(swsl::wide_float*)(reg_b);
 			break;
 
 		case FSUB_MI:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = &program[iptr++];
-			to_ref_float(reg_a) -= to_const_float(reg_b);
+			*(swsl::wide_float*)(reg_a) -= to_wide_float(reg_b);
 			break;
 
 		case FMUL_MM:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = stack + sptr - program[iptr++].u_addr;
-			to_ref_float(reg_a) *= to_ref_float(reg_b);
+			*(swsl::wide_float*)(reg_a) *= *(swsl::wide_float*)(reg_b);
 			break;
 
 		case FMUL_MI:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = &program[iptr++];
-			to_ref_float(reg_a) *= to_const_float(reg_b);
+			*(swsl::wide_float*)(reg_a) *= to_wide_float(reg_b);
 			break;
 
 		case FDIV_MM:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = stack + sptr - program[iptr++].u_addr;
-			to_ref_float(reg_a) /= to_ref_float(reg_b);
+			*(swsl::wide_float*)(reg_a) /= *(swsl::wide_float*)(reg_b);
 			break;
 
 		case FDIV_MI:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = &program[iptr++];
-			to_ref_float(reg_a) /= to_const_float(reg_b);
+			*(swsl::wide_float*)(reg_a) /= to_wide_float(reg_b);
 			break;
 
 		/*case MIN_FF:

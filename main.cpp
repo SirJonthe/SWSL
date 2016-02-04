@@ -9,6 +9,7 @@
 
 #include "swsl.h"
 #include "parser.h"
+#include "gfx.h"
 
 // Things I should look into:
 // Buffers should allocate an extra register at the edges so that screen resolutions that are not multiples of SWSL_WIDTH render properly
@@ -25,8 +26,8 @@ void print_chars(mtlChars s)
 template < int n >
 struct Vertex
 {
-	swsl::Point2D coord;
-	mmlVector<n>  attributes;
+	Point2D      coord;
+	mmlVector<n> attributes;
 };
 
 class Printer
@@ -141,44 +142,54 @@ int main(int, char**)
 	SDL_WM_SetCaption("SWSL test", NULL);
 
 	Printer p;
-	p.SetSize(2);
+	p.SetSize(1);
 
 	mtlString file;
-	if (!mtlParser::BufferFile("../swsl_samples/interp_color.swsl", file)) {
-		p.SetColor(255, 0, 0);
-		p.Print("Could not open file ../swsl_samples/interp_color.swsl");
+	bool compile_success = mtlParser::BufferFile("../swsl_samples/solid_color.swsl", file) && compiler.Compile(file, shader);
+
+	Disassembler disassembler;
+	mtlString disassembly;
+	disassembler.Disassemble(shader, disassembly);
+	print_chars(disassembly);
+	std::cout << std::endl;
+
+	Rasterizer raster;
+	raster.CreateBuffers(video->w, video->h);
+
+	Vertex<3> a, b, c;
+	a.coord.x = video->w / 2;
+	a.coord.y = 0;
+	a.attributes = mmlVector<3>(1.0f, 0.0f, 0.0f);
+	b.coord.x = video->w;
+	b.coord.y = video->h;
+	b.attributes = mmlVector<3>(0.0f, 1.0f, 0.0f);
+	c.coord.x = 0;
+	c.coord.y = video->h;
+	c.attributes = mmlVector<3>(0.0f, 0.0f, 1.0f);
+	raster.SetShader(&shader);
+	raster.FillTriangle(a.coord, b.coord, c.coord, a.attributes, b.attributes, c.attributes);
+
+	raster.WriteColorBuffer((mtlByte*)video->pixels, video->format->BytesPerPixel, mglVideoByteOrder());
+
+	if (compile_success) {
+		p.SetColor(0, 255, 0);
+		p.Print("Compilation successful");
+		p.Newline();
 	} else {
-		if (!compiler.Compile(file, shader)) {
-			const mtlItem<CompilerMessage> *msg = shader.GetErrors();
-			p.SetColor(255, 0, 0);
-			p.Print("Compilation failed:");
-			p.Newline();
-			while (msg != NULL) {
-				p.Print("    ");
-				p.Print(msg->GetItem().msg);
-				p.Print(": ");
-				p.Print(msg->GetItem().ref);
-				p.Newline();
-				msg = msg->GetNext();
-			}
-			p.SetColor(0, 255, 255);
-			msg = shader.GetWarnings();
-			while (msg != NULL) {
-				p.Print(msg->GetItem().msg);
-				p.Print(": ");
-				p.Print(msg->GetItem().ref);
-				p.Newline();
-				msg = msg->GetNext();
-			}
-		} else {
-			p.SetColor(0, 255, 0);
-			p.Print("Compilation successful");
+		p.SetColor(255, 0, 0);
+		p.Print("Compilation failed");
+		p.Newline();
+		for (const mtlItem<CompilerMessage> *i = shader.GetErrors(); i != NULL; i = i->GetNext()) {
+			p.Print("  ");
+			p.Print(i->GetItem().msg);
+			p.Print(": ");
+			p.Print(i->GetItem().ref);
 			p.Newline();
 		}
 	}
 
-	swsl::wide_float vary[3] = { 1.0f, 0.0f, 0.5f };
-	swsl::wide_float frag[4];
+	swsl::wide_float vary[3] = {  1.0f,  0.0f,  0.5f };
+	swsl::wide_float frag[4] = { -2.0f, -2.0f, -2.0f, -2.0f };
 
 	Shader::InputArrays inputs = {
 		{ NULL, 0 },
@@ -186,7 +197,7 @@ int main(int, char**)
 		{ frag, sizeof(frag)/sizeof(swsl::wide_float) }
 	};
 	shader.SetInputArrays(inputs);
-	/*if (!shader.IsValid() || !shader.Run(swsl::wide_float(0.0f) < swsl::wide_float(1.0f))) {
+	if (!shader.IsValid() || !shader.Run(swsl::wide_float(0.0f) < swsl::wide_float(1.0f))) {
 		p.SetColor(255, 0, 0);
 		p.Print("Shader failed to run");
 		p.Newline();
@@ -194,9 +205,7 @@ int main(int, char**)
 		p.SetColor(0, 255, 0);
 		p.Print("Shader execution successful");
 		p.Newline();
-	}*/
-	p.Print("No shader execution");
-	p.Newline();
+	}
 
 	for (int i = 0; i < sizeof(frag)/sizeof(swsl::wide_float); ++i) {
 		float frag_comp[SWSL_WIDTH];
@@ -207,21 +216,6 @@ int main(int, char**)
 		}
 		std::cout << ") ";
 	}
-	std::cout << std::endl;
-
-	Disassembler disassembler;
-	mtlString disassembly;
-	if (!disassembler.Disassemble(shader, disassembly)) {
-		p.SetColor(255, 0, 0);
-		p.Print("Disassembly failed");
-		p.Newline();
-	} else {
-		p.SetColor(0, 255, 0);
-		p.Print("Disassembly successful");
-		p.Newline();
-	}
-
-	print_chars(disassembly);
 	std::cout << std::endl;
 
 	SDL_Flip(video);
