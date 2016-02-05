@@ -126,6 +126,7 @@ void Printer::SetColor(unsigned char _r, unsigned char _g, unsigned char _b)
 int main(int, char**)
 {
 	std::cout << sizeof(char*) * CHAR_BIT << " bit system" << std::endl;
+	std::cout << "SIMD width: " << SWSL_WIDTH << std::endl;
 
 	Compiler compiler;
 	Shader shader;
