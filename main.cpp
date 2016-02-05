@@ -142,86 +142,110 @@ int main(int, char**)
 	SDL_WM_SetCaption("SWSL test", NULL);
 
 	Printer p;
-	p.SetSize(1);
+	p.SetColor(0, 255, 0);
 
 	mtlString file;
-	bool compile_success = mtlParser::BufferFile("../swsl_samples/solid_color.swsl", file) && compiler.Compile(file, shader);
+	if (!mtlParser::BufferFile("../swsl_samples/interp_color.swsl", file)) {
+		std::cout << "Failed to load shader file" << std::endl;
+		return 1;
+	}
+	if (!compiler.Compile(file, shader)) {
+		std::cout << "Failed to compile shader" << std::endl;
+		const mtlItem<CompilerMessage> *err = shader.GetErrors();
+		while (err != NULL) {
+			std::cout << "  ";
+			print_chars(err->GetItem().msg);
+			std::cout << ": ";
+			print_chars(err->GetItem().ref);
+			std::cout << std::endl;
+			err = err->GetNext();
+		}
+		return 1;
+	}
+	{
+		swsl::wide_float vary[3] = {  1.0f,  0.0f,  0.5f };
+		swsl::wide_float frag[4] = { -2.0f, -2.0f, -2.0f, -2.0f };
 
-	Disassembler disassembler;
-	mtlString disassembly;
-	disassembler.Disassemble(shader, disassembly);
-	print_chars(disassembly);
-	std::cout << std::endl;
+		Shader::InputArrays inputs = {
+			{ NULL, 0 },
+			{ vary, sizeof(vary)/sizeof(swsl::wide_float) },
+			{ frag, sizeof(frag)/sizeof(swsl::wide_float) }
+		};
+		shader.SetInputArrays(inputs);
+		if (!shader.IsValid() || !shader.Run(swsl::wide_float(0.0f) < swsl::wide_float(1.0f))) {
+			std::cout << "Failed to execute shader" << std::endl;
+			return 1;
+		}
+
+		for (int i = 0; i < sizeof(frag)/sizeof(swsl::wide_float); ++i) {
+			float frag_comp[SWSL_WIDTH];
+			frag[i].to_scalar(frag_comp);
+			std::cout << "(";
+			for (int j = 0; j < SWSL_WIDTH; ++j) {
+				std::cout << frag_comp[j] << ";";
+			}
+			std::cout << ") ";
+		}
+		std::cout << std::endl;
+	}
+	{
+		Disassembler disassembler;
+		mtlString disassembly;
+		disassembler.Disassemble(shader, disassembly);
+		print_chars(disassembly);
+		std::cout << std::endl;
+	}
+
+	const float side_len = 300.0f;
+	const float base_len = side_len * sin(mmlPI / 3.0f);
 
 	Rasterizer raster;
 	raster.CreateBuffers(video->w, video->h);
-
-	Vertex<3> a, b, c;
-	a.coord.x = video->w / 2;
-	a.coord.y = 0;
-	a.attributes = mmlVector<3>(1.0f, 0.0f, 0.0f);
-	b.coord.x = video->w;
-	b.coord.y = video->h;
-	b.attributes = mmlVector<3>(0.0f, 1.0f, 0.0f);
-	c.coord.x = 0;
-	c.coord.y = video->h;
-	c.attributes = mmlVector<3>(0.0f, 0.0f, 1.0f);
 	raster.SetShader(&shader);
-	raster.FillTriangle(a.coord, b.coord, c.coord, a.attributes, b.attributes, c.attributes);
-
-	raster.WriteColorBuffer((mtlByte*)video->pixels, video->format->BytesPerPixel, mglVideoByteOrder());
-
-	if (compile_success) {
-		p.SetColor(0, 255, 0);
-		p.Print("Compilation successful");
-		p.Newline();
-	} else {
-		p.SetColor(255, 0, 0);
-		p.Print("Compilation failed");
-		p.Newline();
-		for (const mtlItem<CompilerMessage> *i = shader.GetErrors(); i != NULL; i = i->GetNext()) {
-			p.Print("  ");
-			p.Print(i->GetItem().msg);
-			p.Print(": ");
-			p.Print(i->GetItem().ref);
-			p.Newline();
-		}
-	}
-
-	swsl::wide_float vary[3] = {  1.0f,  0.0f,  0.5f };
-	swsl::wide_float frag[4] = { -2.0f, -2.0f, -2.0f, -2.0f };
-
-	Shader::InputArrays inputs = {
-		{ NULL, 0 },
-		{ vary, sizeof(vary)/sizeof(swsl::wide_float) },
-		{ frag, sizeof(frag)/sizeof(swsl::wide_float) }
-	};
-	shader.SetInputArrays(inputs);
-	if (!shader.IsValid() || !shader.Run(swsl::wide_float(0.0f) < swsl::wide_float(1.0f))) {
-		p.SetColor(255, 0, 0);
-		p.Print("Shader failed to run");
-		p.Newline();
-	} else {
-		p.SetColor(0, 255, 0);
-		p.Print("Shader execution successful");
-		p.Newline();
-	}
-
-	for (int i = 0; i < sizeof(frag)/sizeof(swsl::wide_float); ++i) {
-		float frag_comp[SWSL_WIDTH];
-		frag[i].to_scalar(frag_comp);
-		std::cout << "(";
-		for (int j = 0; j < SWSL_WIDTH; ++j) {
-			std::cout << frag_comp[j] << ";";
-		}
-		std::cout << ") ";
-	}
-	std::cout << std::endl;
-
-	SDL_Flip(video);
 
 	SDL_Event event;
-	while (SDL_WaitEvent(&event) && event.type != SDL_QUIT) {}
+	bool quit = false;
+	while (!quit) {
+
+		while (SDL_PollEvent(&event)) {
+			switch (event.type) {
+			case SDL_QUIT: quit = true; break;
+			}
+		}
+
+		const float time_sec = (float)SDL_GetTicks() / 1000.0f;
+		mmlMatrix<2,2> rot = mml2DRotationMatrix(time_sec * mmlPI);
+
+		mmlVector<2> pa = mmlVector<2>(0.0f, -base_len * 0.5f) * rot;
+		mmlVector<2> pb = mmlVector<2>(side_len * 0.5f, base_len * 0.5f) * rot;
+		mmlVector<2> pc = mmlVector<2>(-side_len * 0.5f, pb[1]) * rot;
+
+		Vertex<3> a, b, c;
+		a.coord.x = (int)pa[0] + video->w / 2;
+		a.coord.y = (int)pa[1] + video->h / 2;
+		a.attributes = mmlVector<3>(1.0f, 0.0f, 0.0f);
+		b.coord.x = (int)pb[0] + video->w / 2;
+		b.coord.y = (int)pb[1] + video->h / 2;
+		b.attributes = mmlVector<3>(0.0f, 1.0f, 0.0f);
+		c.coord.x = (int)pc[0] + video->w / 2;
+		c.coord.y = (int)pc[1] + video->h / 2;
+		c.attributes = mmlVector<3>(0.0f, 0.0f, 1.0f);
+
+		raster.ClearBuffers();
+
+		int render_start = (int)SDL_GetTicks();
+		raster.FillTriangle(a.coord, b.coord, c.coord, a.attributes, b.attributes, c.attributes);
+		int render_end = (int)SDL_GetTicks();
+
+		raster.WriteColorBuffer((mtlByte*)video->pixels, video->format->BytesPerPixel, mglVideoByteOrder());
+
+		p.Print("Render time: ");
+		p.Print(render_end - render_start);
+		p.Print(" ms");
+		p.ResetCaret();
+
+		SDL_Flip(video);
+	}
 
 	SDL_Quit();
 
