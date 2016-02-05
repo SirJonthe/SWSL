@@ -123,32 +123,13 @@ void Printer::SetColor(unsigned char _r, unsigned char _g, unsigned char _b)
 #include "compiler.h"
 #include <limits>
 
-int main(int, char**)
+bool LoadShader(const mtlChars &file_name, Shader &shader)
 {
-	std::cout << sizeof(char*) * CHAR_BIT << " bit system" << std::endl;
-	std::cout << "SIMD width: " << SWSL_WIDTH << std::endl;
-
 	Compiler compiler;
-	Shader shader;
-
-	if (SDL_Init(SDL_INIT_VIDEO) == -1) {
-		std::cout << SDL_GetError() << std::endl;
-		return 1;
-	}
-	atexit(SDL_Quit);
-	if (SDL_SetVideoMode(512, 512, 24, SDL_SWSURFACE|SDL_DOUBLEBUF) == NULL) {
-		std::cout << SDL_GetError() << std::endl;
-		return 1;
-	}
-	SDL_WM_SetCaption("SWSL test", NULL);
-
-	Printer p;
-	p.SetColor(0, 255, 0);
-
 	mtlString file;
-	if (!mtlParser::BufferFile("../swsl_samples/interp_color.swsl", file)) {
+	if (!mtlParser::BufferFile(file_name, file)) {
 		std::cout << "Failed to load shader file" << std::endl;
-		return 1;
+		return false;
 	}
 	if (!compiler.Compile(file, shader)) {
 		std::cout << "Failed to compile shader" << std::endl;
@@ -161,7 +142,7 @@ int main(int, char**)
 			std::cout << std::endl;
 			err = err->GetNext();
 		}
-		return 1;
+		return false;
 	}
 	{
 		swsl::wide_float vary[3] = {  1.0f,  0.0f,  0.5f };
@@ -175,7 +156,7 @@ int main(int, char**)
 		shader.SetInputArrays(inputs);
 		if (!shader.IsValid() || !shader.Run(swsl::wide_float(0.0f) < swsl::wide_float(1.0f))) {
 			std::cout << "Failed to execute shader" << std::endl;
-			return 1;
+			return false;
 		}
 
 		for (int i = 0; i < sizeof(frag)/sizeof(swsl::wide_float); ++i) {
@@ -196,41 +177,90 @@ int main(int, char**)
 		print_chars(disassembly);
 		std::cout << std::endl;
 	}
+	return true;
+}
+
+int main(int, char**)
+{
+	std::cout << sizeof(char*) * CHAR_BIT << " bit system" << std::endl;
+	std::cout << "SIMD width: " << SWSL_WIDTH << std::endl;
+
+	if (SDL_Init(SDL_INIT_VIDEO) == -1) {
+		std::cout << SDL_GetError() << std::endl;
+		return 1;
+	}
+	atexit(SDL_Quit);
+	if (SDL_SetVideoMode(512, 512, 24, SDL_SWSURFACE|SDL_DOUBLEBUF) == NULL) {
+		std::cout << SDL_GetError() << std::endl;
+		return 1;
+	}
+	SDL_WM_SetCaption("SWSL test", NULL);
 
 	const float side_len = 300.0f;
 	const float base_len = side_len * sin(mmlPI / 3.0f);
 
+	mmlVector<2> a_pos = mmlVector<2>(side_len * 0.5f,     0.0f);
+	mmlVector<2> b_pos = mmlVector<2>(side_len,        base_len);
+	mmlVector<2> c_pos = mmlVector<2>(    0.0f,        base_len);
+	mmlVector<2> center = (a_pos + b_pos + c_pos) / 3.0f;
+	a_pos -= center;
+	b_pos -= center;
+	c_pos -= center;
+
+	SDL_Event  event;
+	Shader     shader;
+	bool       quit = false;
+	bool       reload_shader = true;
+	bool       shader_status = false;
 	Rasterizer raster;
+	Printer    p;
+
+	p.SetColor(0, 255, 0);
+
 	raster.CreateBuffers(video->w, video->h);
 	raster.SetShader(&shader);
 
-	SDL_Event event;
-	bool quit = false;
 	while (!quit) {
+
+		if (reload_shader) {
+			reload_shader = false;
+			shader_status = LoadShader("../swsl_samples/interactive.swsl", shader);
+		}
 
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
+			case SDL_KEYDOWN:
+				if (event.key.keysym.sym == SDLK_r) {
+					reload_shader = true;
+				}
+				break;
 			case SDL_QUIT: quit = true; break;
 			}
 		}
 
-		const float time_sec = (float)SDL_GetTicks() / 1000.0f;
-		mmlMatrix<2,2> rot = mml2DRotationMatrix(time_sec * mmlPI);
-
-		mmlVector<2> pa = mmlVector<2>(0.0f, -base_len * 0.5f) * rot;
-		mmlVector<2> pb = mmlVector<2>(side_len * 0.5f, base_len * 0.5f) * rot;
-		mmlVector<2> pc = mmlVector<2>(-side_len * 0.5f, pb[1]) * rot;
-
 		Vertex<3> a, b, c;
-		a.coord.x = (int)pa[0] + video->w / 2;
-		a.coord.y = (int)pa[1] + video->h / 2;
-		a.attributes = mmlVector<3>(1.0f, 0.0f, 0.0f);
-		b.coord.x = (int)pb[0] + video->w / 2;
-		b.coord.y = (int)pb[1] + video->h / 2;
-		b.attributes = mmlVector<3>(0.0f, 1.0f, 0.0f);
-		c.coord.x = (int)pc[0] + video->w / 2;
-		c.coord.y = (int)pc[1] + video->h / 2;
-		c.attributes = mmlVector<3>(0.0f, 0.0f, 1.0f);
+
+		mmlMatrix<2,2> rmat = mml2DRotationMatrix((float)SDL_GetTicks() / 1000.0f);
+		mmlVector<2> at = a_pos * rmat;
+		mmlVector<2> bt = b_pos * rmat;
+		mmlVector<2> ct = c_pos * rmat;
+
+		a.coord.x = round(at[0]) + video->w / 2;
+		a.coord.y = round(at[1]) + video->h / 2;
+		b.coord.x = round(bt[0]) + video->w / 2;
+		b.coord.y = round(bt[1]) + video->h / 2;
+		c.coord.x = round(ct[0]) + video->w / 2;
+		c.coord.y = round(ct[1]) + video->h / 2;
+
+		a.attributes[0] = 1.0f;
+		a.attributes[1] = 0.0f;
+		a.attributes[2] = 0.0f;
+		b.attributes[0] = 0.0f;
+		b.attributes[1] = 1.0f;
+		b.attributes[2] = 0.0f;
+		c.attributes[0] = 0.0f;
+		c.attributes[1] = 0.0f;
+		c.attributes[2] = 1.0f;
 
 		raster.ClearBuffers();
 
@@ -240,6 +270,15 @@ int main(int, char**)
 
 		raster.WriteColorBuffer((mtlByte*)video->pixels, video->format->BytesPerPixel, mglVideoByteOrder());
 
+		if (!shader_status) {
+			p.SetColor(255, 0, 0);
+			p.Print("Shader execution failed");
+			p.Newline();
+		} else {
+			p.SetColor(0, 255, 0);
+		}
+		p.Print("Press \'r\' to reload shader");
+		p.Newline();
 		p.Print("Render time: ");
 		p.Print(render_end - render_start);
 		p.Print(" ms");
