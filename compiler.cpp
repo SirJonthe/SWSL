@@ -69,7 +69,8 @@ struct CompileInstance
 	mtlList<CompilerMessage>  errors;
 	mtlList<CompilerMessage>  warnings;
 	mtlList<Scope>            scopes;
-	int                       base_sptr;
+	int                       sptr;
+	int                       stack_manip;
 	int                       main;
 };
 
@@ -279,23 +280,24 @@ ExpressionNode *GenerateTree(const mtlChars &expr)
 	return tree;
 }
 
-Definition     *GetType(CompileInstance &inst, const mtlChars &name);
-bool            IsValidName(const mtlChars &name);
-const TypeInfo *GetTypeInfo(const mtlChars &type);
-bool            EmitOperand(CompileInstance &inst, const mtlChars &operand, int lane);
-bool            AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr);
-bool            DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &name, const mtlChars &expr);
-bool            CompileScope(CompileInstance &inst, const mtlChars &input);
-bool            CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlChars &name, const mtlChars &params, const mtlChars &body);
-bool            CompileCondition(CompileInstance &inst, const mtlChars &cond, const mtlChars &body);
-bool            CompileStatement(CompileInstance &inst, const mtlChars &statement);
-Scope          &PushScope(CompileInstance &inst);
-void            PopScope(CompileInstance &inst);
-void            EmitInstruction(CompileInstance &inst, InstructionSet instr);
-void            EmitImmutable(CompileInstance &inst, float fl);
-void            EmitAddress(CompileInstance &inst, addr_t addr);
-void            PushStack(CompileInstance &inst, int size);
-void            PopStack(CompileInstance &inst, int size);
+Definition            *GetType(CompileInstance &inst, const mtlChars &name);
+bool                   IsValidName(const mtlChars &name);
+const TypeInfo        *GetTypeInfo(const mtlChars &type);
+bool                   EmitOperand(CompileInstance &inst, const mtlChars &operand, int lane);
+bool                   AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr);
+bool                   DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &name, const mtlChars &expr);
+bool                   CompileScope(CompileInstance &inst, const mtlChars &input);
+bool                   CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlChars &name, const mtlChars &params, const mtlChars &body);
+bool                   CompileCondition(CompileInstance &inst, const mtlChars &cond, const mtlChars &body);
+bool                   CompileStatement(CompileInstance &inst, const mtlChars &statement);
+Scope                 &PushScope(CompileInstance &inst);
+void                   PopScope(CompileInstance &inst);
+void                   EmitInstruction(CompileInstance &inst, InstructionSet instr);
+void                   EmitImmutable(CompileInstance &inst, float fl);
+void                   EmitAddress(CompileInstance &inst, addr_t addr);
+void                   PushStack(CompileInstance &inst, int size);
+void                   PopStack(CompileInstance &inst, int size);
+const InstructionInfo *GetInstructionInfo(InstructionSet instr);
 
 Definition *GetType(CompileInstance &inst, const mtlChars &name)
 {
@@ -360,7 +362,7 @@ bool EmitOperand(CompileInstance &inst, const mtlChars &operand, int lane)
 			}
 		}
 	} else {
-		EmitAddress(inst, inst.base_sptr - type->values[lane].var_addr); // this is wrong
+		EmitAddress(inst, inst.sptr - type->values[lane].var_addr); // this is wrong
 	}
 	return true;
 }
@@ -464,7 +466,7 @@ bool DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &nam
 	def.values.Create(type_info->size);
 
 	for (int addr_offset = 0; addr_offset < type_info->size; ++addr_offset) {
-		def.values[addr_offset].var_addr = inst.base_sptr + inst.scopes.GetLast()->GetItem().size + addr_offset;
+		def.values[addr_offset].var_addr = inst.sptr + inst.scopes.GetLast()->GetItem().size + addr_offset;
 	}
 
 	PushStack(inst, type_info->size);
@@ -561,7 +563,7 @@ bool CompileStatement(CompileInstance &inst, const mtlChars &statement)
 	//	result = DeclareConst(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetItem());
 	//	break;
 	//case 1: // var decl
-	switch (parser.Match("%w%s=%s%|%s=%s", m, &seq)) {
+	switch (parser.Match("%w%w=%s%|%w=%s%|%w(%s)%|%w%w", m, &seq)) {
 	case 0:
 		result = DeclareVar(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetItem());
 		break;
@@ -569,9 +571,17 @@ bool CompileStatement(CompileInstance &inst, const mtlChars &statement)
 	case 1:
 		result = AssignVar(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem());
 		break;
+	case 2:
+		// store result in temp
+		result = false;
+		inst.errors.AddLast(CompilerMessage("Calling functions is not supported yet", seq));
+		break;
+	case 3:
+		result = DeclareVar(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem(), "");
+		break;
 	default:
 		result = false;
-		inst.errors.AddLast(CompilerMessage("Malformed statement", seq));
+		inst.errors.AddLast(CompilerMessage("Malformed statement", statement));
 		break;
 	}
 	return result;
@@ -579,9 +589,6 @@ bool CompileStatement(CompileInstance &inst, const mtlChars &statement)
 
 Scope &PushScope(CompileInstance &inst)
 {
-	if (inst.scopes.GetLast() != NULL) {
-		inst.base_sptr += inst.scopes.GetLast()->GetItem().size;
-	}
 	Scope &scope = inst.scopes.AddLast();
 	scope.size = 0;
 	return scope;
@@ -593,14 +600,26 @@ void PopScope(CompileInstance &inst)
 	Scope &scope = inst.scopes.GetLast()->GetItem();
 	PopStack(inst, scope.size);
 	inst.scopes.RemoveLast();
-	if (inst.scopes.GetLast() != NULL) {
-		inst.base_sptr -= inst.scopes.GetLast()->GetItem().size;
-	}
 }
 
 void EmitInstruction(CompileInstance &inst, InstructionSet instr)
 {
 	Instruction i;
+	if (instr != END) {
+		if (inst.stack_manip < 0) {
+			i.instr = UPOP_I;
+			inst.program.AddLast(i);
+			EmitAddress(inst, (addr_t)(-inst.stack_manip));
+			inst.stack_manip = 0;
+		} else if (inst.stack_manip > 0) {
+			i.instr = UPUSH_I;
+			inst.program.AddLast(i);
+			EmitAddress(inst, (addr_t)inst.stack_manip);
+			inst.stack_manip = 0;
+		}
+	} else {
+		inst.stack_manip = 0;
+	}
 	i.instr = instr;
 	inst.program.AddLast(i);
 }
@@ -621,27 +640,29 @@ void EmitAddress(CompileInstance &inst, addr_t addr)
 
 void PushStack(CompileInstance &inst, int size)
 {
-	if (size > 0) {
-		EmitInstruction(inst, UPUSH_I);
-		EmitAddress(inst, size);
-		inst.scopes.GetLast()->GetItem().size += size;
-	}
+	inst.stack_manip += size;
+	inst.scopes.GetLast()->GetItem().size += size;
+	inst.sptr += size;
 }
 
 void PopStack(CompileInstance &inst, int size)
 {
-	if (size > 0) {
-		EmitInstruction(inst, UPOP_I);
-		EmitAddress(inst, size);
-		inst.scopes.GetLast()->GetItem().size -= size;
-	}
+	inst.stack_manip -= size;
+	inst.scopes.GetLast()->GetItem().size -= size;
+	inst.sptr -= size;
+}
+
+const InstructionInfo *GetInstructionInfo(InstructionSet instr)
+{
+	return ((int)instr < INSTR_COUNT) ? gInstr + (int)instr : NULL;
 }
 
 bool Compiler::Compile(const mtlChars &input, Shader &output)
 {
 	CompileInstance inst;
-	inst.base_sptr = 0;
+	inst.sptr = 0;
 	inst.main = 0;
+	inst.stack_manip = 0;
 	EmitAddress(inst, 0); // number of inputs
 	inst.prog_inputs = &(inst.program.GetLast()->GetItem().u_addr);
 	EmitAddress(inst, 2); // entry point (only a guess, is modified later)
@@ -659,16 +680,6 @@ bool Compiler::Compile(const mtlChars &input, Shader &output)
 	output.m_errors.Copy(inst.errors);
 	output.m_warnings.Copy(inst.warnings);
 	return result;
-}
-
-const InstructionInfo *GetInstructionInfo(InstructionSet instr)
-{
-	for (int i = 0; i < INSTR_COUNT; ++i) {
-		if (gInstr[i].instr == instr) {
-			return gInstr+i;
-		}
-	}
-	return NULL;
 }
 
 bool Disassembler::Disassemble(const Shader &shader, mtlString &output)
@@ -708,7 +719,7 @@ bool Disassembler::Disassemble(const Shader &shader, mtlString &output)
 				num.FromInt(shader.m_program[iptr++].u_addr);
 				output.Append(num);
 			}
-			for (int j = 0; j < (4 - num.GetSize()); ++j) {
+			for (int j = 0; j < (6 - num.GetSize()); ++j) {
 				output.Append(' ');
 			}
 		}
