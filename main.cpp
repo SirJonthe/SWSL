@@ -222,6 +222,8 @@ int main(int, char**)
 
 	while (!quit) {
 
+		Uint32 frame_start = SDL_GetTicks();
+
 		if (reload_shader) {
 			reload_shader = false;
 			shader_status = LoadShader("../swsl_samples/interactive.swsl", shader);
@@ -264,9 +266,10 @@ int main(int, char**)
 
 		raster.ClearBuffers();
 
-		int render_start = (int)SDL_GetTicks();
+		Uint32 render_start = SDL_GetTicks();
 		raster.FillTriangle(a.coord, b.coord, c.coord, a.attributes, b.attributes, c.attributes);
-		int render_end = (int)SDL_GetTicks();
+		Uint32 render_end = SDL_GetTicks();
+		Uint32 render_time = render_end - render_start;
 
 		raster.WriteColorBuffer((mtlByte*)video->pixels, video->format->BytesPerPixel, mglVideoByteOrder());
 
@@ -280,156 +283,23 @@ int main(int, char**)
 		p.Print("Press \'r\' to reload shader");
 		p.Newline();
 		p.Print("Render time: ");
-		p.Print(render_end - render_start);
+
+		p.Print((int)render_time);
+		p.Print("/");
+		Uint32 frame_end = SDL_GetTicks();
+		Uint32 frame_time = frame_end - frame_start;
+		p.Print((int)frame_time);
 		p.Print(" ms");
 		p.ResetCaret();
 
 		SDL_Flip(video);
+		if ((int)(25 - render_time) > 0) {
+			SDL_Delay(25 - render_time);
+		}
+
 	}
 
 	SDL_Quit();
 
 	return 0;
 }
-
-/*int main(int, char**)
-{
-	std::cout << "Cores: " << omp_get_num_procs() << std::endl;
-	#pragma omp parallel
-	{
-		std::cout << omp_get_thread_num();
-	}
-	std::cout << std::endl;
-
-	if (SDL_Init(SDL_INIT_VIDEO) == -1) {
-		std::cout << SDL_GetError() << std::endl;
-		return 1;
-	}
-	atexit(SDL_Quit);
-	if (SDL_SetVideoMode(512, 512, 24, SDL_SWSURFACE|SDL_DOUBLEBUF) == NULL) {
-		std::cout << SDL_GetError() << std::endl;
-		return 1;
-	}
-
-	mtlString file_contents;
-	mtlParser parser;
-	if (!parser.BufferFile("../shader.swsl", file_contents)) {
-		std::cout << "File not found." << std::endl;
-		return 1;
-	}
-
-	mtlArray<char> program;
-	swsl::Compiler compiler;
-	if (!compiler.Compile(file_contents, swsl::Compiler::SWSL, swsl::Compiler::ASM, program)) {
-		std::cout << "Failed to compile SWSL to ASM." << std::endl;
-		const mtlItem<mtlString> *err = compiler.GetErrors();
-		while (err != NULL) {
-			std::cout << "  ";
-			for (int i = 0; i < err->GetItem().GetSize(); ++i) {
-				std::cout << err->GetItem().GetChars()[i];
-			}
-			std::cout << std::endl;
-			err = err->GetNext();
-		}
-		return 1;
-	}
-
-	file_contents.Copy(mtlChars::FromDynamic(program, program.GetSize()));
-	if (!compiler.Compile(file_contents, swsl::Compiler::ASM, swsl::Compiler::BYTE_CODE, program)) {
-		std::cout << "Failed to compile ASM to BYTE_CODE." << std::endl;
-		const mtlItem<mtlString> *err = compiler.GetErrors();
-		while (err != NULL) {
-			std::cout << "  ";
-			for (int i = 0; i < err->GetItem().GetSize(); ++i) {
-				std::cout << err->GetItem().GetChars()[i];
-			}
-			std::cout << std::endl;
-			err = err->GetNext();
-		}
-		return 1;
-	}
-
-	swsl::Rasterizer rasterizer;
-	if (!rasterizer.SetShaderProgram(program)) {
-		std::cout << "Failed to set program" << std::endl;
-		return 1;
-	}
-	rasterizer.CreateBuffers(video->w, video->h);
-	rasterizer.ClearBuffers();
-
-	mmlVector<2> a_pos = mmlVector<2>(   0.0f, -111.0f);
-	mmlVector<2> b_pos = mmlVector<2>( 128.0f,  111.0f);
-	mmlVector<2> c_pos = mmlVector<2>(-128.0f,  111.0f);
-
-	float time = 0.0f;
-
-	Printer print;
-	print.SetSize(3);
-
-	SDL_Event event;
-	bool quit = false;
-	while (!quit) {
-
-		Uint32 frame_start = SDL_GetTicks();
-
-		while (SDL_PollEvent(&event)) {
-			switch (event.type) {
-			case SDL_QUIT: quit = true; break;
-			}
-		}
-
-		Vertex<3> a, b, c;
-
-		mmlMatrix<2,2> rmat = mml2DRotationMatrix(time);
-		mmlVector<2> at = a_pos * rmat;
-		mmlVector<2> bt = b_pos * rmat;
-		mmlVector<2> ct = c_pos * rmat;
-
-		a.coord.x = round(at[0]) + video->w / 2;
-		a.coord.y = round(at[1]) + video->h / 2;
-		b.coord.x = round(bt[0]) + video->w / 2;
-		b.coord.y = round(bt[1]) + video->h / 2;
-		c.coord.x = round(ct[0]) + video->w / 2;
-		c.coord.y = round(ct[1]) + video->h / 2;
-
-		a.attributes[0] = 1.0f;
-		a.attributes[1] = 0.0f;
-		a.attributes[2] = 0.0f;
-		b.attributes[0] = 0.0f;
-		b.attributes[1] = 1.0f;
-		b.attributes[2] = 0.0f;
-		c.attributes[0] = 0.0f;
-		c.attributes[1] = 0.0f;
-		c.attributes[2] = 1.0f;
-
-		Uint32 render_start = SDL_GetTicks();
-		rasterizer.FillTriangle(a.coord, b.coord, c.coord, a.attributes, b.attributes, c.attributes);
-		Uint32 render_end = SDL_GetTicks();
-		Uint32 render_time = render_end - render_start;
-
-		Uint32 convert_start = SDL_GetTicks();
-		rasterizer.WriteColorBuffer((mtlByte*)video->pixels, video->format->BytesPerPixel, mglVideoByteOrder());
-		float clear_color[] = { 1.0f, 0.0f, 1.0f, 0.0f };
-		rasterizer.ClearBuffers(clear_color);
-		Uint32 convert_end = SDL_GetTicks();
-		Uint32 convert_time = convert_end - convert_start;
-
-		print.ResetCaret();
-		print.Print("Render:  ");
-		print.Print((int)render_time);
-		print.Print(" ms");
-		print.Newline();
-		print.Print("Convert: ");
-		print.Print((int)convert_time);
-		print.Print(" ms");
-
-		SDL_Flip(video);
-
-		Uint32 frame_end = SDL_GetTicks();
-		time += (float)(frame_end - frame_start) / 1000.0f;
-	}
-
-	SDL_Quit();
-
-	return 0;
-}*/
