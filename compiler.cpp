@@ -59,6 +59,7 @@ struct Scope
 	mtlList< Definition > defs;
 	Parser                parser;
 	int                   size;
+	int                   rel_sptr;
 };
 
 struct CompileInstance
@@ -69,7 +70,6 @@ struct CompileInstance
 	mtlList<CompilerMessage>  errors;
 	mtlList<CompilerMessage>  warnings;
 	mtlList<Scope>            scopes;
-	int                       sptr;
 	int                       stack_manip;
 	int                       main;
 };
@@ -298,6 +298,7 @@ void                   EmitAddress(CompileInstance &inst, addr_t addr);
 void                   PushStack(CompileInstance &inst, int size);
 void                   PopStack(CompileInstance &inst, int size);
 const InstructionInfo *GetInstructionInfo(InstructionSet instr);
+const InstructionInfo *GetInstructionInfo(const mtlChars &instr);
 
 Definition *GetType(CompileInstance &inst, const mtlChars &name)
 {
@@ -317,7 +318,7 @@ Definition *GetType(CompileInstance &inst, const mtlChars &name)
 
 bool IsValidName(const mtlChars &name)
 {
-	if (name.GetSize() > 0) {
+	if (name.GetSize() > 0 && GetTypeInfo(name) == NULL) {
 		if (!mtlChars::IsAlpha(name.GetChars()[0]) && name.GetChars()[0] != '_') {
 			return false;
 		}
@@ -356,13 +357,13 @@ bool EmitOperand(CompileInstance &inst, const mtlChars &operand, int lane)
 			if (p.Match("[%i]", m) == 0) {
 				int stack_offset;
 				m.GetFirst()->GetItem().ToInt(stack_offset);
-				EmitAddress(inst, inst.scopes.GetLast()->GetItem().size - stack_offset);
+				EmitAddress(inst, inst.scopes.GetLast()->GetItem().rel_sptr - stack_offset);
 			} else {
 				return false;
 			}
 		}
 	} else {
-		EmitAddress(inst, inst.sptr - type->values[lane].var_addr); // this is wrong
+		EmitAddress(inst, inst.scopes.GetLast()->GetItem().rel_sptr - type->values[lane].var_addr);
 	}
 	return true;
 }
@@ -465,8 +466,9 @@ bool DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &nam
 	def.type = *type_info;
 	def.values.Create(type_info->size);
 
+	const int rel_sptr = inst.scopes.GetLast()->GetItem().rel_sptr;
 	for (int addr_offset = 0; addr_offset < type_info->size; ++addr_offset) {
-		def.values[addr_offset].var_addr = inst.sptr + inst.scopes.GetLast()->GetItem().size + addr_offset;
+		def.values[addr_offset].var_addr = rel_sptr + addr_offset;
 	}
 
 	PushStack(inst, type_info->size);
@@ -482,14 +484,17 @@ bool CompileScope(CompileInstance &inst, const mtlChars &input)
 	mtlList<mtlChars> m;
 	mtlChars seq;
 	while (result && !scope.parser.IsEnd()) {
-		switch (scope.parser.Match("%w%w(%s){%s}%|if(%s){%s}%|%s;", m, &seq)) {
-		case 0: // FUNCTION
+		switch (scope.parser.Match("{%s}%|%w%w(%s){%s}%|if(%s){%s}%|%s;", m, &seq)) {
+		case 0: // SCOPE
+			result = CompileScope(inst, m.GetFirst()->GetItem());
+			break;
+		case 1: // FUNCTION
 			result = CompileFunction(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetNext()->GetItem());
 			break;
-		case 1: // CONDITION
+		case 2: // CONDITION
 			result = CompileCondition(inst, m.GetFirst()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetItem());
 			break;
-		case 2: // STATEMENT
+		case 3: // STATEMENT
 			result = CompileStatement(inst, m.GetFirst()->GetItem());
 			break;
 		default:
@@ -505,6 +510,7 @@ bool CompileScope(CompileInstance &inst, const mtlChars &input)
 bool CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlChars &name, const mtlChars &params, const mtlChars &body)
 {
 	PushScope(inst);
+	inst.scopes.GetLast()->GetItem().rel_sptr = 0; // reset the relative stack pointer
 	bool result = true;
 	bool is_main = false;
 	result &= DeclareVar(inst, ret_type, name, "");
@@ -526,6 +532,9 @@ bool CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlC
 	int stack_start = inst.scopes.GetLast()->GetItem().size;
 	while (!p.IsEnd()) {
 		if (p.Match("%w%w", m, &seq) == 0) {
+			std::cout << "Declare: ";
+			print_ch(m.GetFirst()->GetNext()->GetItem());
+			std::cout << std::endl;
 			result &= DeclareVar(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem(), "");
 		} else {
 			inst.errors.AddLast(CompilerMessage("Parameter syntax", seq));
@@ -591,6 +600,11 @@ Scope &PushScope(CompileInstance &inst)
 {
 	Scope &scope = inst.scopes.AddLast();
 	scope.size = 0;
+	if (inst.scopes.GetLast()->GetPrev() != NULL) {
+		scope.rel_sptr = inst.scopes.GetLast()->GetPrev()->GetItem().rel_sptr;
+	} else {
+		scope.rel_sptr = 0;
+	}
 	return scope;
 }
 
@@ -642,14 +656,14 @@ void PushStack(CompileInstance &inst, int size)
 {
 	inst.stack_manip += size;
 	inst.scopes.GetLast()->GetItem().size += size;
-	inst.sptr += size;
+	inst.scopes.GetLast()->GetItem().rel_sptr += size;
 }
 
 void PopStack(CompileInstance &inst, int size)
 {
 	inst.stack_manip -= size;
 	inst.scopes.GetLast()->GetItem().size -= size;
-	inst.sptr -= size;
+	inst.scopes.GetLast()->GetItem().rel_sptr -= size;
 }
 
 const InstructionInfo *GetInstructionInfo(InstructionSet instr)
@@ -657,10 +671,19 @@ const InstructionInfo *GetInstructionInfo(InstructionSet instr)
 	return ((int)instr < INSTR_COUNT) ? gInstr + (int)instr : NULL;
 }
 
+const InstructionInfo *GetInstructionInfo(const mtlChars &instr)
+{
+	for (int i = 0; i < INSTR_COUNT; ++i) {
+		if (gInstr[i].name.Compare(instr, true)) {
+			return gInstr + i;
+		}
+	}
+	return NULL;
+}
+
 bool Compiler::Compile(const mtlChars &input, Shader &output)
 {
 	CompileInstance inst;
-	inst.sptr = 0;
 	inst.main = 0;
 	inst.stack_manip = 0;
 	EmitAddress(inst, 0); // number of inputs
