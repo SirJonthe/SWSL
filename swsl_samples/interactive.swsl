@@ -1,5 +1,9 @@
+float sum(float a, float b, float c)
+{
+	float s = a + b + c;
+}
+
 void main(float3 i_color, float3 frag, float depth)
 {
-	float a;
-	frag = i_color;
+	frag.x = 1.0;
 }

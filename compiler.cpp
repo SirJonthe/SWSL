@@ -111,6 +111,8 @@ struct ValueNode : public ExpressionNode
 	mtlString term;
 	int       size;
 
+	void GetLane(const mtlChars &val, int lane, mtlString &out) const;
+
 	int  Evaluate(const mtlChars &dst, mtlString &out, int lane, int depth);
 	bool IsLeaf( void ) const { return true; }
 	void AppendValue(mtlString &out);
@@ -155,22 +157,47 @@ void OperationNode::AppendValue(mtlString &out)
 	out.Append(operation);
 }
 
+void ValueNode::GetLane(const mtlChars &val, int lane, mtlString &out) const
+{
+	out.Free();
+	if (val.IsFloat()) {
+		out.Copy(val);
+	} else {
+		int index = val.FindLastChar('.');
+		if (index != -1) {
+			out.Append(mtlChars(val, 0, index));
+			out.Append('.');
+			int size = val.GetSize() - (index + 1);
+			out.Append(lane < size ? mtlChars(val, index+1, val.GetSize())[lane] : '0');
+		} else {
+			mtlChars mem = "xyzw";
+			out.Append(val);
+			out.Append('.');
+			out.Append(lane < mem.GetSize() ? mem[lane] : '0');
+		}
+	}
+}
+
 int ValueNode::Evaluate(const mtlChars &dst, mtlString &out, int lane, int depth)
 {
 	int out_depth = 0;
+	mtlString temp;
 	if (depth > 0 || dst.GetSize() == 0) {
 		out.Append('[');
-		mtlString addr_str;
-		addr_str.FromInt(depth);
-		out.Append(addr_str);
+		temp.FromInt(depth);
+		out.Append(temp);
 		out.Append(']');
 		out_depth = depth;
 	} else {
-		out.Append(dst);
+		//out.Append(dst);
+		GetLane(dst, lane, temp);
+		out.Append(temp);
 		out_depth = 0;
 	}
 	out.Append("=");
-	AppendValue(out);
+	//AppendValue(out);
+	GetLane(term, lane, temp);
+	out.Append(temp);
 	out.Append(';');
 
 	return out_depth;
@@ -288,7 +315,7 @@ bool                   AssignVar(CompileInstance &inst, const mtlChars &name, co
 bool                   DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &name, const mtlChars &expr);
 bool                   CompileScope(CompileInstance &inst, const mtlChars &input);
 bool                   CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlChars &name, const mtlChars &params, const mtlChars &body);
-bool                   CompileCondition(CompileInstance &inst, const mtlChars &cond, const mtlChars &body);
+bool                   CompileCondition(CompileInstance &inst, const mtlChars &cond, const mtlChars &if_body, const mtlChars &else_body);
 bool                   CompileStatement(CompileInstance &inst, const mtlChars &statement);
 Scope                 &PushScope(CompileInstance &inst);
 void                   PopScope(CompileInstance &inst);
@@ -299,6 +326,7 @@ void                   PushStack(CompileInstance &inst, int size);
 void                   PopStack(CompileInstance &inst, int size);
 const InstructionInfo *GetInstructionInfo(InstructionSet instr);
 const InstructionInfo *GetInstructionInfo(const mtlChars &instr);
+bool                   IsGlobal(const CompileInstance &inst);
 
 Definition *GetType(CompileInstance &inst, const mtlChars &name)
 {
@@ -370,7 +398,8 @@ bool EmitOperand(CompileInstance &inst, const mtlChars &operand, int lane)
 
 bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr)
 {
-	Definition *type = GetType(inst, name);
+	int index = name.FindLastChar('.');
+	Definition *type = GetType(inst, index != -1 ? mtlChars(name, 0, index) : name);
 	if (type == NULL) {
 		inst.errors.AddLast(CompilerMessage("Undeclared variable", name));
 		return false;
@@ -484,7 +513,7 @@ bool CompileScope(CompileInstance &inst, const mtlChars &input)
 	mtlList<mtlChars> m;
 	mtlChars seq;
 	while (result && !scope.parser.IsEnd()) {
-		switch (scope.parser.Match("{%s}%|%w%w(%s){%s}%|if(%s){%s}%|%s;", m, &seq)) {
+		switch (scope.parser.Match("{%s}%|%w%w(%s){%s}%|if(%s){%s}else{%s}%|if(%s){%s}%|%s;", m, &seq)) {
 		case 0: // SCOPE
 			result = CompileScope(inst, m.GetFirst()->GetItem());
 			break;
@@ -492,9 +521,12 @@ bool CompileScope(CompileInstance &inst, const mtlChars &input)
 			result = CompileFunction(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetNext()->GetItem());
 			break;
 		case 2: // CONDITION
-			result = CompileCondition(inst, m.GetFirst()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetItem());
+			result = CompileCondition(inst, m.GetFirst()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetItem(), "");
 			break;
-		case 3: // STATEMENT
+		case 3: // CONDITION
+			result = CompileCondition(inst, m.GetFirst()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetNext()->GetItem());
+			break;
+		case 4: // STATEMENT
 			result = CompileStatement(inst, m.GetFirst()->GetItem());
 			break;
 		default:
@@ -509,6 +541,11 @@ bool CompileScope(CompileInstance &inst, const mtlChars &input)
 
 bool CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlChars &name, const mtlChars &params, const mtlChars &body)
 {
+	if (!IsGlobal(inst)) { // TODO: I want to support this eventually, but I need to emit jump instructions
+		inst.errors.AddLast(CompilerMessage("Nested functions not allowed", name));
+		return false;
+	}
+
 	PushScope(inst);
 	inst.scopes.GetLast()->GetItem().rel_sptr = 0; // reset the relative stack pointer
 	bool result = true;
@@ -532,9 +569,6 @@ bool CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlC
 	int stack_start = inst.scopes.GetLast()->GetItem().size;
 	while (!p.IsEnd()) {
 		if (p.Match("%w%w", m, &seq) == 0) {
-			std::cout << "Declare: ";
-			print_ch(m.GetFirst()->GetNext()->GetItem());
-			std::cout << std::endl;
 			result &= DeclareVar(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem(), "");
 		} else {
 			inst.errors.AddLast(CompilerMessage("Parameter syntax", seq));
@@ -548,39 +582,42 @@ bool CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlC
 	if (is_main) {
 		*inst.prog_inputs = stack_end - stack_start;
 		EmitInstruction(inst, END);
+	} else {
+		// FIX: This is a placeholder to prevent the compiler from optimizing stack manipulations
+		EmitInstruction(inst, NOP); // this should emit a SET instruction (set the value of the return value)
 	}
 	return result;
 }
 
-bool CompileCondition(CompileInstance &inst, const mtlChars &cond, const mtlChars &body)
+bool CompileCondition(CompileInstance &inst, const mtlChars &cond, const mtlChars &if_body, const mtlChars &else_body)
 {
 	// output forks (based on cond)
-	bool result = CompileScope(inst, body);
+	bool result = CompileScope(inst, if_body) & CompileScope(inst, else_body);
 	// output merges
 	return result;
 }
 
 bool CompileStatement(CompileInstance &inst, const mtlChars &statement)
 {
+	if (IsGlobal(inst)) {
+		inst.errors.AddLast(CompilerMessage("Global statements not allowed", statement));
+		return false;
+	}
+
 	Parser parser;
 	parser.SetBuffer(statement);
 	mtlList<mtlChars> m;
 	mtlChars seq;
 	bool result = false;
-	//switch (parser.Match("const %w%s=%s%|%w%s=%s%|%s=%s", m, &seq)) {
-	//case 0: // const decl - determine readonly/immutable
-	//	result = DeclareConst(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetItem());
-	//	break;
-	//case 1: // var decl
-	switch (parser.Match("%w%w=%s%|%w=%s%|%w(%s)%|%w%w", m, &seq)) {
+	switch (parser.Match("%w%w=%s%|%s=%s%|%w(%s)%|%w%w", m, &seq)) {
 	case 0:
 		result = DeclareVar(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetItem());
 		break;
-	//case 2: // reassignment (throw error if const)
 	case 1:
 		result = AssignVar(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem());
 		break;
 	case 2:
+		// TODO: implement function calling
 		// store result in temp
 		result = false;
 		inst.errors.AddLast(CompilerMessage("Calling functions is not supported yet", seq));
@@ -681,6 +718,11 @@ const InstructionInfo *GetInstructionInfo(const mtlChars &instr)
 	return NULL;
 }
 
+bool IsGlobal(const CompileInstance &inst)
+{
+	return inst.scopes.GetSize() <= 1;
+}
+
 bool Compiler::Compile(const mtlChars &input, Shader &output)
 {
 	CompileInstance inst;
@@ -711,16 +753,21 @@ bool Disassembler::Disassemble(const Shader &shader, mtlString &output)
 	output.Reserve(4096);
 	mtlString num;
 
-	output.Append("inputs   ");
+	output.Append("0     inputs   ");
 	num.FromInt(shader.m_program[0].u_addr);
 	output.Append(num);
 	output.Append("\n");
-	output.Append("entry    ");
+	output.Append("1     entry    ");
 	num.FromInt(shader.m_program[1].u_addr);
 	output.Append(num);
 	output.Append("\n");
 
 	for (int iptr = 2; iptr < shader.m_program.GetSize(); ) {
+		num.FromInt(iptr);
+		output.Append(num);
+		for (int j = 0; j < (6 - num.GetSize()); ++j) {
+			output.Append(' ');
+		}
 		const InstructionInfo *instr = GetInstructionInfo((InstructionSet)shader.m_program[iptr++].instr);
 		if (instr == NULL) {
 			output.Append("<<Unknown instruction. Abort.>>");
