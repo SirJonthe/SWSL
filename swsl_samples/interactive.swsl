@@ -5,5 +5,5 @@ float sum(float a, float b, float c)
 
 void main(float3 i_color, float3 frag, float depth)
 {
-	frag.x = 1.0;
+	frag.xy = 1.0;
 }

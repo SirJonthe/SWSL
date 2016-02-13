@@ -35,8 +35,8 @@ enum Mutability
 
 union Value
 {
-	unsigned short var_addr;
-	float          imm_value;
+	addr_t var_addr;
+	float imm_value;
 };
 
 struct TypeInfo
@@ -44,6 +44,7 @@ struct TypeInfo
 	mtlChars name;
 	Type     type;
 	int      size;
+	mtlChars members;
 };
 
 struct Definition
@@ -75,16 +76,20 @@ struct CompileInstance
 };
 
 const TypeInfo gTypes[TYPE_COUNT] = {
-	{ mtlChars("void"),   Void,   0 },
-	{ mtlChars("bool"),   Bool,   1 },
-	{ mtlChars("float"),  Float,  1 },
-	{ mtlChars("float2"), Float2, 2 },
-	{ mtlChars("float3"), Float3, 3 },
-	{ mtlChars("float4"), Float4, 4 }
+	{ mtlChars("void"),   Void,   0, mtlChars("") },
+	{ mtlChars("bool"),   Bool,   1, mtlChars("") },
+	{ mtlChars("float"),  Float,  1, mtlChars("") },
+	{ mtlChars("float2"), Float2, 2, mtlChars("xy") },
+	{ mtlChars("float3"), Float3, 3, mtlChars("xyz") },
+	{ mtlChars("float4"), Float4, 4, mtlChars("xyzw") }
 };
+
+const mtlChars Members = "xyzw";
 
 struct ExpressionNode
 {
+	void GetLane(const mtlChars &val, int lane, mtlString &out) const;
+
 	virtual ~ExpressionNode( void ) {}
 	virtual int  Evaluate(const mtlChars &dst, mtlString &out, int lane, int depth) = 0;
 	virtual bool IsLeaf( void ) const = 0;
@@ -111,13 +116,31 @@ struct ValueNode : public ExpressionNode
 	mtlString term;
 	int       size;
 
-	void GetLane(const mtlChars &val, int lane, mtlString &out) const;
-
 	int  Evaluate(const mtlChars &dst, mtlString &out, int lane, int depth);
 	bool IsLeaf( void ) const { return true; }
 	void AppendValue(mtlString &out);
 	bool IsConstant( void ) const { return term.IsFloat(); }
 };
+
+void ExpressionNode::GetLane(const mtlChars &val, int lane, mtlString &out) const
+{
+	out.Free();
+	if (val.IsFloat()) {
+		out.Copy(val);
+	} else {
+		int index = val.FindLastChar('.');
+		if (index != -1) {
+			out.Append(mtlChars(val, 0, index));
+			out.Append('.');
+			int size = val.GetSize() - (index + 1);
+			out.Append(lane < size ? mtlChars(val, index+1, val.GetSize())[lane] : '0');
+		} else {
+			out.Append(val);
+			out.Append('.');
+			out.Append(lane < Members.GetSize() ? Members[lane] : '0');
+		}
+	}
+}
 
 int OperationNode::Evaluate(const mtlChars &dst, mtlString &out, int lane, int depth)
 {
@@ -133,7 +156,10 @@ int OperationNode::Evaluate(const mtlChars &dst, mtlString &out, int lane, int d
 		out.Append(']');
 		mdepth = depth;
 	} else {
-		out.Append(dst);
+		mtlString temp;
+		GetLane(dst, lane, temp);
+		out.Append(temp);
+		//out.Append(dst);
 	}
 
 	AppendValue(out);
@@ -155,27 +181,6 @@ int OperationNode::Evaluate(const mtlChars &dst, mtlString &out, int lane, int d
 void OperationNode::AppendValue(mtlString &out)
 {
 	out.Append(operation);
-}
-
-void ValueNode::GetLane(const mtlChars &val, int lane, mtlString &out) const
-{
-	out.Free();
-	if (val.IsFloat()) {
-		out.Copy(val);
-	} else {
-		int index = val.FindLastChar('.');
-		if (index != -1) {
-			out.Append(mtlChars(val, 0, index));
-			out.Append('.');
-			int size = val.GetSize() - (index + 1);
-			out.Append(lane < size ? mtlChars(val, index+1, val.GetSize())[lane] : '0');
-		} else {
-			mtlChars mem = "xyzw";
-			out.Append(val);
-			out.Append('.');
-			out.Append(lane < mem.GetSize() ? mem[lane] : '0');
-		}
-	}
 }
 
 int ValueNode::Evaluate(const mtlChars &dst, mtlString &out, int lane, int depth)
@@ -421,11 +426,14 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 	mtlList<mtlChars> m;
 	mtlChars          seq;
 	mtlString         order_str;
+	mtlChars          dst_members = mtlChars(name, index + 1, name.GetSize());
+	const int         num_lanes = (index != -1) ? (name.GetSize() - (index + 1)) : type->type.size;
 
-	for (int addr_offset = 0; addr_offset < type->type.size; ++addr_offset) {
+	for (int addr_offset = 0; addr_offset < num_lanes; ++addr_offset) {
 
 		order_str.Free();
 		const int stack_size = tree->Evaluate(name, order_str, addr_offset, 0);
+		print_ch(order_str); std::cout << std::endl;
 
 		PushStack(inst, stack_size);
 
