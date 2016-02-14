@@ -36,7 +36,7 @@ enum Mutability
 union Value
 {
 	addr_t var_addr;
-	float imm_value;
+	float  imm_value;
 };
 
 struct TypeInfo
@@ -53,6 +53,7 @@ struct Definition
 	TypeInfo        type;
 	Mutability      mut;
 	mtlArray<Value> values;
+	int             scope_level;
 };
 
 struct Scope
@@ -325,13 +326,17 @@ bool                   CompileStatement(CompileInstance &inst, const mtlChars &s
 Scope                 &PushScope(CompileInstance &inst);
 void                   PopScope(CompileInstance &inst);
 void                   EmitInstruction(CompileInstance &inst, InstructionSet instr);
+void				   EmitInstruction(CompileInstance &inst, InstructionSet instr, mtlItem<Instruction> *&at);
 void                   EmitImmutable(CompileInstance &inst, float fl);
+void                   EmitImmutable(CompileInstance &inst, float fl, mtlItem<Instruction> *&at);
 void                   EmitAddress(CompileInstance &inst, addr_t addr);
+void                   EmitAddress(CompileInstance &inst, addr_t addr, mtlItem<Instruction> *&at);
 void                   PushStack(CompileInstance &inst, int size);
 void                   PopStack(CompileInstance &inst, int size);
 const InstructionInfo *GetInstructionInfo(InstructionSet instr);
 const InstructionInfo *GetInstructionInfo(const mtlChars &instr);
 bool                   IsGlobal(const CompileInstance &inst);
+addr_t                 GetRelAddress(const CompileInstance &inst, addr_t addr);
 
 Definition *GetType(CompileInstance &inst, const mtlChars &name)
 {
@@ -396,7 +401,7 @@ bool EmitOperand(CompileInstance &inst, const mtlChars &operand, int lane)
 			}
 		}
 	} else {
-		EmitAddress(inst, inst.scopes.GetLast()->GetItem().rel_sptr - type->values[lane].var_addr);
+		EmitAddress(inst, GetRelAddress(inst, type->values[lane].var_addr));
 	}
 	return true;
 }
@@ -458,8 +463,8 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 
 			mtlItem<Instruction> *instr_item = inst.program.GetLast();
 
-			mtlChars dst = m.GetFirst()->GetItem();
-			mtlChars src = m.GetFirst()->GetNext()->GetItem();
+			const mtlChars dst = m.GetFirst()->GetItem();
+			const mtlChars src = m.GetFirst()->GetNext()->GetItem();
 
 			EmitOperand(inst, dst, addr_offset);
 			if (src.IsFloat()) {
@@ -502,6 +507,7 @@ bool DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &nam
 	def.name = name;
 	def.type = *type_info;
 	def.values.Create(type_info->size);
+	def.scope_level = inst.scopes.GetSize() - 1;
 
 	const int rel_sptr = inst.scopes.GetLast()->GetItem().rel_sptr;
 	for (int addr_offset = 0; addr_offset < type_info->size; ++addr_offset) {
@@ -599,8 +605,11 @@ bool CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlC
 
 bool CompileCondition(CompileInstance &inst, const mtlChars &cond, const mtlChars &if_body, const mtlChars &else_body)
 {
-	// output forks (based on cond)
-	bool result = CompileScope(inst, if_body) & CompileScope(inst, else_body);
+	// emit test instructions
+	// emit condition mask
+
+	bool result = CompileScope(inst, if_body) && CompileScope(inst, else_body);
+
 	// output merges
 	return result;
 }
@@ -683,6 +692,13 @@ void EmitInstruction(CompileInstance &inst, InstructionSet instr)
 	inst.program.AddLast(i);
 }
 
+void EmitInstruction(CompileInstance &inst, InstructionSet instr, mtlItem<Instruction> *&at)
+{
+	Instruction i;
+	i.instr = instr;
+	at = inst.program.Insert(i, at);
+}
+
 void EmitImmutable(CompileInstance &inst, float fl)
 {
 	Instruction i;
@@ -690,11 +706,25 @@ void EmitImmutable(CompileInstance &inst, float fl)
 	inst.program.AddLast(i);
 }
 
+void EmitImmutable(CompileInstance &inst, float fl, mtlItem<Instruction> *&at)
+{
+	Instruction i;
+	i.fl_imm = fl;
+	at = inst.program.Insert(i, at);
+}
+
 void EmitAddress(CompileInstance &inst, addr_t addr)
 {
 	Instruction i;
 	i.u_addr = addr;
 	inst.program.AddLast(i);
+}
+
+void EmitAddress(CompileInstance &inst, addr_t addr, mtlItem<Instruction> *&at)
+{
+	Instruction i;
+	i.u_addr = addr;
+	at = inst.program.Insert(i, at);
 }
 
 void PushStack(CompileInstance &inst, int size)
@@ -729,6 +759,11 @@ const InstructionInfo *GetInstructionInfo(const mtlChars &instr)
 bool IsGlobal(const CompileInstance &inst)
 {
 	return inst.scopes.GetSize() <= 1;
+}
+
+addr_t GetRelAddress(const CompileInstance &inst, addr_t addr)
+{
+	return inst.scopes.GetLast()->GetItem().rel_sptr - addr;
 }
 
 bool Compiler::Compile(const mtlChars &input, Shader &output)
