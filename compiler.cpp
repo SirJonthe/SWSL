@@ -316,7 +316,7 @@ ExpressionNode *GenerateTree(const mtlChars &expr)
 Definition            *GetType(CompileInstance &inst, const mtlChars &name);
 bool                   IsValidName(const mtlChars &name);
 const TypeInfo        *GetTypeInfo(const mtlChars &type);
-bool                   EmitOperand(CompileInstance &inst, const mtlChars &operand, int lane);
+bool                   EmitOperand(CompileInstance &inst, const mtlChars &operand);
 bool                   AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr);
 bool                   DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &name, const mtlChars &expr);
 bool                   CompileScope(CompileInstance &inst, const mtlChars &input);
@@ -381,7 +381,7 @@ const TypeInfo *GetTypeInfo(const mtlChars &type)
 	return NULL;
 }
 
-bool EmitOperand(CompileInstance &inst, const mtlChars &operand, int lane)
+bool EmitOperand(CompileInstance &inst, const mtlChars &operand)
 {
 	const Definition *type = GetType(inst, operand);
 	if (type == NULL) {
@@ -397,11 +397,18 @@ bool EmitOperand(CompileInstance &inst, const mtlChars &operand, int lane)
 				m.GetFirst()->GetItem().ToInt(stack_offset);
 				EmitAddress(inst, inst.scopes.GetLast()->GetItem().rel_sptr - stack_offset);
 			} else {
+				inst.errors.AddLast(CompilerMessage("Unknown operand", operand));
 				return false;
 			}
 		}
 	} else {
-		EmitAddress(inst, GetRelAddress(inst, type->values[lane].var_addr));
+		int addr_offset = type->type.members.FindFirstChar(operand[operand.GetSize() - 1]);
+		if (addr_offset != -1) {
+			EmitAddress(inst, GetRelAddress(inst, type->values[addr_offset].var_addr));
+		} else {
+			inst.errors.AddLast(CompilerMessage("Unknown member", ""));
+			return false;
+		}
 	}
 	return true;
 }
@@ -434,11 +441,10 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 	mtlChars          dst_members = mtlChars(name, index + 1, name.GetSize());
 	const int         num_lanes = (index != -1) ? (name.GetSize() - (index + 1)) : type->type.size;
 
-	for (int addr_offset = 0; addr_offset < num_lanes; ++addr_offset) {
+	for (int lane = 0; lane < num_lanes; ++lane) {
 
 		order_str.Free();
-		const int stack_size = tree->Evaluate(name, order_str, addr_offset, 0);
-		print_ch(order_str); std::cout << std::endl;
+		const int stack_size = tree->Evaluate(name, order_str, lane, 0);
 
 		PushStack(inst, stack_size);
 
@@ -466,11 +472,11 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 			const mtlChars dst = m.GetFirst()->GetItem();
 			const mtlChars src = m.GetFirst()->GetNext()->GetItem();
 
-			EmitOperand(inst, dst, addr_offset);
+			EmitOperand(inst, dst);
 			if (src.IsFloat()) {
 				*((int*)(&instr_item->GetItem().instr)) += 1;
 			}
-			EmitOperand(inst, src, addr_offset);
+			EmitOperand(inst, src);
 
 			op = op->GetNext();
 		}

@@ -18,6 +18,8 @@
 #define topstack_to_cmpmask     (*(swsl::wide_cmpmask*)&stack[sptr-1])
 #define pushstack_cmpmask(mask) (*(swsl::wide_cmpmask*)&stack[sptr++] = (mask))
 
+#define stack_to_mask(reg) (*(swsl::wide_cmpmask*)(reg))
+
 void Shader::Delete( void )
 {
 	m_program.Free();
@@ -59,8 +61,9 @@ bool Shader::Run(const swsl::wide_cmpmask &frag_mask) const
 {
 	swsl::wide_float stack[STACK_SIZE];
 
-	addr_t iptr = m_program[gMetaData_EntryIndex].u_addr;
-	addr_t sptr = 0;
+	addr_t iptr = m_program[gMetaData_EntryIndex].u_addr; // instruction pointer
+	addr_t sptr = 0;                                      // stack pointer
+	addr_t mptr = 0;                                      // mask pointer
 
 	const Instruction *program      = (const Instruction*)(&m_program[0]);
 	const addr_t       program_size = (addr_t)m_program.GetSize();
@@ -122,13 +125,13 @@ bool Shader::Run(const swsl::wide_cmpmask &frag_mask) const
 		case FSET_MM:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = stack + sptr - program[iptr++].u_addr;
-			*(swsl::wide_float*)(reg_a) = *(swsl::wide_float*)(reg_b);
+			*(swsl::wide_float*)(reg_a) = swsl::wide_float::merge((*(swsl::wide_float*)(reg_b)), *(swsl::wide_float*)(reg_a), stack_to_mask(stack + mptr));
 			break;
 
 		case FSET_MI:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = &program[iptr++];
-			*(swsl::wide_float*)(reg_a) = to_wide_float(reg_b);
+			*(swsl::wide_float*)(reg_a) = swsl::wide_float::merge(to_wide_float(reg_b), *(swsl::wide_float*)(reg_a), stack_to_mask(stack + mptr));
 			break;
 
 		case FADD_MM:
