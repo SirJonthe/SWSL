@@ -3,7 +3,7 @@
 
 #include "swsl_wide.h"
 #include "swsl_buffers.h"
-#include "swsl_vmach.h"
+#include "swsl_shader.h"
 
 #include "MiniLib/MML/mmlVector.h"
 #include "MiniLib/MML/mmlMath.h"
@@ -12,6 +12,7 @@
 
 namespace swsl
 {
+
 	struct Point2D
 	{
 		int x;
@@ -22,9 +23,9 @@ namespace swsl
 	class Rasterizer
 	{
 	private:
-		typedef swsl::wide_cmpmask gfx_cmpmask;
-		typedef swsl::wide_float   gfx_float;
-		typedef swsl::wide_int     gfx_int;
+		typedef swsl::wide_bool  gfx_bool;
+		typedef swsl::wide_float gfx_float;
+		typedef swsl::wide_int   gfx_int;
 
 		struct wide_Point2D
 		{
@@ -33,10 +34,10 @@ namespace swsl
 		};
 
 	private:
-		swsl::ShaderProgram m_shader; // only temp until we compile programs natively
-		swsl::FrameBuffer   m_out_buffer; // RGB + depth
-		int                 m_width;
-		int                 m_height;
+		swsl::Shader      *m_shader; // only temp until we compile programs natively
+		swsl::FrameBuffer  m_out_buffer; // RGB + depth
+		int                m_width;
+		int                m_height;
 
 	private:
 		bool      IsTopLeft(const swsl::Point2D &a, const swsl::Point2D &b) const;
@@ -46,7 +47,7 @@ namespace swsl
 	public:
 		Rasterizer( void );
 
-		bool SetShaderProgram(const mtlArray<char> &program);
+		void SetShader(swsl::Shader *shader);
 		void CreateBuffers(int width, int height, int components = 4);
 		void ClearBuffers( void );
 		void ClearBuffers(const float *component_data);
@@ -54,16 +55,16 @@ namespace swsl
 		void WriteColorBuffer(mtlByte *dst_pixels, int dst_bytes_per_pixel, mglByteOrder32 dst_byte_order);
 
 		/*template < int n >
-		void DrawPoint(const swsl::Point2D &a, const mmlVector<n> &a_attr);
+		void DrawPoint(const swsl::swsl::Point2D &a, const mmlVector<n> &a_attr);
 
 		template < int n >
-		void DrawLine(const swsl::Point2D &a, const swsl::Point2D &b, const mmlVector<n> &aa, const mmlVector<n> &ab, const mmlVector<n> &ba, const mmlVector<n> &bb);
+		void DrawLine(const swsl::swsl::Point2D &a, const swsl::swsl::Point2D &b, const mmlVector<n> &aa, const mmlVector<n> &ab, const mmlVector<n> &ba, const mmlVector<n> &bb);
 
 		template < int n >
-		void FillArc(int quadrant, const swsl::Point2D &a, const swsl::Point2D &b, const mmlVector<n> &aa, const mmlVector<n> &ab, const mmlVector<n> &ba, const mmlVector<n> &bb);
+		void FillArc(int quadrant, const swsl::swsl::Point2D &a, const swsl::swsl::Point2D &b, const mmlVector<n> &aa, const mmlVector<n> &ab, const mmlVector<n> &ba, const mmlVector<n> &bb);
 
 		template < int n >
-		void FillRectangle(const swsl::Point2D &a, const swsl::Point2D &b, const mmlVector<n> &aa, const mmlVector<n> &ab, const mmlVector<n> &ba, const mmlVector<n> &bb);*/
+		void FillRectangle(const swsl::swsl::Point2D &a, const swsl::swsl::Point2D &b, const mmlVector<n> &aa, const mmlVector<n> &ab, const mmlVector<n> &ba, const mmlVector<n> &bb);*/
 
 		template < int var, int cnst >
 		void FillTriangle(const swsl::Point2D &a, const swsl::Point2D &b, const swsl::Point2D &c, const mmlVector<var> &a_attr, const mmlVector<var> &b_attr, const mmlVector<var> &c_attr, const mmlVector<cnst> &const_attr);
@@ -76,6 +77,7 @@ namespace swsl
 
 		void FillTriangle(const swsl::Point2D &a, const swsl::Point2D &b, const swsl::Point2D &c);
 	};
+
 }
 
 template < int var, int cnst >
@@ -87,15 +89,17 @@ void swsl::Rasterizer::FillTriangle(const swsl::Point2D &a, const swsl::Point2D 
 	// ISSUES
 	// Interpolated values seem to overflow at the edges
 
+	if (m_shader == NULL) { return; }
+
 	gfx_float varying_arr[var];
 	gfx_float constants_arr[cnst];
-	swsl::ShaderInput shader_input = {
+	swsl::Shader::InputArrays shader_input = {
 		{ constants_arr, cnst },            // constant register
 		{ varying_arr, var },               // varying register
 		{ NULL, m_out_buffer.GetYawSize() } // fragment register
 	};
-	m_shader.SetInputRegisters(shader_input);
-	if (!m_shader.Verify()) { return; }
+	m_shader->SetInputArrays(shader_input);
+	if (!m_shader->IsValid()) { return; }
 
 	// Copy constant data to register
 	for (int i = 0; i < cnst; ++i) {
@@ -113,10 +117,10 @@ void swsl::Rasterizer::FillTriangle(const swsl::Point2D &a, const swsl::Point2D 
 	}
 
 	// AABB Clipping
-	const int min_y = mmlMax2(mmlMin3(a.y, b.y, c.y), 0);
-	const int max_y = mmlMin2(mmlMax3(a.y, b.y, c.y), m_height - 1);
-	const int min_x = mmlMax2(mmlMin3(a.x, b.x, c.x) & SWSL_WIDTH_INVMASK, 0); // Make sure this is snapped to a block boundry
-	const int max_x = mmlMin2(mmlMax3(a.x, b.x, c.x), m_width - 1);
+	const int min_y = mmlMax(mmlMin(a.y, b.y, c.y), 0);
+	const int max_y = mmlMin(mmlMax(a.y, b.y, c.y), m_height - 1);
+	const int min_x = mmlMax(mmlMin(a.x, b.x, c.x) & SWSL_WIDTH_INVMASK, 0); // Make sure this is snapped to a block boundry
+	const int max_x = mmlMin(mmlMax(a.x, b.x, c.x), m_width - 1);
 
 	// Triangle setup
 	const gfx_float A01 = (float)((a.y - b.y) * SWSL_WIDTH);
@@ -152,7 +156,7 @@ void swsl::Rasterizer::FillTriangle(const swsl::Point2D &a, const swsl::Point2D 
 		shader_input.fragments.data = pixel_offset;
 		for (int x = min_x; x <= max_x; x += SWSL_WIDTH) {
 
-			swsl::wide_cmpmask fragment_mask = (w0 | w1 | w2) >= 0.0f;
+			gfx_bool fragment_mask = (w0 | w1 | w2) >= 0.0f;
 
 			if (!fragment_mask.all_fail()) {
 
@@ -160,7 +164,7 @@ void swsl::Rasterizer::FillTriangle(const swsl::Point2D &a, const swsl::Point2D 
 					varying_arr[i] = (a_reg[i] * w0 + b_reg[i] * w1 + c_reg[i] * w2) * sum_inv_area_x2;
 				}
 
-				m_shader.ExecProgram(fragment_mask);
+				m_shader->Run(fragment_mask);
 			}
 
 			w0 += A12;
@@ -192,4 +196,4 @@ void swsl::Rasterizer::FillTriangle(const swsl::Point2D &a, const swsl::Point2D 
 	FillTriangle(a, b, c, a_attr, b_attr, c_attr, const_attr);
 }
 
-#endif // SWSL_GFX_H
+#endif // GFX_H

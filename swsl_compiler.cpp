@@ -1,14 +1,162 @@
-#include <iostream>
 #include "swsl_compiler.h"
-#include "MiniLib/MTL/mtlParser.h"
-#include "MiniLib/MTL/mtlList.h"
-#include "MiniLib/MTL/mtlMathParser.h"
-#include "MiniLib/MML/mmlMath.h"
+#include "swsl_instr.h"
 
-int swsl::Compiler::OperationNode::Evaluate(mtlChars dst, mtlString &out, int depth)
+#include "swsl_wide.h"
+
+#include "MiniLib/MTL/mtlArray.h"
+#include "MiniLib/MTL/mtlMathParser.h"
+
+#include <iostream>
+void print_ch(const mtlChars &str)
 {
-	int ldepth = left->Evaluate(dst, out, depth);
-	int rdepth = right->IsLeaf() ? 0 : right->Evaluate(dst, out, depth+1);
+	for (int i = 0; i < str.GetSize(); ++i) {
+		std::cout << str.GetChars()[i];
+	}
+}
+
+enum Type
+{
+	Void,
+	Bool,
+	Float,
+	Float2,
+	Float3,
+	Float4,
+
+	TYPE_COUNT
+};
+
+enum Mutability
+{
+	Immutable,
+	Readonly,
+	Mutable
+};
+
+union Value
+{
+	swsl::addr_t var_addr;
+	float        imm_value;
+};
+
+struct TypeInfo
+{
+	mtlChars name;
+	Type     type;
+	int      size;
+};
+
+struct Definition
+{
+	mtlString  name;
+	TypeInfo   type;
+	Mutability mut;
+	Value      value;
+	int        scope_level;
+};
+
+struct Scope
+{
+	mtlList< Definition > defs;
+	Parser                parser;
+	int                   size;
+	int                   rel_sptr;
+	int                   nested_branch;
+};
+
+struct CompileInstance
+{
+	mtlList<swsl::Instruction>      program;
+	swsl::addr_t                   *prog_entry;
+	swsl::addr_t                   *prog_inputs;
+	mtlList<swsl::CompilerMessage>  errors;
+	mtlList<swsl::CompilerMessage>  warnings;
+	mtlList<Scope>                  scopes;
+	int                             stack_manip;
+	int                             main;
+};
+
+static const TypeInfo gTypes[TYPE_COUNT] = {
+	{ mtlChars("void"),   Void,   0 },
+	{ mtlChars("bool"),   Bool,   1 },
+	{ mtlChars("float"),  Float,  1 },
+	{ mtlChars("float2"), Float2, 2 },
+	{ mtlChars("float3"), Float3, 3 },
+	{ mtlChars("float4"), Float4, 4 }
+};
+
+static const TypeInfo gSubTypes[TYPE_COUNT] = {
+	{ mtlChars("void"),  Void,  0 },
+	{ mtlChars("bool"),  Bool,  1 },
+	{ mtlChars("float"), Float, 1 },
+	{ mtlChars("float"), Float, 1 },
+	{ mtlChars("float"), Float, 1 },
+	{ mtlChars("float"), Float, 1 }
+};
+
+static const mtlChars Members = "xyzw";
+static const char     Accessor = '.';
+
+struct ExpressionNode
+{
+	void GetLane(const mtlChars &val, int lane, mtlString &out) const;
+
+	virtual      ~ExpressionNode( void ) {}
+	virtual int   Evaluate(const mtlChars &dst, mtlString &out, int lane, int depth) = 0;
+	virtual bool  IsLeaf( void ) const = 0;
+	virtual void  AppendValue(mtlString &out) = 0;
+	virtual bool  IsConstant( void ) const = 0;
+};
+
+struct OperationNode : public ExpressionNode
+{
+	char            operation;
+	ExpressionNode *left;
+	ExpressionNode *right;
+
+		  OperationNode( void ) : left(NULL), right(NULL) {}
+		 ~OperationNode( void ) { delete left; delete right; }
+	int   Evaluate(const mtlChars &dst, mtlString &out, int lane, int depth);
+	bool  IsLeaf( void ) const { return false; }
+	void  AppendValue(mtlString &out);
+	bool  IsConstant( void ) const { return left->IsConstant() && right->IsConstant(); }
+};
+
+struct ValueNode : public ExpressionNode
+{
+	mtlString term;
+	int       size;
+
+	int  Evaluate(const mtlChars &dst, mtlString &out, int lane, int depth);
+	bool IsLeaf( void ) const { return true; }
+	void AppendValue(mtlString &out);
+	bool IsConstant( void ) const { return term.IsFloat(); }
+};
+
+void ExpressionNode::GetLane(const mtlChars &val, int lane, mtlString &out) const
+{
+	out.Free();
+	if (val.IsFloat()) {
+		out.Copy(val);
+	} else {
+		int index = val.FindLastChar(Accessor);
+		if (index != -1) {
+			out.Append(mtlChars(val, 0, index));
+			out.Append(Accessor);
+			int size = val.GetSize() - (index + 1);
+			out.Append(lane < size ? mtlChars(val, index+1, val.GetSize())[lane] : '0');
+		} else {
+			out.Append(val);
+			out.Append(Accessor);
+			out.Append(lane < Members.GetSize() ? Members[lane] : '0');
+		}
+	}
+}
+
+int OperationNode::Evaluate(const mtlChars &dst, mtlString &out, int lane, int depth)
+{
+	int ldepth = left->Evaluate(dst, out, lane, depth);
+	int rdepth = right->IsLeaf() ? 0 : right->Evaluate(dst, out, lane, depth+1);
 	int mdepth = 0;
 
 	mtlString addr_str;
@@ -19,7 +167,10 @@ int swsl::Compiler::OperationNode::Evaluate(mtlChars dst, mtlString &out, int de
 		out.Append(']');
 		mdepth = depth;
 	} else {
-		out.Append(dst);
+		mtlString temp;
+		GetLane(dst, lane, temp);
+		out.Append(temp);
+		//out.Append(dst);
 	}
 
 	AppendValue(out);
@@ -35,46 +186,45 @@ int swsl::Compiler::OperationNode::Evaluate(mtlChars dst, mtlString &out, int de
 	}
 	out.Append(';');
 
-	return mmlMax3(ldepth, mdepth, rdepth);
+	return mmlMax(ldepth, mdepth, rdepth);
 }
 
-void swsl::Compiler::OperationNode::AppendValue(mtlString &out)
+void OperationNode::AppendValue(mtlString &out)
 {
 	out.Append(operation);
 }
 
-int swsl::Compiler::ValueNode::Evaluate(mtlChars dst, mtlString &out, int depth)
+int ValueNode::Evaluate(const mtlChars &dst, mtlString &out, int lane, int depth)
 {
 	int out_depth = 0;
+	mtlString temp;
 	if (depth > 0 || dst.GetSize() == 0) {
 		out.Append('[');
-		mtlString addr_str;
-		addr_str.FromInt(depth);
-		out.Append(addr_str);
+		temp.FromInt(depth);
+		out.Append(temp);
 		out.Append(']');
 		out_depth = depth;
 	} else {
-		out.Append(dst);
+		//out.Append(dst);
+		GetLane(dst, lane, temp);
+		out.Append(temp);
 		out_depth = 0;
 	}
 	out.Append("=");
-	AppendValue(out);
+	//AppendValue(out);
+	GetLane(term, lane, temp);
+	out.Append(temp);
 	out.Append(';');
 
 	return out_depth;
 }
 
-void swsl::Compiler::ValueNode::AppendValue(mtlString &out)
+void ValueNode::AppendValue(mtlString &out)
 {
 	out.Append(term);
 }
 
-bool swsl::Compiler::ValueNode::IsConstant( void ) const
-{
-	return is_constant;
-}
-
-bool swsl::Compiler::SWSLOutput::IsBraceBalanced(mtlChars expr) const
+bool IsBraceBalanced(const mtlChars &expr)
 {
 	int stack = 0;
 	for (int i = 0; i < expr.GetSize(); ++i) {
@@ -92,7 +242,7 @@ bool swsl::Compiler::SWSLOutput::IsBraceBalanced(mtlChars expr) const
 	return stack == 0;
 }
 
-int swsl::Compiler::SWSLOutput::FindOperation(const mtlChars &operations, const mtlChars &expression) const
+int FindOperation(const mtlChars &operations, const mtlChars &expression)
 {
 	int braceStack = 0;
 	for (int i = 0; i < expression.GetSize(); ++i) {
@@ -108,19 +258,7 @@ int swsl::Compiler::SWSLOutput::FindOperation(const mtlChars &operations, const 
 	return -1;
 }
 
-swsl::Compiler::ExpressionNode *swsl::Compiler::SWSLOutput::GenerateTree(mtlChars expr, int lane)
-{
-	ExpressionNode *tree = NULL;
-	if (!GenerateTree(tree, expr, lane, 0)) {
-		if (tree != NULL) {
-			delete tree;
-			tree = NULL;
-		}
-	}
-	return tree;
-}
-
-bool swsl::Compiler::SWSLOutput::GenerateTree(ExpressionNode *&node, mtlChars expr, int lane, int depth)
+bool GenerateTree(ExpressionNode *&node, mtlChars expr)
 {
 	static const char zero_str[] = "0";
 	static const int OperationClasses = 2;
@@ -160,972 +298,608 @@ bool swsl::Compiler::SWSLOutput::GenerateTree(ExpressionNode *&node, mtlChars ex
 			lexpr = zero_str;
 		}
 
-		retval = GenerateTree(op_node->left, lexpr, lane, depth) && GenerateTree(op_node->right, rexpr, lane, depth + 1);
+		retval = GenerateTree(op_node->left, lexpr) && GenerateTree(op_node->right, rexpr);
 
 		node = op_node;
 	} else { // STOPPING CONDITION
 
 		ValueNode *val_node = new ValueNode;
-		Type *type = GetType(expr);
-
-		if (type != NULL && type->mutability == Constant) {
-			val_node->size = type->size;
-			val_node->term.FromFloat(type->size > 1 ? type->out.value[lane] : type->out.value[0]);
-			val_node->is_constant = true;
-		} else {
-			mtlParser p(expr);
-			mtlList<mtlChars> match;
-			if (p.MatchAll("{%s}", match)) {
-				mtlChars c = match.GetFirst()->GetItem();
-				c.SplitByChar(match, ',');
-				val_node->size = match.GetSize();
-				if (lane >= match.GetSize() || match.GetSize() <= 0 || match.GetSize() > 4) {
-					retval = false;
-				} else {
-					mtlItem<mtlChars> *iter = match.GetFirst();
-					for (int i = 0; i < lane; ++i) {
-						iter = iter->GetNext();
-					}
-					val_node->term.Copy(iter->GetItem());
-				}
-			} else {
-				val_node->size = 1;
-				val_node->term.Copy(expr);
-			}
-			val_node->is_constant = val_node->term.IsFloat();
-		}
+		val_node->term.Copy(expr);
 
 		node = val_node;
 	}
 	return retval;
 }
 
-void swsl::Compiler::SWSLOutput::SimplifyTree(ExpressionNode *node) const
+ExpressionNode *GenerateTree(const mtlChars &expr)
 {
-	if (node == NULL) { return; }
+	ExpressionNode *tree = NULL;
+	if (!GenerateTree(tree, expr)) {
+		if (tree != NULL) {
+			delete tree;
+			tree = NULL;
+		}
+	}
+	return tree;
 }
 
-bool swsl::Compiler::SWSLOutput::ParseExpression(mtlChars dst, mtlChars expr, int lane, mtlString &out, int &out_depth)
-{
-	if (!IsBraceBalanced(expr)) { return false; }
-	ExpressionNode *tree = GenerateTree(expr, lane);
-	if (tree == NULL) { return false; }
-	SimplifyTree(tree); // combine constant terms
-	out_depth = tree->Evaluate(dst, out, 0);
-	std::cout << out_depth << " : " << out.GetChars() << std::endl;
-	delete tree;
-	return true;
-}
+Definition                  *GetType(CompileInstance &inst, const mtlChars &name);
+bool                         IsValidName(const mtlChars &name);
+const TypeInfo              *GetTypeInfo(const mtlChars &type);
+bool                         EmitOperand(CompileInstance &inst, const mtlChars &operand);
+bool                         AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr);
+bool                         DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &name, const mtlChars &expr);
+bool                         CompileScope(CompileInstance &inst, const mtlChars &input, bool branch);
+bool                         CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlChars &name, const mtlChars &params, const mtlChars &body);
+bool                         CompileCondition(CompileInstance &inst, const mtlChars &cond, const mtlChars &if_body, const mtlChars &else_body);
+bool                         CompileStatement(CompileInstance &inst, const mtlChars &statement);
+Scope                       &PushScope(CompileInstance &inst, bool branch);
+void                         PopScope(CompileInstance &inst);
+void                         EmitInstruction(CompileInstance &inst, swsl::InstructionSet instr);
+void                         EmitInstruction(CompileInstance &inst, swsl::InstructionSet instr, mtlItem<swsl::Instruction> *&at);
+void                         EmitImmutable(CompileInstance &inst, float fl);
+void                         EmitImmutable(CompileInstance &inst, float fl, mtlItem<swsl::Instruction> *&at);
+void                         EmitAddress(CompileInstance &inst, swsl::addr_t addr);
+void                         EmitAddress(CompileInstance &inst, swsl::addr_t addr, mtlItem<swsl::Instruction> *&at);
+void                         PushStack(CompileInstance &inst, int size);
+void                         PopStack(CompileInstance &inst, int size);
+const swsl::InstructionInfo *GetInstructionInfo(swsl::InstructionSet instr);
+const swsl::InstructionInfo *GetInstructionInfo(const mtlChars &instr);
+bool                         IsGlobal(const CompileInstance &inst);
+swsl::addr_t                 GetRelAddress(const CompileInstance &inst, swsl::addr_t addr);
+void                         AddError(CompileInstance &inst, const mtlChars &msg, const mtlChars &ref);
+void                         CopyCompilerMessages(const mtlList<swsl::CompilerMessage> &a, mtlList<swsl::CompilerMessage> &b);
+mtlChars                     GetBaseName(const mtlChars &name);
+mtlChars                     GetBaseMembers(const mtlChars &name);
 
-mtlItem<mtlString> *swsl::Compiler::SWSLOutput::EmitPartialOperation(mtlChars op)
+Definition *GetType(CompileInstance &inst, const mtlChars &name)
 {
-	if (op.Compare("+")) {
-		Emit("add_");
-		return m_code.GetLast();
-	} else if (op.Compare("-")) {
-		Emit("sub_");
-		return m_code.GetLast();
-	} else if (op.Compare("*")) {
-		Emit("mul_");
-		return m_code.GetLast();
-	} else if (op.Compare("/")) {
-		Emit("div_");
-		return m_code.GetLast();
+	mtlItem<Scope> *scope = inst.scopes.GetLast();
+	while (scope != NULL) {
+		mtlItem<Definition> *def = scope->GetItem().defs.GetFirst();
+		while (def != NULL) {
+			if (def->GetItem().name.Compare(name, true)) {
+				return &def->GetItem();
+			}
+			def = def->GetNext();
+		}
+		scope = scope->GetPrev();
 	}
 	return NULL;
 }
 
-void swsl::Compiler::SWSLOutput::EmitOperand(mtlChars operand, int lane, mtlItem<mtlString> *op_loc)
+bool IsValidName(const mtlChars &name)
 {
-	Type *type = GetType(operand);
-	for (int i = 0; i < operand.GetSize(); ++i) {
-		std::cout << operand[i];
-	}
-	std::cout << std::endl;
-	if (type == NULL) {
-		if (operand.IsFloat()) {
-			Emit(operand);
-			op_loc->GetItem().Append('c');
-		} else {
-			mtlParser p(operand);
-			mtlList<mtlChars> m;
-			if (p.MatchAll("[%i]", m) == mtlParser::ExpressionFound) {
-				int stack_offset;
-				m.GetFirst()->GetItem().ToInt(stack_offset);
-				Emit(m_stack_size + stack_offset - 1);
-				op_loc->GetItem().Append('f');
-			} else {
-				Emit(0.0f);
-				op_loc->GetItem().Append('c'); // HACK: will cause error (I should really emit error here)
-			}
+	if (name.GetSize() > 0 && GetTypeInfo(name) == NULL) {
+		if (!mtlChars::IsAlpha(name.GetChars()[0]) && name.GetChars()[0] != '_') {
+			return false;
 		}
-	} else {
-		if (type->size <= 1) {
-			Emit(type->out.address);
-		} else if (lane < type->size) {
-			Emit(type->out.address + lane);
-		} else {
-			// AddError("Type mismatch", operand);
-		}
-		op_loc->GetItem().Append('f');
-	}
-}
-
-swsl::Compiler::SWSLOutput::SWSLOutput( void ) : m_stack_size(0)
-{
-}
-
-void swsl::Compiler::SWSLOutput::PushScope(mtlChars scope_code)
-{
-	m_scopes.AddLast();
-	m_scopes.GetLast()->GetItem().parser.SetBuffer(scope_code);
-	m_scopes.GetLast()->GetItem().stack_size = 0;
-	for (int i = 0; i < scope_code.GetSize(); ++i) {
-		std::cout << scope_code[i];
-	}
-	std::cout << std::endl;
-}
-
-void swsl::Compiler::SWSLOutput::PopScope( void )
-{
-	Emit("pop");
-	Emit((swsl::instr_t)m_scopes.GetLast()->GetItem().stack_size);
-	m_stack_size -= m_scopes.GetLast()->GetItem().stack_size;
-	m_scopes.RemoveLast();
-}
-
-int swsl::Compiler::SWSLOutput::GetScopeDepth( void ) const
-{
-	return m_scopes.GetSize();
-}
-
-void swsl::Compiler::SWSLOutput::PushStack(int size)
-{
-	Emit("push");
-	Emit((swsl::instr_t)size);
-	m_stack_size += size;
-	m_scopes.GetLast()->GetItem().stack_size += size;
-}
-
-void swsl::Compiler::SWSLOutput::PopStack(int size)
-{
-	Emit("pop");
-	Emit((swsl::instr_t)size);
-	m_stack_size -= size;
-	m_scopes.GetLast()->GetItem().stack_size -= size;
-}
-
-swsl::Compiler::ValueType swsl::Compiler::SWSLOutput::Typeof(mtlChars decl_type) const
-{
-	if (decl_type.Compare("void")) {
-		return Void;
-	} else if (decl_type.Compare("bool")) {
-		return Bool;
-	} else if (decl_type.Compare("float")) {
-		return Float;
-	} else if (decl_type.Compare("float2")) {
-		return Float;
-	} else if (decl_type.Compare("float3")) {
-		return Float;
-	} else if (decl_type.Compare("float4")) {
-		return Float;
-	}
-	return None;
-}
-
-swsl::instr_t swsl::Compiler::SWSLOutput::Sizeof(mtlChars decl_type) const
-{
-	if (decl_type.Compare("void")) {
-		return 0;
-	} else if (decl_type.Compare("bool")) {
-		return 1;
-	} else if (decl_type.Compare("float")) {
-		return 1;
-	} else if (decl_type.Compare("float2")) {
-		return 2;
-	} else if (decl_type.Compare("float3")) {
-		return 3;
-	} else if (decl_type.Compare("float4")) {
-		return 4;
-	}
-	return 0;
-}
-
-swsl::Compiler::Type *swsl::Compiler::SWSLOutput::Declare(mtlChars type, mtlChars name, MutabilityType mut)
-{
-	Type t;
-	t.name = name;
-	t.out.address = m_stack_size;
-	t.mutability = mut;
-	t.scope_depth = GetScopeDepth();
-	t.decl_type = type;
-	t.base_type = Typeof(type);
-	t.size = Sizeof(type);
-	if (t.size == 0) { return NULL; }
-
-	PushStack(t.size);
-
-	if (name.GetSize() > 0 && (mtlChars::IsAlpha(name.GetChars()[0]) || name.GetChars()[0] == '_')) {
 		for (int i = 1; i < name.GetSize(); ++i) {
-			if (!mtlChars::IsAlphanumeric(name.GetChars()[i]) && name.GetChars()[i] != '_') {
-				return NULL;
-			}
-		}
-	} else {
-		return NULL;
-	}
-
-	if (GetType(name) != NULL) {
-		return NULL;
-	}
-
-	Type *t_ptr = m_scopes.GetLast()->GetItem().types.CreateEntry(name);
-	*t_ptr = t;
-
-	return t_ptr;
-}
-
-swsl::Compiler::Type *swsl::Compiler::SWSLOutput::GetType(mtlChars name)
-{
-	mtlItem<Scope> *scope = m_scopes.GetLast();
-	Type *type = NULL;
-	while (scope != NULL && type == NULL) {
-		type = scope->GetItem().types.GetEntry(name);
-		scope = scope->GetPrev();
-	}
-	return type;
-}
-
-void swsl::Compiler::SWSLOutput::Emit(mtlChars instr, mtlItem<mtlString> *insert_loc)
-{
-	m_code.Insert(insert_loc)->GetItem().Copy(instr);
-}
-
-void swsl::Compiler::SWSLOutput::Emit(swsl::instr_t instr, mtlItem<mtlString> *insert_loc)
-{
-	m_code.Insert(insert_loc)->GetItem().FromInt(instr);
-}
-
-void swsl::Compiler::SWSLOutput::Emit(float value, mtlItem<mtlString> *insert_loc)
-{
-	m_code.Insert(insert_loc)->GetItem().FromFloat(value);
-}
-
-bool swsl::Compiler::SWSLOutput::EmitExpression(int lane, mtlChars expression, swsl::instr_t depth)
-{
-	if (depth > 0) {
-		Emit("push");
-		Emit(depth);
-	}
-
-	mtlList<mtlChars> operations;
-	expression.SplitByChar(operations, ';');
-	mtlItem<mtlChars> *operation = operations.GetFirst();
-
-	while (operation != NULL) {
-		if (operation->GetItem().GetSize() == 0) { break; }
-
-		mtlParser op_parser(operation->GetItem());
-		mtlList<mtlChars> match;
-
-		if (op_parser.MatchAll("%s+=%s", match) == mtlParser::ExpressionFound) {
-			Emit("add_");
-		} else if (op_parser.MatchAll("%s-=%s", match) == mtlParser::ExpressionFound) {
-			Emit("sub_");
-		} else if (op_parser.MatchAll("%s*=%s", match) == mtlParser::ExpressionFound) {
-			Emit("mul_");
-		} else if (op_parser.MatchAll("%s/=%s", match) == mtlParser::ExpressionFound) {
-			Emit("div_");
-		} else if (op_parser.MatchAll("%s=%s", match) == mtlParser::ExpressionFound) {
-			Emit("mov_");
-		}
-
-		mtlItem<mtlString> *op_loc = m_code.GetLast();
-		mtlChars dst = match.GetFirst()->GetItem();
-		mtlChars src = match.GetFirst()->GetNext()->GetItem();
-
-		EmitOperand(dst, lane, op_loc);
-		EmitOperand(src, lane, op_loc);
-
-		operation = operation->GetNext();
-	}
-
-	if (depth > 0) {
-		Emit("pop");
-		Emit(depth);
-	}
-
-	return true;
-}
-
-void swsl::Compiler::SWSLOutput::EmitInput(mtlChars params)
-{
-	Emit("input");
-	mtlList<mtlChars> p;
-	params.SplitByChar(p, ',');
-	mtlItem<mtlChars> *param = p.GetFirst();
-	swsl::instr_t input_count = 0;
-	while (param != NULL) {
-		mtlList<mtlChars> match;
-		mtlParser parser(param->GetItem());
-		if (parser.Match("%w", match) == mtlParser::ExpressionFound) {
-			input_count += Sizeof(match.GetFirst()->GetItem());
-		}
-		param = param->GetNext();
-	}
-	Emit(input_count);
-}
-
-bool swsl::Compiler::SWSLOutput::Evaluate(mtlChars str)
-{
-	mtlList<mtlChars> match;
-	str.SplitByChar(match, '=');
-	mtlChars dst_str;
-	mtlChars expr_str;
-	mtlChars dst_type;
-	mtlChars dst_name;
-	if (match.GetSize() <= 2) {
-		dst_str = match.GetFirst()->GetItem();
-	} else {
-		return false;
-	}
-	if (match.GetSize() == 2) {
-		expr_str = match.GetFirst()->GetNext()->GetItem();
-	}
-
-	mtlParser parser(dst_str);
-	Type *dst = NULL;
-	bool readonly_decl = false;
-	if (parser.MatchAll("const %w %w", match) == mtlParser::ExpressionFound) {
-		dst_type = match.GetFirst()->GetItem();
-		dst_name = match.GetFirst()->GetNext()->GetItem();
-		dst = Declare(dst_type, dst_name, Readonly);
-		readonly_decl = true;
-	} else if (parser.MatchAll("%w %w", match) == mtlParser::ExpressionFound) {
-		dst_type = match.GetFirst()->GetItem();
-		dst_name = match.GetFirst()->GetNext()->GetItem();
-		dst = Declare(dst_type, dst_name, Variable);
-	} else if (parser.MatchAll("%w", match) == mtlParser::ExpressionFound) {
-		dst_name = match.GetFirst()->GetItem();
-		dst = GetType(dst_name);
-		if (dst != NULL && dst->mutability != Variable) { return false; }
-	}
-
-	if (dst == NULL) { return false; }
-
-	if (expr_str.GetSize() > 0) {
-		for (int i = 0; i < dst->size; ++i) {
-			mtlString order;
-			int depth;
-			if (!ParseExpression(dst_name, expr_str, i, order, depth)) {
+			char ch = name.GetChars()[i];
+			if (!mtlChars::IsAlphanumeric(ch) && ch != '_') {
 				return false;
 			}
-
-			// IF readonly_decl AND expression = Constant
-			// dst->mutability = Constant;
-			// dst->out.value = expression.result;
-
-			EmitExpression(i, order, depth);
 		}
+		return true;
 	}
-
-	return true;
-}
-
-swsl::instr_t swsl::Compiler::SWSLOutput::GetStackPtr( void ) const
-{
-	return m_stack_size;
-}
-
-bool swsl::Compiler::SWSLOutput::Match(mtlChars expr)
-{
-	return m_scopes.GetLast()->GetItem().parser.Match(expr, m_matches) == mtlParser::ExpressionFound;
-}
-
-mtlChars swsl::Compiler::SWSLOutput::GetMatch(int i) const
-{
-	const mtlItem<mtlChars> *iter = m_matches.GetFirst();
-	for (int j = 0; j < i; ++j) {
-		if (iter != NULL) {
-			iter = iter->GetNext();
-		} else {
-			return mtlChars();
-		}
-	}
-	return iter->GetItem();
-}
-
-bool swsl::Compiler::SWSLOutput::IsEnd( void )
-{
-	return m_scopes.GetLast()->GetItem().parser.IsEnd();
-}
-
-void swsl::Compiler::SWSLOutput::CopyOutputTo(mtlArray<char> &out) const
-{
-	const mtlItem<mtlString> *instr = m_code.GetFirst();
-	int len = 0;
-	while (instr != NULL) {
-		len += instr->GetItem().GetSize() + 1;
-		instr = instr->GetNext();
-	}
-	out.Create(len);
-	instr = m_code.GetFirst();
-	int j = 0;
-	while (instr != NULL) {
-		for (int i = 0; i < instr->GetItem().GetSize(); ++i) {
-			out[j++] = instr->GetItem().GetChars()[i];
-		}
-		out[j++] = ' ';
-		instr = instr->GetNext();
-	}
-}
-
-void swsl::Compiler::SWSLOutput::Optimize( void )
-{
-	// For now;
-	// Only finds adjacent push/pop instructions and merges them together
-
-	mtlItem<mtlString> *instr = m_code.GetFirst();
-	mtlItem<mtlString> *ins = NULL;
-	int counter = 0;
-	int type = 0;
-	while (instr != NULL) {
-		if (instr->GetItem().Compare("push")) {
-			if (type < 0) {
-				ins->GetItem().FromInt(counter);
-				counter = 0;
-			}
-			type = 1;
-			if (ins == NULL) {
-				instr = instr->GetNext();
-				if (instr->GetItem().ToInt(counter)) {
-					ins = instr;
-				}
-				instr = instr->GetNext();
-			} else {
-				int c;
-				if (instr->GetNext()->GetItem().ToInt(c)) {
-					counter += c;
-				}
-				instr = instr->Remove()->Remove();
-			}
-		} else if (instr->GetItem().Compare("pop")) {
-			if (type > 0) {
-				ins->GetItem().FromInt(counter);
-				counter = 0;
-			}
-			type = -1;
-			if (ins == NULL) {
-				instr = instr->GetNext();
-				if (instr->GetItem().ToInt(counter)) {
-					ins = instr;
-				}
-				instr = instr->GetNext();
-			} else {
-				int c;
-				if (instr->GetNext()->GetItem().ToInt(c)) {
-					counter += c;
-				}
-				instr = instr->Remove()->Remove();
-			}
-		} else {
-			if (ins != NULL) {
-				ins->GetItem().FromInt(counter);
-			}
-			ins = NULL;
-			counter = 0;
-			type = 0;
-			instr = instr->GetNext();
-		}
-	}
-}
-
-void swsl::Compiler::AddError(mtlChars message, mtlChars instr)
-{
-	m_errors.AddLast();
-	m_errors.GetLast()->GetItem().Copy(message);
-	m_errors.GetLast()->GetItem().Append(": ").Append(instr);
-}
-
-void swsl::Compiler::CompileSWSLScope(mtlChars scope_code, mtlChars parameters, const bool branch, SWSLOutput &out)
-{
-	out.PushScope(scope_code);
-	if (parameters.GetSize() != 0) {
-		mtlList<mtlChars> params;
-		parameters.SplitByChar(params, ',');
-		mtlItem<mtlChars> *i = params.GetFirst();
-		while (i != NULL) {
-			mtlParser parser(i->GetItem());
-			mtlList<mtlChars> match;
-			if (parser.MatchAll("%w %w", match) == mtlParser::ExpressionFound) {
-				if (!out.Evaluate(i->GetItem())) {
-					AddError("Declaration", i->GetItem());
-				}
-			} else {
-				AddError("Syntax", i->GetItem());
-			}
-			i = i->GetNext();
-		}
-	}
-
-	// Conditionals require:
-	// A stack copy of an any variable
-		// 1) declared outside of the conditional scope, and
-		// 2) is modified inside the conditional scope
-	// Store the test as a mask on the top of the stack
-	// Merge instructions between the modified stack copy and the original variables at the end of the scope
-	mtlItem<mtlString> *conditional = NULL;
-
-	while (!out.IsEnd()) {
-
-		if (out.Match("{%s}")) {
-			mtlChars scope_code = out.GetMatch(0);
-			CompileSWSLScope(scope_code, "", false, out);
-		}
-
-		/*else if (out.Match("if(%s){%s}")) {
-			// compile expression and test
-			// push branching values
-			// push comparison mask
-			mtlChars scope_code = out.GetMatch(1);
-			CompileSWSLScope(scope_code, "", true, out);
-			// Supporting else ifs might require more than one copy of branching values...
-			// Maybe force programmer to do if inside else-block
-			//while (out.Match("else if(%s){%s}")) {
-			//	// compile expression and test
-			//	scope_code = out.GetMatch(1);
-			//	CompileSWSLScope(scope_code, true, "", out);
-			//}
-			if (out.Match("else{%s}")) {
-				// compile expression and test
-				scope_code = out.GetMatch(0);
-				CompileSWSLScope(scope_code, false, "", out);
-			}
-			// merge values
-			// pop comparison mask
-			// pop branching values
-		}*/
-
-		else if (out.Match("%s;")) {
-			out.Evaluate(out.GetMatch(0));
-		}
-
-		else {
-			AddError("Statement", "N/A");
-			return;
-		}
-	}
-
-	out.PopScope();
-}
-
-bool swsl::Compiler::CompileSWSL(mtlArray<char> &out)
-{
-	mtlString file_contents;
-	file_contents.Copy(mtlChars::FromDynamic(out, out.GetSize()));
-	out.Free();
-
-	SWSLOutput out_asm;
-	out_asm.PushScope(file_contents);
-
-	// In this function we iterate over global scope (functions, global variables (textures etc.))
-
-	while (!out_asm.IsEnd()) {
-		if (out_asm.Match("%w %w(%s){%s}")) {
-			mtlChars func_ret_type   = out_asm.GetMatch(0);
-			mtlChars func_name       = out_asm.GetMatch(1);
-			mtlChars func_params     = out_asm.GetMatch(2);
-			mtlChars func_scope_code = out_asm.GetMatch(3);
-			if (func_name.Compare("main")) {
-				if (!func_ret_type.Compare("void")) {
-					AddError("Main can not have return value", "N/A");
-				}
-				out_asm.EmitInput(func_params);
-			}
-			CompileSWSLScope(func_scope_code, func_params, false, out_asm);
-		}
-
-		else if (out_asm.Match("struct %w{%s};")) {
-
-		}
-
-		else {
-			AddError("Global", "N/A");
-		}
-	}
-
-	if (m_errors.GetSize() == 0) {
-		out_asm.Emit("end");
-		out_asm.Optimize();
-		out_asm.CopyOutputTo(out);
-	}
-
-	return m_errors.GetSize() == 0;
-}
-
-/*bool swsl::Compiler::CompileSWSL(mtlArray<char> &out)
-{
-	// TODO
-	// Conditionals
-	// Expressions
-	// float2, float3, float4 element access
-	// Math functions (dot, cross, sqrt, etc.)
-	// Texture sampling
-	// Comments
-	// Functions
-	// Structs
-	// Includes
-	// Defines
-
-	mtlString file_contents;
-	file_contents.Copy(mtlChars::FromDynamic(out, out.GetSize()));
-
-	mtlList<mtlString> asm_program;
-	mtlList<Scope> scopes;
-	PushScope(scopes, file_contents);
-	mtlList<mtlChars> parse_match;
-
-	int char_count = 0;
-
-	while (scopes.GetSize() > 0 && !TopParser(scopes).IsEnd()) {
-
-		if (IsGlobalScope(scopes)) {
-
-			if (TopParser(scopes).Match("void main(%s){%s}", parse_match)) { // allow for any function declaration later
-
-				PushScope(scopes, parse_match.GetFirst()->GetNext()->GetItem());
-
-				mtlList<mtlChars> params;
-				parse_match.GetFirst()->GetItem().SplitByChar(params, ',');
-				mtlItem<mtlChars> *param = params.GetFirst();
-				while (param != NULL) {
-					AddFunctionParameter(scopes, param->GetItem());
-					param = param->GetNext();
-				}
-
-				AddInstruction("input", asm_program, char_count);
-				AddInstruction(TopScope(scopes).stack_size, asm_program, char_count);
-
-			} else {
-				AddError("main not found", TopParser(scopes).GetBuffer());
-			}
-
-		} else {
-			if (TopParser(scopes).Match("%w=%s;", parse_match)) {
-				mtlChars dst_name = parse_match.GetFirst()->GetItem();
-				mtlChars src_name = parse_match.GetFirst()->GetNext()->GetItem(); // This will fail if src is anything but a single unary term
-				Type *dst = GetDataType(scopes, dst_name);
-				if (dst != NULL) {
-					Type *src = GetDataType(scopes, src_name);
-					if (src != NULL) {
-						if (dst->type == src->type && dst->type >= Float) {
-							for (int i = 0; i < dst->type; ++i) {
-								AddInstruction("mov_ff", asm_program, char_count);
-								AddInstruction(dst->address + i, asm_program, char_count);
-								AddInstruction(src->address + i, asm_program, char_count);
-							}
-						} else {
-							AddError("Type mismatch", TopParser(scopes).GetBuffer());
-						}
-					} else {
-						float fl;
-						if (src_name.ToFloat(fl)) {
-							if (dst->type >= Float) {
-								mtlString fl_str;
-								fl_str.FromFloat(fl);
-								for (int i = 0; i < dst->type; ++i) {
-									AddInstruction("mov_fc", asm_program, char_count);
-									AddInstruction(dst->address + i, asm_program, char_count);
-									AddInstruction(fl, asm_program, char_count);
-								}
-							}
-						}
-					}
-
-				} else {
-					AddError("Expression", dst_name);
-				}
-			} else if (TopParser(scopes).Match("if(%s){%s}", parse_match)) {
-
-			} else {
-				AddError("Expression", TopParser(scopes).GetBuffer());
-			}
-		}
-
-		while (scopes.GetSize() > 0 && TopParser(scopes).IsEnd()) {
-			scopes.RemoveLast();
-		}
-	}
-
-	AddInstruction("end", asm_program, char_count);
-
-	// struct:      "struct %w{%s};"
-	// function:    "%w %w(%s){%s}"
-	// conditional: "if(%s){%s}" | "if(%s)" (unsure if I should support no-braces)
-	// declaration: "%w %w={%s};" | "%w %w=%s;" | "%w %w;"
-
-	out.Create(char_count);
-	mtlItem<mtlString> *instruction = asm_program.GetFirst();
-	int i = 0;
-	while (instruction != NULL) {
-		for (int n = 0; n < instruction->GetItem().GetSize(); ++n, ++i) {
-			out[i] = instruction->GetItem().GetChars()[n];
-		}
-		out[i++] = ' ';
-		instruction = instruction->GetNext();
-	}
-
-	return m_errors.GetSize() == 0;
-}*/
-
-swsl::instr_t swsl::Compiler::ReadFloat(mtlParser &parser)
-{
-	mtlList<mtlChars> out;
-	float to_float = 0.0f;
-	if (parser.Match("%(%d.f)", out, false) == mtlParser::ExpressionFound && out.GetSize() == 1 && out.GetFirst()->GetItem().ToFloat(to_float)) {
-		return ToIntBits(to_float);
-	}
-	AddError("Invalid constant [float]", parser.GetBuffer());
-	return ToIntBits(0.0f);
-}
-
-swsl::instr_t swsl::Compiler::ReadInt(mtlParser &parser)
-{
-	mtlChars num = parser.ReadWord();
-	swsl::instr_t to_uint = 0;
-	if (!num.ToInt(*(int*)&to_uint)) {
-		AddError("Invalid constant [uint]", num);
-		return 0;
-	}
-	return to_uint;
-}
-
-bool swsl::Compiler::CompileASM(mtlArray<char> &out)
-{
-	mtlString file_contents;
-	file_contents.Copy(mtlChars::FromDynamic(out, out.GetSize()));
-
-	mtlParser parser;
-	parser.SetBuffer(file_contents);
-
-	mtlList<instr_t> bytecode;
-
-	mtlChars instr = parser.ReadWord();
-	if (!instr.Compare("input")) {
-		AddError("First instruction is not [input]", instr);
-	}
-	bytecode.AddLast(ReadInt(parser));
-
-	while (!parser.IsEnd()) {
-		instr = parser.ReadWord();
-		if (instr.Compare("nop")) {
-			bytecode.AddLast(swsl::NOP);
-		} else if (instr.Compare("end")) {
-			bytecode.AddLast(swsl::END);
-		} else if (instr.Compare("jmp")) {
-			bytecode.AddLast(swsl::JMP);
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("pop")) {
-			bytecode.AddLast(swsl::POP);
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("push")) {
-			bytecode.AddLast(swsl::PUSH);
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("mov_ff")) {
-			bytecode.AddLast(swsl::MOV_FF);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("mov_fc")) {
-			bytecode.AddLast(swsl::MOV_FC);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadFloat(parser));
-		} else if (instr.Compare("add_ff")) {
-			bytecode.AddLast(swsl::ADD_FF);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("add_fc")) {
-			bytecode.AddLast(swsl::ADD_FC);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadFloat(parser));
-		} else if (instr.Compare("sub_ff")) {
-			bytecode.AddLast(swsl::SUB_FF);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("sub_fc")) {
-			bytecode.AddLast(swsl::SUB_FC);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadFloat(parser));
-		} else if (instr.Compare("mul_ff")) {
-			bytecode.AddLast(swsl::MUL_FF);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("mul_fc")) {
-			bytecode.AddLast(swsl::MUL_FC);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadFloat(parser));
-		} else if (instr.Compare("div_ff")) {
-			bytecode.AddLast(swsl::DIV_FF);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("div_fc")) {
-			bytecode.AddLast(swsl::DIV_FC);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadFloat(parser));
-		} else if (instr.Compare("min_ff")) {
-			bytecode.AddLast(swsl::MIN_FF);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("min_fc")) {
-			bytecode.AddLast(swsl::MIN_FC);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadFloat(parser));
-		} else if (instr.Compare("max_ff")) {
-			bytecode.AddLast(swsl::MAX_FF);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("max_fc")) {
-			bytecode.AddLast(swsl::MAX_FC);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadFloat(parser));
-		} else if (instr.Compare("sqrt_ff")) {
-			bytecode.AddLast(swsl::SQRT_FF);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("sqrt_fc")) {
-			bytecode.AddLast(swsl::SQRT_FC);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadFloat(parser));
-		} else if (instr.Compare("eq_ff")) {
-			bytecode.AddLast(swsl::EQ_FF);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("eq_fc")) {
-			bytecode.AddLast(swsl::EQ_FC);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadFloat(parser));
-		} else if (instr.Compare("eq_cf")) {
-			bytecode.AddLast(swsl::EQ_CF);
-			bytecode.AddLast(ReadFloat(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("neq_ff")) {
-			bytecode.AddLast(swsl::NEQ_FF);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("neq_fc")) {
-			bytecode.AddLast(swsl::NEQ_FC);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadFloat(parser));
-		} else if (instr.Compare("neq_cf")) {
-			bytecode.AddLast(swsl::NEQ_CF);
-			bytecode.AddLast(ReadFloat(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("gt_ff")) {
-			bytecode.AddLast(swsl::GT_FF);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("gt_fc")) {
-			bytecode.AddLast(swsl::GT_FC);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadFloat(parser));
-		} else if (instr.Compare("gt_cf")) {
-			bytecode.AddLast(swsl::GT_CF);
-			bytecode.AddLast(ReadFloat(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("ge_ff")) {
-			bytecode.AddLast(swsl::GE_FF);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("ge_fc")) {
-			bytecode.AddLast(swsl::GE_FC);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadFloat(parser));
-		} else if (instr.Compare("ge_cf")) {
-			bytecode.AddLast(swsl::GE_CF);
-			bytecode.AddLast(ReadFloat(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("lt_ff")) {
-			bytecode.AddLast(swsl::LT_FF);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("lt_fc")) {
-			bytecode.AddLast(swsl::LT_FC);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadFloat(parser));
-		} else if (instr.Compare("lt_cf")) {
-			bytecode.AddLast(swsl::LT_CF);
-			bytecode.AddLast(ReadFloat(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("le_ff")) {
-			bytecode.AddLast(swsl::LE_FF);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("le_fc")) {
-			bytecode.AddLast(swsl::LE_FC);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadFloat(parser));
-		} else if (instr.Compare("le_cf")) {
-			bytecode.AddLast(swsl::LE_CF);
-			bytecode.AddLast(ReadFloat(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else if (instr.Compare("mrg")) {
-			bytecode.AddLast(swsl::MRG);
-			bytecode.AddLast(ReadInt(parser));
-			bytecode.AddLast(ReadInt(parser));
-		} else {
-			AddError("Invalid opcode", instr);
-		}
-	}
-
-	if (m_errors.GetSize() == 0) {
-		out.Create(bytecode.GetSize() * sizeof(swsl::instr_t));
-		mtlItem<instr_t> *i = bytecode.GetFirst();
-		swsl::instr_t *data = (swsl::instr_t*)&out[0];
-		int counter = 0;
-		while (i != NULL) {
-			data[counter++] = i->GetItem();
-			i = i->GetNext();
-		}
-	}
-
-	return m_errors.GetSize() == 0;
-}
-
-bool swsl::Compiler::CompileByteCode(mtlArray<char> &out)
-{
-	// Introduce actual native compilation here
-	AddError("Compilation to native binary not supported yet", "0");
 	return false;
 }
 
-bool swsl::Compiler::Compile(const mtlChars &file_contents, swsl::Compiler::LanguageFormat in_fmt, swsl::Compiler::LanguageFormat out_fmt, mtlArray<char> &out)
+const TypeInfo *GetTypeInfo(const mtlChars &type)
 {
-	out.Free();
-	m_errors.RemoveAll();
+	for (int i = 0; i < TYPE_COUNT; ++i) {
+		if (gTypes[i].name.Compare(type, true)) {
+			return gTypes+i;
+		}
+	}
+	return NULL;
+}
 
-	if (in_fmt >= out_fmt) {
-		AddError("Reassembly not supported", "0");
+bool EmitOperand(CompileInstance &inst, const mtlChars &operand)
+{
+	const Definition *type = GetType(inst, operand);
+	if (type == NULL) {
+		float fl_val;
+		if (operand.ToFloat(fl_val)) {
+			EmitImmutable(inst, fl_val);
+		} else {
+			Parser p;
+			p.SetBuffer(operand);
+			mtlList<mtlChars> m;
+			if (p.Match("[%i]", m) == 0) {
+				int stack_offset;
+				m.GetFirst()->GetItem().ToInt(stack_offset);
+				EmitAddress(inst, inst.scopes.GetLast()->GetItem().rel_sptr - stack_offset);
+			} else {
+				AddError(inst, "Unknown operand", operand);
+				return false;
+			}
+		}
+	} else {
+		EmitAddress(inst, GetRelAddress(inst, type->value.var_addr));
+	}
+	return true;
+}
+
+bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr)
+{
+	mtlChars base_name = GetBaseName(name);
+	Definition *type = GetType(inst, base_name);
+	if (type == NULL) {
+		AddError(inst, "Undeclared variable", name);
+		return false;
+	}
+	if (type->mut != Mutable) {
+		AddError(inst, "Modifying a constant", name);
+		return false;
 	}
 
-	out.Create(file_contents.GetSize());
-	mtlCopy((char*)&out[0], file_contents.GetChars(), out.GetSize());
+	ExpressionNode *tree = GenerateTree(expr);
+	if (tree == NULL) {
+		AddError(inst, "Malformed expression", expr);
+		return false;
+	}
 
-	switch (in_fmt) {
-	case SWSL:
-		if (!CompileSWSL(out)) { return false; }
-		if (out_fmt == ASM) { break; }
 
-	case ASM:
-		if (!CompileASM(out)) { return false; }
-		if (out_fmt == BYTE_CODE) { break; }
+	mtlChars          base_mem = GetBaseMembers(name);
+	bool              result = true;
+	Parser            parser;
+	mtlList<mtlChars> ops;
+	mtlList<mtlChars> m;
+	mtlString         order_str;
+	const int         num_lanes = (base_mem.GetSize() > 0) ? base_mem.GetSize() : type->type.size;
 
-	case BYTE_CODE:
-		if (!CompileByteCode(out)) { return false; }
-		if (out_fmt == NATIVE) { break; }
+	for (int lane = 0; lane < num_lanes; ++lane) {
 
+		order_str.Free();
+		const int stack_size = tree->Evaluate(name, order_str, lane, 0);
+
+		PushStack(inst, stack_size);
+
+		order_str.SplitByChar(ops, ';');
+		mtlItem<mtlChars> *op = ops.GetFirst();
+
+		while (op != NULL && op->GetItem().GetSize() > 0) {
+
+			parser.SetBuffer(op->GetItem());
+
+			switch (parser.Match("%s+=%s%|%s-=%s%|%s*=%s%|%s/=%s%|%s=%s", m, NULL)) {
+			case 0: EmitInstruction(inst, swsl::FADD_MM); break;
+			case 1: EmitInstruction(inst, swsl::FSUB_MM); break;
+			case 2: EmitInstruction(inst, swsl::FMUL_MM); break;
+			case 3: EmitInstruction(inst, swsl::FDIV_MM); break;
+			case 4: EmitInstruction(inst, swsl::FSET_MM); break;
+			default:
+				AddError(inst, "Invalid syntax", op->GetItem());
+				return false;
+				break;
+			}
+
+			mtlItem<swsl::Instruction> *instr_item = inst.program.GetLast();
+
+			const mtlChars dst = m.GetFirst()->GetItem();
+			const mtlChars src = m.GetFirst()->GetNext()->GetItem();
+
+			EmitOperand(inst, dst);
+			if (src.IsFloat()) {
+				*((int*)(&instr_item->GetItem().instr)) += 1;
+			}
+			EmitOperand(inst, src);
+
+			op = op->GetNext();
+		}
+
+		PopStack(inst, stack_size);
+	}
+
+	delete tree;
+
+	return result;
+}
+
+bool DeclareVar(CompileInstance &inst, const mtlChars &type, const mtlChars &name, const mtlChars &expr)
+{
+	const TypeInfo *type_info = GetTypeInfo(type);
+	if (type_info == NULL) {
+		AddError(inst, "Unknown type", type);
+		return false;
+	}
+
+	if (!IsValidName(name)) {
+		AddError(inst, "Invalid name", name);
+		return false;
+	}
+
+	const Definition *prev_def = GetType(inst, name);
+	if (prev_def != NULL) {
+		AddError(inst, "Redeclaration", name);
+		return false;
+	}
+
+	const int rel_sptr = inst.scopes.GetLast()->GetItem().rel_sptr;
+
+	Definition &def = inst.scopes.GetLast()->GetItem().defs.AddLast();
+	def.name.Copy(name);
+	def.mut            = Mutable;
+	def.type           = *type_info;
+	def.scope_level    = inst.scopes.GetSize() - 1;
+	def.value.var_addr = rel_sptr;
+
+	//def.values.Create(type_info->size);
+	//for (int addr_offset = 0; addr_offset < type_info->size; ++addr_offset) {
+	//	def.values[addr_offset].var_addr = rel_sptr + addr_offset;
+	//}
+
+	for (int i = 0; i < type_info->size; ++i) {
+		Definition &def = inst.scopes.GetLast()->GetItem().defs.AddLast();
+		def.name.Copy(name);
+		def.name.Append(Accessor);
+		def.name.Append(Members[i]);
+		def.mut            = Mutable;
+		def.type           = gSubTypes[type_info->type];
+		def.scope_level    = inst.scopes.GetSize() - 1;
+		def.value.var_addr = rel_sptr + i;
+	}
+
+	PushStack(inst, type_info->size);
+
+	return (expr.GetSize() > 0) ? AssignVar(inst, name, expr) : true;
+}
+
+bool CompileScope(CompileInstance &inst, const mtlChars &input, bool branch)
+{
+	bool result = true;
+	Scope &scope = PushScope(inst, branch);
+	scope.parser.SetBuffer(input);
+	mtlList<mtlChars> m;
+	while (result && !scope.parser.IsEnd()) {
+		switch (scope.parser.Match("{%s}%|%w%w(%s){%s}%|if(%s){%s}else{%s}%|if(%s){%s}%|%s;", m, NULL)) {
+		case 0: // SCOPE
+			result = CompileScope(inst, m.GetFirst()->GetItem(), false);
+			break;
+		case 1: // FUNCTION
+			result = CompileFunction(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetNext()->GetItem());
+			break;
+		case 2: // CONDITION
+			result = CompileCondition(inst, m.GetFirst()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetItem(), "");
+			break;
+		case 3: // CONDITION
+			result = CompileCondition(inst, m.GetFirst()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetNext()->GetItem());
+			break;
+		case 4: // STATEMENT
+			result = CompileStatement(inst, m.GetFirst()->GetItem());
+			break;
+		default:
+			AddError(inst, "Malformed sequence", input);
+			return false;
+			break;
+		}
+	}
+	PopScope(inst);
+	return result;
+}
+
+bool CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlChars &name, const mtlChars &params, const mtlChars &body)
+{
+	if (!IsGlobal(inst)) { // TODO: I want to support this eventually, but I need to emit jump instructions
+		AddError(inst, "Nested functions not allowed", name);
+		return false;
+	}
+
+	PushScope(inst, false);
+	inst.scopes.GetLast()->GetItem().rel_sptr = 0; // reset the relative stack pointer
+	bool result = true;
+	bool is_main = false;
+	result &= DeclareVar(inst, ret_type, name, "");
+
+	if (name.Compare("main", true)) {
+		++inst.main;
+		if (inst.main > 1) {
+			AddError(inst, "Multiple entry points", "");
+			return false;
+		}
+		*inst.prog_entry = (char)inst.program.GetSize();
+		is_main = true;
+	}
+
+	Parser p;
+	p.SetBuffer(params);
+	mtlList<mtlChars> m;
+	int stack_start = inst.scopes.GetLast()->GetItem().size;
+	while (!p.IsEnd()) {
+		if (p.Match("%w%w", m, NULL) == 0) {
+			result &= DeclareVar(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem(), "");
+		} else {
+			AddError(inst, "Parameter syntax", params);
+			return false;
+		}
+		p.Match(",", m);
+	}
+	int stack_end = inst.scopes.GetLast()->GetItem().size;
+	result &= CompileScope(inst, body, false);
+	PopScope(inst);
+	if (is_main) {
+		*inst.prog_inputs = stack_end - stack_start;
+		EmitInstruction(inst, swsl::END);
+	} else {
+		// FIX: This is a placeholder to prevent the compiler from optimizing stack manipulations
+		EmitInstruction(inst, swsl::NOP); // this should emit a SET instruction (set the value of the return value)
+	}
+	return result;
+}
+
+bool CompileCondition(CompileInstance &inst, const mtlChars &cond, const mtlChars &if_body, const mtlChars &else_body)
+{
+	// emit test instructions
+	// emit condition mask
+
+	bool result = CompileScope(inst, if_body, true) && CompileScope(inst, else_body, true);
+
+	// output merges
+	return result;
+}
+
+bool CompileStatement(CompileInstance &inst, const mtlChars &statement)
+{
+	if (IsGlobal(inst)) {
+		AddError(inst, "Global statements not allowed", statement);
+		return false;
+	}
+
+	Parser parser;
+	parser.SetBuffer(statement);
+	mtlList<mtlChars> m;
+	mtlChars seq;
+	bool result = false;
+	switch (parser.Match("%w%w=%s%|%s=%s%|%w(%s)%|%w%w", m, &seq)) {
+	case 0:
+		result = DeclareVar(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem(), m.GetFirst()->GetNext()->GetNext()->GetItem());
+		break;
+	case 1:
+		result = AssignVar(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem());
+		break;
+	case 2:
+		// TODO: implement function calling
+		// store result in temp
+		result = false;
+		AddError(inst, "Calling functions is not supported yet", seq);
+		break;
+	case 3:
+		result = DeclareVar(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem(), "");
+		break;
 	default:
-		AddError("Unknown compilation type", "0");
+		result = false;
+		AddError(inst, "Malformed statement", statement);
 		break;
 	}
+	return result;
+}
 
-	return m_errors.GetSize() == 0;
+Scope &PushScope(CompileInstance &inst, bool branch)
+{
+	int nested_branch = 0;
+	if (inst.scopes.GetSize() > 0) {
+		nested_branch = inst.scopes.GetLast()->GetItem().nested_branch;
+	}
+	Scope &scope = inst.scopes.AddLast();
+	scope.size = 0;
+	scope.nested_branch = nested_branch + (int)branch;
+	if (inst.scopes.GetLast()->GetPrev() != NULL) {
+		scope.rel_sptr = inst.scopes.GetLast()->GetPrev()->GetItem().rel_sptr;
+	} else {
+		scope.rel_sptr = 0;
+	}
+	return scope;
+}
+
+void PopScope(CompileInstance &inst)
+{
+	if (inst.scopes.GetSize() <= 0) { return; }
+	Scope &scope = inst.scopes.GetLast()->GetItem();
+	PopStack(inst, scope.size);
+	inst.scopes.RemoveLast();
+}
+
+void EmitInstruction(CompileInstance &inst, swsl::InstructionSet instr)
+{
+	swsl::Instruction i;
+	if (instr != swsl::END) {
+		if (inst.stack_manip < 0) {
+			i.instr = swsl::UPOP_I;
+			inst.program.AddLast(i);
+			EmitAddress(inst, (swsl::addr_t)(-inst.stack_manip));
+			inst.stack_manip = 0;
+		} else if (inst.stack_manip > 0) {
+			i.instr = swsl::UPUSH_I;
+			inst.program.AddLast(i);
+			EmitAddress(inst, (swsl::addr_t)inst.stack_manip);
+			inst.stack_manip = 0;
+		}
+	} else {
+		inst.stack_manip = 0;
+	}
+	i.instr = instr;
+	inst.program.AddLast(i);
+}
+
+void EmitInstruction(CompileInstance &inst, swsl::InstructionSet instr, mtlItem<swsl::Instruction> *&at)
+{
+	swsl::Instruction i;
+	i.instr = instr;
+	at = inst.program.Insert(i, at);
+}
+
+void EmitImmutable(CompileInstance &inst, float fl)
+{
+	swsl::Instruction i;
+	i.fl_imm = fl;
+	inst.program.AddLast(i);
+}
+
+void EmitImmutable(CompileInstance &inst, float fl, mtlItem<swsl::Instruction> *&at)
+{
+	swsl::Instruction i;
+	i.fl_imm = fl;
+	at = inst.program.Insert(i, at);
+}
+
+void EmitAddress(CompileInstance &inst, swsl::addr_t addr)
+{
+	swsl::Instruction i;
+	i.u_addr = addr;
+	inst.program.AddLast(i);
+}
+
+void EmitAddress(CompileInstance &inst, swsl::addr_t addr, mtlItem<swsl::Instruction> *&at)
+{
+	swsl::Instruction i;
+	i.u_addr = addr;
+	at = inst.program.Insert(i, at);
+}
+
+void PushStack(CompileInstance &inst, int size)
+{
+	inst.stack_manip += size;
+	inst.scopes.GetLast()->GetItem().size += size;
+	inst.scopes.GetLast()->GetItem().rel_sptr += size;
+}
+
+void PopStack(CompileInstance &inst, int size)
+{
+	inst.stack_manip -= size;
+	inst.scopes.GetLast()->GetItem().size -= size;
+	inst.scopes.GetLast()->GetItem().rel_sptr -= size;
+}
+
+const swsl::InstructionInfo *GetInstructionInfo(swsl::InstructionSet instr)
+{
+	return ((int)instr < swsl::INSTR_COUNT) ? swsl::gInstr + (int)instr : NULL;
+}
+
+const swsl::InstructionInfo *GetInstructionInfo(const mtlChars &instr)
+{
+	for (int i = 0; i < swsl::INSTR_COUNT; ++i) {
+		if (swsl::gInstr[i].name.Compare(instr, true)) {
+			return swsl::gInstr + i;
+		}
+	}
+	return NULL;
+}
+
+bool IsGlobal(const CompileInstance &inst)
+{
+	return inst.scopes.GetSize() <= 1;
+}
+
+swsl::addr_t GetRelAddress(const CompileInstance &inst, swsl::addr_t addr)
+{
+	return inst.scopes.GetLast()->GetItem().rel_sptr - addr;
+}
+
+void AddError(CompileInstance &inst, const mtlChars &msg, const mtlChars &ref)
+{
+	swsl::CompilerMessage &m = inst.errors.AddLast();
+	m.msg.Copy(msg);
+	m.ref.Copy(ref);
+}
+
+void CopyCompilerMessages(const mtlList<swsl::CompilerMessage> &a, mtlList<swsl::CompilerMessage> &b)
+{
+	const mtlItem<swsl::CompilerMessage> *i = a.GetFirst();
+	while (i != NULL) {
+		swsl::CompilerMessage &m = b.AddLast();
+		m.msg.Copy(i->GetItem().msg);
+		m.ref.Copy(i->GetItem().ref);
+		i = i->GetNext();
+	}
+}
+
+mtlChars GetBaseName(const mtlChars &name)
+{
+	const int mem_index = name.FindLastChar(Accessor);
+	mtlChars ret_val = (mem_index < 0) ? name : mtlChars(name, 0, mem_index);
+	return ret_val;
+}
+
+mtlChars GetBaseMembers(const mtlChars &name)
+{
+	const int mem_index = name.FindLastChar(Accessor);
+	mtlChars ret_val = (mem_index < 0) ? "" : mtlChars(name, mem_index + 1, name.GetSize());
+	return ret_val;
+}
+
+bool swsl::Compiler::Compile(const mtlChars &input, swsl::Shader &output)
+{
+	output.Delete();
+	CompileInstance inst;
+	inst.main = 0;
+	inst.stack_manip = 0;
+	EmitAddress(inst, 0); // number of inputs
+	inst.prog_inputs = &(inst.program.GetLast()->GetItem().u_addr);
+	EmitAddress(inst, 2); // entry point (only a guess, is modified later)
+	inst.prog_entry = &(inst.program.GetLast()->GetItem().u_addr);
+	bool result = CompileScope(inst, input, false);
+	if (inst.main == 0) {
+		AddError(inst, "Missing \'main\'", "");
+	}
+	output.m_program.Create(inst.program.GetSize());
+	mtlItem<Instruction> *j = inst.program.GetFirst();
+	for (int i = 0; i < output.m_program.GetSize(); ++i) {
+		output.m_program[i] = j->GetItem();
+		j = j->GetNext();
+	}
+	CopyCompilerMessages(inst.errors, output.m_errors);
+	CopyCompilerMessages(inst.warnings, output.m_warnings);
+	return result && output.m_errors.GetSize() == 0;
+}
+
+bool swsl::Disassembler::Disassemble(const swsl::Shader &shader, mtlString &output)
+{
+	output.Free();
+	output.Reserve(4096);
+	mtlString num;
+
+	output.Append("0     inputs   ");
+	num.FromInt(shader.m_program[0].u_addr);
+	output.Append(num);
+	output.Append("\n");
+	output.Append("1     entry    ");
+	num.FromInt(shader.m_program[1].u_addr);
+	output.Append(num);
+	output.Append("\n");
+
+	for (int iptr = 2; iptr < shader.m_program.GetSize(); ) {
+		num.FromInt(iptr);
+		output.Append(num);
+		for (int j = 0; j < (6 - num.GetSize()); ++j) {
+			output.Append(' ');
+		}
+		const InstructionInfo *instr = GetInstructionInfo((swsl::InstructionSet)shader.m_program[iptr++].instr);
+		if (instr == NULL) {
+			output.Append("<<Unknown instruction. Abort.>>");
+			return false;
+		}
+		output.Append(instr->name);
+		for (int i = 0; i < (9 - instr->name.GetSize()); ++i) {
+			output.Append(' ');
+		}
+		if (iptr + instr->params - 1 >= shader.m_program.GetSize()) {
+			output.Append("<<Parameter corruption. Abort.>>");
+			return false;
+		}
+		for (int i = 0; i < instr->params; ++i) {
+			if (i == instr->params - 1 && instr->const_float_src) {
+				num.FromFloat(shader.m_program[iptr++].fl_imm);
+				output.Append(num);
+			} else {
+				num.FromInt(shader.m_program[iptr++].u_addr);
+				output.Append(num);
+			}
+			for (int j = 0; j < (6 - num.GetSize()); ++j) {
+				output.Append(' ');
+			}
+		}
+		output.Append("\n");
+	}
+	return shader.GetErrorCount() == 0;
 }

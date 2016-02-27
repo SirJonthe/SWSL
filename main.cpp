@@ -4,12 +4,13 @@
 
 #include <SDL/SDL.h>
 
+#include "MiniLib/MTL/mtlParser.h"
 #include "MiniLib/MGL/mglText.h"
 #include "MiniLib/MML/mmlMatrix.h"
 
 #include "swsl.h"
 #include "parser.h"
-#include "gfx.h"
+#include "swsl_gfx.h"
 
 // Things I should look into:
 // Buffers should allocate an extra register at the edges so that screen resolutions that are not multiples of SWSL_WIDTH render properly
@@ -26,8 +27,8 @@ void print_chars(mtlChars s)
 template < int n >
 struct Vertex
 {
-	Point2D      coord;
-	mmlVector<n> attributes;
+	swsl::Point2D coord;
+	mmlVector<n>  attributes;
 };
 
 class Printer
@@ -74,7 +75,7 @@ void Printer::Newline( void )
 
 void Printer::Print(const mtlChars &str)
 {
-	line_height = mmlMax2(line_height, size);
+	line_height = mmlMax(line_height, size);
 	for (int i = 0; i < str.GetSize(); ++i) {
 
 		char ch = str[i];
@@ -120,12 +121,12 @@ void Printer::SetColor(unsigned char _r, unsigned char _g, unsigned char _b)
 	b = _b;
 }
 
-#include "compiler.h"
+#include "swsl_compiler.h"
 #include <limits>
 
-bool LoadShader(const mtlChars &file_name, Shader &shader)
+bool LoadShader(const mtlChars &file_name, swsl::Shader &shader)
 {
-	Compiler compiler;
+	swsl::Compiler compiler;
 	mtlString file;
 	if (!mtlParser::BufferFile(file_name, file)) {
 		std::cout << "Failed to load shader file" << std::endl;
@@ -133,7 +134,7 @@ bool LoadShader(const mtlChars &file_name, Shader &shader)
 	}
 	if (!compiler.Compile(file, shader)) {
 		std::cout << "Failed to compile shader" << std::endl;
-		const mtlItem<CompilerMessage> *err = shader.GetErrors();
+		const mtlItem<swsl::CompilerMessage> *err = shader.GetErrors();
 		while (err != NULL) {
 			std::cout << "  ";
 			print_chars(err->GetItem().msg);
@@ -145,10 +146,10 @@ bool LoadShader(const mtlChars &file_name, Shader &shader)
 		return false;
 	}
 	{
-		swsl::wide_float vary[3] = {  1.0f,  0.0f,  0.5f };
-		swsl::wide_float frag[4] = { -2.0f, -2.0f, -2.0f, -2.0f };
+		swsl::wide_float vary[3] = {  1.0f,  2.0f,  3.0f };
+		swsl::wide_float frag[4] = { -1.0f, -2.0f, -3.0f, -4.0f };
 
-		Shader::InputArrays inputs = {
+		swsl::Shader::InputArrays inputs = {
 			{ NULL, 0 },
 			{ vary, sizeof(vary)/sizeof(swsl::wide_float) },
 			{ frag, sizeof(frag)/sizeof(swsl::wide_float) }
@@ -171,7 +172,7 @@ bool LoadShader(const mtlChars &file_name, Shader &shader)
 		std::cout << std::endl;
 	}
 	{
-		Disassembler disassembler;
+		swsl::Disassembler disassembler;
 		mtlString disassembly;
 		disassembler.Disassemble(shader, disassembly);
 		print_chars(disassembly);
@@ -199,21 +200,21 @@ int main(int, char**)
 	const float side_len = 300.0f;
 	const float base_len = side_len * sin(mmlPI / 3.0f);
 
-	mmlVector<2> a_pos = mmlVector<2>(side_len * 0.5f,     0.0f);
-	mmlVector<2> b_pos = mmlVector<2>(side_len,        base_len);
-	mmlVector<2> c_pos = mmlVector<2>(    0.0f,        base_len);
+	mmlVector<2> a_pos  = mmlVector<2>(side_len * 0.5f,     0.0f);
+	mmlVector<2> b_pos  = mmlVector<2>(side_len,        base_len);
+	mmlVector<2> c_pos  = mmlVector<2>(    0.0f,        base_len);
 	mmlVector<2> center = (a_pos + b_pos + c_pos) / 3.0f;
 	a_pos -= center;
 	b_pos -= center;
 	c_pos -= center;
 
-	SDL_Event  event;
-	Shader     shader;
-	bool       quit = false;
-	bool       reload_shader = true;
-	bool       shader_status = false;
-	Rasterizer raster;
-	Printer    p;
+	SDL_Event        event;
+	swsl::Shader     shader;
+	bool             quit = false;
+	bool             reload_shader = true;
+	bool             shader_status = false;
+	swsl::Rasterizer raster;
+	Printer          p;
 
 	p.SetColor(0, 255, 0);
 
@@ -243,9 +244,9 @@ int main(int, char**)
 		Vertex<3> a, b, c;
 
 		mmlMatrix<2,2> rmat = mml2DRotationMatrix((float)SDL_GetTicks() / 1000.0f);
-		mmlVector<2> at = a_pos * rmat;
-		mmlVector<2> bt = b_pos * rmat;
-		mmlVector<2> ct = c_pos * rmat;
+		mmlVector<2>   at   = a_pos * rmat;
+		mmlVector<2>   bt   = b_pos * rmat;
+		mmlVector<2>   ct   = c_pos * rmat;
 
 		a.coord.x = round(at[0]) + video->w / 2;
 		a.coord.y = round(at[1]) + video->h / 2;

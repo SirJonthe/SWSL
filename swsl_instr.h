@@ -1,72 +1,83 @@
 #ifndef SWSL_INSTR_H
 #define SWSL_INSTR_H
 
-namespace swsl
-{
+#include "MiniLib/MTL/mtlString.h"
 
-enum InstructionSet
-{
-	// 0 arguments
+namespace swsl {
 
-	NOP,
-	END,
+	enum InstructionSet
+	{
+		NOP,
+		END,
 
-	// 1 argument
+		FPUSH_M,
+		FPUSH_I,
+		UPUSH_I,
 
-	POP,
-	PUSH,
-	JMP,
+		FPOP_M,
+		UPOP_I,
 
-	// 2 arguments
+		UJMP_I,
 
-	// Various arithmetic instructions
-	MOV_FF,
-	MOV_FC,
-	ADD_FF,
-	ADD_FC,
-	SUB_FF,
-	SUB_FC,
-	MUL_FF,
-	MUL_FC,
-	DIV_FF,
-	DIV_FC,
-	MAX_FF,
-	MAX_FC,
-	MIN_FF,
-	MIN_FC,
-	SQRT_FF,
-	SQRT_FC,
+		FSET_MM,
+		FSET_MI,
 
-	// Comparisons generate a comparison mask (and an inverse comparison mask).
-	// All variables that originate from outside the statement are copied inside the statement if they are modified there.
-	// On "endif" copied variables that have been modified inside the statements are merged (MRG) with the original variable using the comparison masks.
-	EQ_FF,
-	EQ_FC,
-	EQ_CF,
-	NEQ_FF,
-	NEQ_FC,
-	NEQ_CF,
-	LT_FF,
-	LT_FC,
-	LT_CF,
-	LE_FF,
-	LE_FC,
-	LE_CF,
-	GT_FF,
-	GT_FC,
-	GT_CF,
-	GE_FF,
-	GE_FC,
-	GE_CF,
-	// NOTE: One of the branches resulting from a comparison between two constants can be optimized away.
+		FADD_MM,
+		FADD_MI,
 
-	MRG, // branch_a, branch_b (uses value at top of stack as mask)
+		FSUB_MM,
+		FSUB_MI,
 
-	INSTR_COUNT
-};
+		FMUL_MM,
+		FMUL_MI,
 
-typedef unsigned int instr_t;
+		FDIV_MM,
+		FDIV_MI,
+
+		INSTR_COUNT
+	};
+
+	struct InstructionInfo
+	{
+		mtlChars       name;
+		InstructionSet instr;
+		int            params;
+		bool           const_float_src;
+	};
+
+	const InstructionInfo gInstr[INSTR_COUNT] = {
+		{ mtlChars("nop"),     NOP,      0, false },
+		{ mtlChars("end"),     END,      0, false },
+		{ mtlChars("fpush_m"), FPUSH_M,  1, false },
+		{ mtlChars("fpush_i"), FPUSH_I,  1, true  },
+		{ mtlChars("upush_i"), UPUSH_I,  1, false },
+		{ mtlChars("fpop_m"),  FPOP_M,   1, false },
+		{ mtlChars("upop_i"),  UPOP_I,   1, false },
+		{ mtlChars("ujmp_i"),  UJMP_I,   1, false },
+		{ mtlChars("fset_mm"), FSET_MM,  2, false },
+		{ mtlChars("fset_mi"), FSET_MI,  2, true  },
+		{ mtlChars("fadd_mm"), FADD_MM,  2, false },
+		{ mtlChars("fadd_mi"), FADD_MI,  2, true  },
+		{ mtlChars("fsub_mm"), FSUB_MM,  2, false },
+		{ mtlChars("fsub_mi"), FSUB_MI,  2, true  },
+		{ mtlChars("fmul_mm"), FMUL_MM,  2, false },
+		{ mtlChars("fmul_mi"), FMUL_MI,  2, true  },
+		{ mtlChars("fdiv_mm"), FDIV_MM,  2, false },
+		{ mtlChars("fdiv_mi"), FDIV_MI,  2, true  }
+	};
+
+	typedef unsigned short addr_t;
+
+	union Instruction
+	{
+		InstructionSet instr;
+		float          fl_imm;
+		addr_t         u_addr;
+	};
+
+	const int gMetaData_InputIndex = 0;
+	const int gMetaData_EntryIndex = 1;
 
 }
 
-#endif // SWSL_INSTR_H
+#endif // INSTR_H

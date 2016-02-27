@@ -16,7 +16,6 @@ LIBS += -fopenmp -pthread
 
 SOURCES += \
 	main.cpp \
-    swsl_vmach.cpp \
     swsl_compiler.cpp \
     swsl_gfx.cpp \
     swsl_buffers.cpp \
@@ -38,13 +37,11 @@ SOURCES += \
     MiniLib/MTL/mtlRandom.cpp \
 	MiniLib/MTL/mtlString.cpp \
 	parser.cpp \
-    compiler.cpp \
-    shader.cpp \
-    gfx.cpp
+    swsl_shader.cpp \
+    compiler.cpp
 
 HEADERS += \
     swsl_simd.h \
-    swsl_vmach.h \
     swsl_compiler.h \
     swsl_instr.h \
     swsl.h \
@@ -93,10 +90,9 @@ HEADERS += \
     MiniLib/MTL/mtlStringMap.h \
     MiniLib/MTL/mtlType.h \
     parser.h \
-    compiler.h \
-    shader.h \
-    gfx.h \
-    instr.h
+    swsl_shader.h \
+    instr.h \
+    compiler.h
 
 macx: {
 	OBJECTIVE_SOURCES += \

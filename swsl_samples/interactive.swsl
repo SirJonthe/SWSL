@@ -1,9 +1,6 @@
-float sum(float a, float b, float c)
+void main(float3 i_color, float3 o_frag, float o_depth)
 {
-	float s = a + b + c;
-}
-
-void main(float3 i_color, float3 frag, float depth)
-{
-	frag.xy = 1.0;
+	o_frag.x = i_color.x;
+	o_frag.y = 0.5;
+	o_frag.z = 0.1;
 }

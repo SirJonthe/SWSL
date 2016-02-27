@@ -19,11 +19,11 @@ swsl::Rasterizer::gfx_float swsl::Rasterizer::Orient2D(const swsl::Point2D &a, c
 	return (B.x - A.x) * (c.y - A.y) - (B.y - A.y) * (c.x - A.x);
 }
 
-swsl::Rasterizer::Rasterizer( void ) : m_width(0), m_height(0) {}
+swsl::Rasterizer::Rasterizer( void ) : m_shader(NULL), m_width(0), m_height(0) {}
 
-bool swsl::Rasterizer::SetShaderProgram(const mtlArray<char> &program)
+void swsl::Rasterizer::SetShader(swsl::Shader *shader)
 {
-	return m_shader.LoadProgram(program);
+	m_shader = shader;
 }
 
 void swsl::Rasterizer::CreateBuffers(int width, int height, int components)
@@ -147,13 +147,13 @@ void swsl::Rasterizer::FillTriangle(const swsl::Point2D &a, const swsl::Point2D 
 
 // Triangle filling algorithm with linear interpolation - Scalar code, reference
 /*
-void FillTriangle(mtlByte *pixels, int bytes_per_pixel, int width, int height, const swsl::Point2D &a, const swsl::Point2D &b, const swsl::Point2D &c, const mmlVector<3> &a_attr, const mmlVector<3> &b_attr, const mmlVector<3> &c_attr)
+void FillTriangle(mtlByte *pixels, int bytes_per_pixel, int width, int height, const swsl::swsl::Point2D &a, const swsl::swsl::Point2D &b, const swsl::swsl::Point2D &c, const mmlVector<3> &a_attr, const mmlVector<3> &b_attr, const mmlVector<3> &c_attr)
 {
 	// AABB Clipping
 	int min_y = mmlMax2(mmlMin3(a.y, b.y, c.y), 0);
-	int max_y = mmlMin2(mmlMax3(a.y, b.y, c.y), height - 1);
+	int max_y = mmlMin(mmlMax3(a.y, b.y, c.y), height - 1);
 	int min_x = mmlMax2(mmlMin3(a.x, b.x, c.x), 0);
-	int max_x = mmlMin2(mmlMax3(a.x, b.x, c.x), width - 1);
+	int max_x = mmlMin(mmlMax3(a.x, b.x, c.x), width - 1);
 
 	// Triangle setup
 	int A01 = a.y - b.y;
@@ -167,7 +167,7 @@ void FillTriangle(mtlByte *pixels, int bytes_per_pixel, int width, int height, c
 	int bias1 = IsTopLeft(c, a) ? 0 : -1;
 	int bias2 = IsTopLeft(a, b) ? 0 : -1;
 
-	swsl::Point2D p = { min_x, min_y };
+	swsl::swsl::Point2D p = { min_x, min_y };
 	int w0_row = Orient2D(b, c, p) + bias0;
 	int w1_row = Orient2D(c, a, p) + bias1;
 	int w2_row = Orient2D(a, b, p) + bias2;

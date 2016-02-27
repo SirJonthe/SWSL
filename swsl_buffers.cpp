@@ -4,8 +4,8 @@
 
 void swsl::FrameBuffer::Create(int width, int height, int components)
 {
-	width = mmlMax2(0, width);
-	height = mmlMax2(0, height);
+	width = mmlMax(0, width);
+	height = mmlMax(0, height);
 	float frac_width = (float)width / (float)SWSL_WIDTH;
 	width = (int)frac_width;
 	if (frac_width > (float)width) {
