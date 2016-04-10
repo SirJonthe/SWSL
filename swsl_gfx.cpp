@@ -19,7 +19,22 @@ swsl::Rasterizer::gfx_float swsl::Rasterizer::Orient2D(const swsl::Point2D &a, c
 	return (B.x - A.x) * (c.y - A.y) - (B.y - A.y) * (c.x - A.x);
 }
 
-swsl::Rasterizer::Rasterizer( void ) : m_shader(NULL), m_width(0), m_height(0) {}
+int swsl::Rasterizer::GetMaskWidthStride( void ) const
+{
+	return ((m_mask_x2 - m_mask_x1) / MPL_WIDTH) * m_out_buffer.GetPixelStride();
+}
+
+int swsl::Rasterizer::CeilIndex(int i) const
+{
+	return (i + MPL_WIDTH_MASK) & MPL_WIDTH_INVMASK;
+}
+
+int swsl::Rasterizer::FloorIndex(int i) const
+{
+	return i & MPL_WIDTH_INVMASK;
+}
+
+swsl::Rasterizer::Rasterizer( void ) : m_shader(NULL), m_width(0), m_height(0), m_mask_x1(0), m_mask_y1(0), m_mask_x2(0), m_mask_y2(0) {}
 
 void swsl::Rasterizer::SetShader(swsl::Shader *shader)
 {
@@ -31,56 +46,118 @@ void swsl::Rasterizer::CreateBuffers(int width, int height, int components)
 	m_width = width;
 	m_height = height;
 	m_out_buffer.Create(width, height, components); // RGB + depth = 4 components
+	ResetRasterMask();
+}
+#include <iostream>
+void swsl::Rasterizer::SetRasterMask(int x1, int y1, int x2, int y2)
+{
+	// raster mask does not necessarily respect the exact boundry specified
+	// due to the memory layout of the frame buffer
+
+	m_mask_x1 = mmlMax(FloorIndex(x1), 0);
+	m_mask_y1 = mmlMax(y1, 0);
+	m_mask_x2 = mmlMin(CeilIndex(x2), m_width);
+	m_mask_y2 = mmlMin(y2, m_height);
+}
+
+void swsl::Rasterizer::ResetRasterMask( void )
+{
+	m_mask_x1 = 0;
+	m_mask_y1 = 0;
+	m_mask_x2 = m_width;
+	m_mask_y2 = m_height;
 }
 
 void swsl::Rasterizer::ClearBuffers( void )
 {
-	mtlClear(m_out_buffer.GetComponent(0, 0, 0), m_out_buffer.GetTotalComponentCount());
+	int scanline_stride    = m_out_buffer.GetScanlineStride();
+	int mask_stride        = GetMaskWidthStride();
+	gfx_float *buffer_data = m_out_buffer.GetComponent(m_mask_x1 / MPL_WIDTH, m_mask_y1);
+
+	for (int y = m_mask_y1; y < m_mask_y2; ++y) {
+		mtlClear(buffer_data, mask_stride);
+		buffer_data += scanline_stride;
+	}
 }
 
 void swsl::Rasterizer::ClearBuffers(const float *component_data)
 {
-#ifndef _OPENMP
-	int        buffer_area   = m_out_buffer.GetWidth() * m_out_buffer.GetHeight();
-	int        buffer_stride = m_out_buffer.GetYawSize();
-	gfx_float *buffer_data   = m_out_buffer.GetComponent(0,0,0);
+	/*int        buffer_area   = m_out_buffer.GetWidth() * m_out_buffer.GetHeight();
+	int        buffer_stride = m_out_buffer.GetPixelStride();
+	gfx_float *buffer_data   = m_out_buffer.GetComponent(0,0);
 	for (int i = 0; i < buffer_area; ++i) {
 		for (int n = 0; n < buffer_stride; ++n) {
 			*buffer_data = component_data[n];
 			++buffer_data;
 		}
-	}
-#else
-	// split into a series of scanlines per core
-	// TODO: I have to be able to handle vertical resolutions that results in remainders when dividing by thread count
-	const int width = m_out_buffer.GetWidth();
-	const int x_stride = m_out_buffer.GetYawSize();
-	#pragma omp parallel
-	{
-		const int y_count = m_out_buffer.GetHeight() / omp_get_num_threads(); // need to deal with remainders
-		const int count = width * y_count;
-		gfx_float *buffer_data = m_out_buffer.GetComponent(0, y_count * omp_get_thread_num(), 0);
-		for (int i = 0; i < count; ++i) {
-			for (int n = 0; n < x_stride; ++n) {
-				*buffer_data = component_data[n];
-				++buffer_data;
+	}*/
+
+	int        scanline_stride = m_out_buffer.GetScanlineStride();
+	int        pixel_stride    = m_out_buffer.GetPixelStride();
+	int        mask_stride     = GetMaskWidthStride();
+	gfx_float *buffer_data     = m_out_buffer.GetComponent(m_mask_x1 / MPL_WIDTH, m_mask_y1);
+
+	for (int y = m_mask_y1; y < m_mask_y2; ++y) {
+		for (int x = 0; x < mask_stride;) {
+			for (int n = 0; n < pixel_stride; ++n, ++x) {
+				buffer_data[x] = component_data[n];
 			}
 		}
+		buffer_data += scanline_stride;
 	}
-#endif
 }
 
 void swsl::Rasterizer::WriteColorBuffer(int src_r_idx, int src_g_idx, int src_b_idx, mtlByte *dst_pixels, int dst_bytes_per_pixel, mglByteOrder32 dst_byte_order)
 {
-#ifndef _OPENMP
-	int        buffer_area   = m_out_buffer.GetWidth() * m_out_buffer.GetHeight();
-	int        buffer_stride = m_out_buffer.GetYawSize();
-	gfx_float *buffer_data   = m_out_buffer.GetComponent(0,0,0);
+	const int        src_scanline_stride = m_out_buffer.GetScanlineStride();
+	const int        dst_scanline_stride = dst_bytes_per_pixel * m_width;
+	const int        src_pixel_stride = m_out_buffer.GetPixelStride();
+	const int        x1 = m_mask_x1 / MPL_WIDTH;
+	const int        x2 = m_mask_x2 / MPL_WIDTH;
+	const gfx_float *src_pixels = m_out_buffer.GetComponent(x1, m_mask_y1);
+	const gfx_float  scale = 255.0f;
+	gfx_float        rf, gf, bf;
+	gfx_int          ri, gi, bi;
+	int              rs[MPL_WIDTH], gs[MPL_WIDTH], bs[MPL_WIDTH];
 
-	gfx_float scale = 255.0f;
-	gfx_float rf, gf, bf;
-	gfx_int   ri, gi, bi;
-	int       rs[SWSL_WIDTH], gs[SWSL_WIDTH], bs[SWSL_WIDTH];
+	dst_pixels += (m_mask_x1 + m_mask_y1 * m_width) * dst_bytes_per_pixel;
+
+	for (int y = m_mask_y1; y < m_mask_y2; ++y) {
+		mtlByte         *dst_pixel = dst_pixels;
+		const gfx_float *src_pixel = src_pixels;
+		for (int x = x1; x < x2; ++x) {
+			rf = *(src_pixel + src_r_idx) * scale;
+			gf = *(src_pixel + src_g_idx) * scale;
+			bf = *(src_pixel + src_b_idx) * scale;
+			ri = gfx_int(rf);
+			gi = gfx_int(gf);
+			bi = gfx_int(bf);
+			ri.to_scalar(rs);
+			gi.to_scalar(gs);
+			bi.to_scalar(bs);
+			for (int n = 0; n < MPL_WIDTH; ++n) {
+				dst_pixel[dst_byte_order.index.r] = rs[n];
+				dst_pixel[dst_byte_order.index.g] = gs[n];
+				dst_pixel[dst_byte_order.index.b] = bs[n];
+				dst_pixel += dst_bytes_per_pixel;
+			}
+			src_pixel += src_pixel_stride;
+		}
+		dst_pixels += dst_scanline_stride;
+		src_pixels += src_scanline_stride;
+	}
+}
+
+/*void swsl::Rasterizer::WriteColorBuffer(int src_r_idx, int src_g_idx, int src_b_idx, mtlByte *dst_pixels, int dst_bytes_per_pixel, mglByteOrder32 dst_byte_order)
+{
+	const int  buffer_area   = m_out_buffer.GetPackedWidth() * m_out_buffer.GetHeight();
+	const int  buffer_stride = m_out_buffer.GetPixelStride();
+	gfx_float *buffer_data   = m_out_buffer.GetComponent(0,0);
+
+	const gfx_float scale = 255.0f;
+	gfx_float       rf, gf, bf;
+	gfx_int         ri, gi, bi;
+	int             rs[MPL_WIDTH], gs[MPL_WIDTH], bs[MPL_WIDTH];
 	for (int i = 0; i < buffer_area; ++i) {
 		rf = *(buffer_data + src_r_idx) * scale;
 		gf = *(buffer_data + src_g_idx) * scale;
@@ -91,7 +168,7 @@ void swsl::Rasterizer::WriteColorBuffer(int src_r_idx, int src_g_idx, int src_b_
 		ri.to_scalar(rs);
 		gi.to_scalar(gs);
 		bi.to_scalar(bs);
-		for (int n = 0; n < SWSL_WIDTH; ++n) {
+		for (int n = 0; n < MPL_WIDTH; ++n) {
 			dst_pixels[dst_byte_order.index.r] = rs[n];
 			dst_pixels[dst_byte_order.index.g] = gs[n];
 			dst_pixels[dst_byte_order.index.b] = bs[n];
@@ -99,40 +176,7 @@ void swsl::Rasterizer::WriteColorBuffer(int src_r_idx, int src_g_idx, int src_b_
 		}
 		buffer_data += buffer_stride;
 	}
-#else
-	// split into a series of scanlines per core
-	// TODO: I have to be able to handle vertical resolutions that results in remainders when dividing by thread count
-	#pragma parallel omp
-	{
-		const int buffer_area = m_out_buffer.GetWidth() * (m_out_buffer.GetHeight() / omp_get_num_threads());
-		const int pixel_stride = m_out_buffer.GetPixelStride();
-		gfx_float *buffer_data = m_out_buffer.GetComponent(0, buffer_area * omp_get_thread_num(), 0);
-
-		gfx_float scale = 255.0f;
-		gfx_float rf, gf, bf;
-		gfx_int   ri, gi, bi;
-		int       rs[SWSL_WIDTH], gs[SWSL_WIDTH], bs[SWSL_WIDTH];
-		for (int i = 0; i < buffer_area; ++i) {
-			rf = *(buffer_data + src_r_idx) * scale;
-			gf = *(buffer_data + src_g_idx) * scale;
-			bf = *(buffer_data + src_b_idx) * scale;
-			ri = gfx_int(rf);
-			gi = gfx_int(gf);
-			bi = gfx_int(bf);
-			ri.to_scalar(rs);
-			gi.to_scalar(gs);
-			bi.to_scalar(bs);
-			for (int n = 0; n < SWSL_WIDTH; ++n) {
-				dst_pixels[dst_byte_order.index.r] = rs[n];
-				dst_pixels[dst_byte_order.index.g] = gs[n];
-				dst_pixels[dst_byte_order.index.b] = bs[n];
-				dst_pixels += dst_bytes_per_pixel;
-			}
-			buffer_data += pixel_stride;
-		}
-	}
-#endif
-}
+}*/
 
 void swsl::Rasterizer::WriteColorBuffer(mtlByte *dst_pixels, int dst_bytes_per_pixel, mglByteOrder32 dst_byte_order)
 {
@@ -177,14 +221,14 @@ void FillTriangle(mtlByte *pixels, int bytes_per_pixel, int width, int height, c
 
 	int pitch = width * bytes_per_pixel;
 	mtlByte *pixel_offset = pixels + ((min_x + min_y * width) * bytes_per_pixel);
-	for (p.y = min_y; p.y <= max_y; ++p.y) { // p.y += SWSL_BLOCK_Y
+	for (p.y = min_y; p.y <= max_y; ++p.y) { // p.y += MPL_BLOCK_Y
 
 		int w0 = w0_row;
 		int w1 = w1_row;
 		int w2 = w2_row;
 
 		mtlByte *pixels = pixel_offset;
-		for (p.x = min_x; p.x <= max_x; ++p.x) { // p.x += SWSL_BLOCK_X
+		for (p.x = min_x; p.x <= max_x; ++p.x) { // p.x += MPL_BLOCK_X
 
 			if ((w0 | w1 | w2) >= 0) {
 

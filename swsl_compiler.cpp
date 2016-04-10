@@ -1,8 +1,7 @@
 #include "swsl_compiler.h"
 #include "swsl_instr.h"
 
-#include "swsl_wide.h"
-
+#include "MiniLib/MML/mmlMath.h"
 #include "MiniLib/MTL/mtlArray.h"
 #include "MiniLib/MTL/mtlMathParser.h"
 

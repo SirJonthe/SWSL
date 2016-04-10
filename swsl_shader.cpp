@@ -1,6 +1,5 @@
 #include "swsl_shader.h"
 #include "swsl_instr.h"
-#include "swsl_wide.h"
 
 #include "MiniLib/MTL/mtlMemory.h"
 
@@ -10,14 +9,14 @@
 
 // Convert an instruction pointer to a value, or dereference the pointer to a value stored in the data cache.
 #define to_addr(reg)             (*(addr_t*)(reg))
-#define to_wide_float(reg)       (swsl::wide_float(*(float*)(reg)))
+#define to_wide_float(reg)       (mpl::wide_float(*(float*)(reg)))
 #define to_stack_float(reg)      (stack[to_addr(reg)])
 #define to_stack_float_x(reg, x) (stack[(to_addr(reg) + (x))])
 
-#define topstack_to_cmpmask     (*(swsl::wide_bool*)&stack[sptr-1])
-#define pushstack_cmpmask(mask) (*(swsl::wide_bool*)&stack[sptr++] = (mask))
+#define topstack_to_cmpmask     (*(mpl::wide_bool*)&stack[sptr-1])
+#define pushstack_cmpmask(mask) (*(mpl::wide_bool*)&stack[sptr++] = (mask))
 
-#define stack_to_mask(reg) (*(swsl::wide_bool*)(reg))
+#define stack_to_mask(reg) (*(mpl::wide_bool*)(reg))
 
 void swsl::Shader::Delete( void )
 {
@@ -57,20 +56,20 @@ const mtlItem<swsl::CompilerMessage> *swsl::Shader::GetWarnings( void ) const
 }
 
 #include <iostream>
-void print_fl(const swsl::wide_float &f)
+void print_fl(const mpl::wide_float &f)
 {
-	float fs[SWSL_WIDTH];
+	float fs[MPL_WIDTH];
 	f.to_scalar(fs);
 	std::cout << "[";
-	for (int i = 0; i < SWSL_WIDTH; ++i) {
+	for (int i = 0; i < MPL_WIDTH; ++i) {
 		std::cout << fs[i] << " ";
 	}
 	std::cout << "]";
 }
 
-bool swsl::Shader::Run(const swsl::wide_bool &frag_mask) const
+bool swsl::Shader::Run(const mpl::wide_bool &frag_mask) const
 {
-	swsl::wide_float stack[STACK_SIZE];
+	mpl::wide_float stack[STACK_SIZE];
 
 	swsl::addr_t iptr = m_program[gMetaData_EntryIndex].u_addr; // instruction pointer
 	swsl::addr_t sptr = 0;                                      // stack pointer
@@ -97,9 +96,9 @@ bool swsl::Shader::Run(const swsl::wide_bool &frag_mask) const
 
 		case swsl::END: {
 			// Sync up fragment data to output
-			const swsl::wide_float *fragment_data = stack + frag_offset;
+			const mpl::wide_float *fragment_data = stack + frag_offset;
 			for (int i = 0; i < m_inputs->fragments.count; ++i) {
-				m_inputs->fragments.data[i] = swsl::wide_float::merge(fragment_data[i], m_inputs->fragments.data[i], frag_mask);
+				m_inputs->fragments.data[i] = mpl::wide_float::merge(fragment_data[i], m_inputs->fragments.data[i], frag_mask);
 			}
 			return true;
 		}
@@ -136,91 +135,91 @@ bool swsl::Shader::Run(const swsl::wide_bool &frag_mask) const
 		case swsl::FSET_MM:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = stack + sptr - program[iptr++].u_addr;
-			*(swsl::wide_float*)(reg_a) = *(swsl::wide_float*)(reg_b);
+			*(mpl::wide_float*)(reg_a) = *(mpl::wide_float*)(reg_b);
 			break;
 
 		case swsl::FSET_MI:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = &program[iptr++];
-			*(swsl::wide_float*)(reg_a) = to_wide_float(reg_b);
+			*(mpl::wide_float*)(reg_a) = to_wide_float(reg_b);
 			break;
 
 		case swsl::FADD_MM:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = stack + sptr - program[iptr++].u_addr;
-			*(swsl::wide_float*)(reg_a) += *(swsl::wide_float*)(reg_b);
+			*(mpl::wide_float*)(reg_a) += *(mpl::wide_float*)(reg_b);
 			break;
 
 		case swsl::FADD_MI:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = &program[iptr++];
-			*(swsl::wide_float*)(reg_a) += to_wide_float(reg_b);
+			*(mpl::wide_float*)(reg_a) += to_wide_float(reg_b);
 			break;
 
 		case swsl::FSUB_MM:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = stack + sptr - program[iptr++].u_addr;
-			*(swsl::wide_float*)(reg_a) -= *(swsl::wide_float*)(reg_b);
+			*(mpl::wide_float*)(reg_a) -= *(mpl::wide_float*)(reg_b);
 			break;
 
 		case swsl::FSUB_MI:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = &program[iptr++];
-			*(swsl::wide_float*)(reg_a) -= to_wide_float(reg_b);
+			*(mpl::wide_float*)(reg_a) -= to_wide_float(reg_b);
 			break;
 
 		case swsl::FMUL_MM:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = stack + sptr - program[iptr++].u_addr;
-			*(swsl::wide_float*)(reg_a) *= *(swsl::wide_float*)(reg_b);
+			*(mpl::wide_float*)(reg_a) *= *(mpl::wide_float*)(reg_b);
 			break;
 
 		case swsl::FMUL_MI:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = &program[iptr++];
-			*(swsl::wide_float*)(reg_a) *= to_wide_float(reg_b);
+			*(mpl::wide_float*)(reg_a) *= to_wide_float(reg_b);
 			break;
 
 		case swsl::FDIV_MM:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = stack + sptr - program[iptr++].u_addr;
-			*(swsl::wide_float*)(reg_a) /= *(swsl::wide_float*)(reg_b);
+			*(mpl::wide_float*)(reg_a) /= *(mpl::wide_float*)(reg_b);
 			break;
 
 		case swsl::FDIV_MI:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = &program[iptr++];
-			*(swsl::wide_float*)(reg_a) /= to_wide_float(reg_b);
+			*(mpl::wide_float*)(reg_a) /= to_wide_float(reg_b);
 			break;
 
 		/*case MIN_FF:
 			read_2_instr(reg_a, reg_b);
-			to_ref_float(reg_a) = swsl::wide_float::min(to_ref_float(reg_a), to_ref_float(reg_b));
+			to_ref_float(reg_a) = mpl::wide_float::min(to_ref_float(reg_a), to_ref_float(reg_b));
 			break;
 
 		case MIN_FC:
 			read_2_instr(reg_a, reg_b);
-			to_ref_float(reg_a) = swsl::wide_float::min(to_ref_float(reg_a), to_const_float(reg_b));
+			to_ref_float(reg_a) = mpl::wide_float::min(to_ref_float(reg_a), to_const_float(reg_b));
 			break;
 
 		case MAX_FF:
 			read_2_instr(reg_a, reg_b);
-			to_ref_float(reg_a) = swsl::wide_float::max(to_ref_float(reg_a), to_ref_float(reg_b));
+			to_ref_float(reg_a) = mpl::wide_float::max(to_ref_float(reg_a), to_ref_float(reg_b));
 			break;
 
 		case MAX_FC:
 			read_2_instr(reg_a, reg_b);
-			to_ref_float(reg_a) = swsl::wide_float::max(to_ref_float(reg_a), to_const_float(reg_b));
+			to_ref_float(reg_a) = mpl::wide_float::max(to_ref_float(reg_a), to_const_float(reg_b));
 			break;
 
 		case SQRT_FF:
 			read_2_instr(reg_a, reg_b);
-			to_ref_float(reg_a) = swsl::wide_float::sqrt(to_ref_float(reg_b));
+			to_ref_float(reg_a) = mpl::wide_float::sqrt(to_ref_float(reg_b));
 			break;
 
 		case SQRT_FC:
 			read_2_instr(reg_a, reg_b);
-			to_ref_float(reg_a) = swsl::wide_float::sqrt(to_const_float(reg_b));
+			to_ref_float(reg_a) = mpl::wide_float::sqrt(to_const_float(reg_b));
 			break;
 
 		case EQ_FF:
@@ -315,7 +314,7 @@ bool swsl::Shader::Run(const swsl::wide_bool &frag_mask) const
 
 		case MRG:
 			read_2_instr(reg_a, reg_b);
-			to_ref_float(reg_a) = swsl::wide_float::merge(to_ref_float(reg_a), to_ref_float(reg_b), topstack_to_cmpmask);
+			to_ref_float(reg_a) = mpl::wide_float::merge(to_ref_float(reg_a), to_ref_float(reg_b), topstack_to_cmpmask);
 			break;*/
 
 		default: return false;

@@ -1,10 +1,10 @@
-#ifndef SWSL_GFX_H
-#define SWSL_GFX_H
+#ifndef SWSL_GFX_H_INCLUDED__
+#define SWSL_GFX_H_INCLUDED__
 
-#include "swsl_wide.h"
 #include "swsl_buffers.h"
 #include "swsl_shader.h"
 
+#include "MiniLib/MPL/mplWide.h"
 #include "MiniLib/MML/mmlVector.h"
 #include "MiniLib/MML/mmlMath.h"
 #include "MiniLib/MTL/mtlBits.h"
@@ -23,9 +23,9 @@ namespace swsl
 	class Rasterizer
 	{
 	private:
-		typedef swsl::wide_bool  gfx_bool;
-		typedef swsl::wide_float gfx_float;
-		typedef swsl::wide_int   gfx_int;
+		typedef mpl::wide_bool  gfx_bool;
+		typedef mpl::wide_float gfx_float;
+		typedef mpl::wide_int   gfx_int;
 
 		struct wide_Point2D
 		{
@@ -38,17 +38,26 @@ namespace swsl
 		swsl::FrameBuffer  m_out_buffer; // RGB + depth
 		int                m_width;
 		int                m_height;
+		int                m_mask_x1;
+		int                m_mask_y1;
+		int                m_mask_x2;
+		int                m_mask_y2;
 
 	private:
 		bool      IsTopLeft(const swsl::Point2D &a, const swsl::Point2D &b) const;
 		int       Orient2D(const swsl::Point2D &a, const swsl::Point2D &b, const swsl::Point2D &c) const;
 		gfx_float Orient2D(const swsl::Point2D &a, const swsl::Point2D &b, const wide_Point2D &c) const;
+		int       GetMaskWidthStride( void ) const;
+		int       CeilIndex(int i) const;
+		int       FloorIndex(int i) const;
 
 	public:
 		Rasterizer( void );
 
 		void SetShader(swsl::Shader *shader);
-		void CreateBuffers(int width, int height, int components = 4);
+		void CreateBuffers(int width, int height, int components = 3);
+		void SetRasterMask(int x1, int y1, int x2, int y2);
+		void ResetRasterMask( void );
 		void ClearBuffers( void );
 		void ClearBuffers(const float *component_data);
 		void WriteColorBuffer(int src_r_idx, int src_g_idx, int src_b_idx, mtlByte *dst_pixels, int dst_bytes_per_pixel, mglByteOrder32 dst_byte_order);
@@ -94,9 +103,9 @@ void swsl::Rasterizer::FillTriangle(const swsl::Point2D &a, const swsl::Point2D 
 	gfx_float varying_arr[var];
 	gfx_float constants_arr[cnst];
 	swsl::Shader::InputArrays shader_input = {
-		{ constants_arr, cnst },            // constant register
-		{ varying_arr, var },               // varying register
-		{ NULL, m_out_buffer.GetYawSize() } // fragment register
+		{ constants_arr, cnst },                // constant register
+		{ varying_arr, var },                   // varying register
+		{ NULL, m_out_buffer.GetPixelStride() } // fragment register
 	};
 	m_shader->SetInputArrays(shader_input);
 	if (!m_shader->IsValid()) { return; }
@@ -117,26 +126,26 @@ void swsl::Rasterizer::FillTriangle(const swsl::Point2D &a, const swsl::Point2D 
 	}
 
 	// AABB Clipping
-	const int min_y = mmlMax(mmlMin(a.y, b.y, c.y), 0);
-	const int max_y = mmlMin(mmlMax(a.y, b.y, c.y), m_height - 1);
-	const int min_x = mmlMax(mmlMin(a.x, b.x, c.x) & SWSL_WIDTH_INVMASK, 0); // Make sure this is snapped to a block boundry
-	const int max_x = mmlMin(mmlMax(a.x, b.x, c.x), m_width - 1);
+	const int min_y = mmlMax(mmlMin(a.y, b.y, c.y), m_mask_y1);
+	const int max_y = mmlMin(mmlMax(a.y, b.y, c.y), m_mask_y2 - 1);
+	const int min_x = mmlMax(FloorIndex(mmlMin(a.x, b.x, c.x)), m_mask_x1); // Make sure this is snapped to a block boundry
+	const int max_x = mmlMin(mmlMax(a.x, b.x, c.x), m_mask_x2 - 1);
 
 	// Triangle setup
-	const gfx_float A01 = (float)((a.y - b.y) * SWSL_WIDTH);
+	const gfx_float A01 = (float)((a.y - b.y) * MPL_WIDTH);
 	const gfx_float B01 = (float)(b.x - a.x);
-	const gfx_float A12 = (float)((b.y - c.y) * SWSL_WIDTH);
+	const gfx_float A12 = (float)((b.y - c.y) * MPL_WIDTH);
 	const gfx_float B12 = (float)(c.x - b.x);
-	const gfx_float A20 = (float)((c.y - a.y) * SWSL_WIDTH);
+	const gfx_float A20 = (float)((c.y - a.y) * MPL_WIDTH);
 	const gfx_float B20 = (float)(a.x - c.x);
 
 	const gfx_float bias0 = IsTopLeft(b, c) ? 0.0f : -1.0f;
 	const gfx_float bias1 = IsTopLeft(c, a) ? 0.0f : -1.0f;
 	const gfx_float bias2 = IsTopLeft(a, b) ? 0.0f : -1.0f;
 
-	const float x_offset[] = SWSL_OFFSETS;
-	// float x_offset[] = SWSL_X_OFFSETS;
-	// float y_offset[] = SWSL_Y_OFFSETS;
+	const float x_offset[] = MPL_OFFSETS;
+	// float x_offset[] = MPL_X_OFFSETS;
+	// float y_offset[] = MPL_Y_OFFSETS;
 
 	wide_Point2D p = { gfx_float(min_x) + gfx_float(x_offset), min_y };
 	gfx_float w0_row = Orient2D(b, c, p) + bias0;
@@ -144,8 +153,8 @@ void swsl::Rasterizer::FillTriangle(const swsl::Point2D &a, const swsl::Point2D 
 	gfx_float w2_row = Orient2D(a, b, p) + bias2;
 	const gfx_float sum_inv_area_x2 = (gfx_float)(1.0f) / (w0_row + w1_row + w2_row);
 
-	gfx_float *pixel_offset = (gfx_float*)m_out_buffer.GetComponent(min_x / SWSL_WIDTH, min_y, 0);
-	const int  pixel_y_stride = m_out_buffer.GetPitchSize();
+	gfx_float *pixel_offset = (gfx_float*)m_out_buffer.GetComponent(min_x / MPL_WIDTH, min_y, 0);
+	const int  pixel_y_stride = m_out_buffer.GetScanlineStride();
 
 	for (int y = min_y; y <= max_y; ++y) {
 
@@ -154,7 +163,7 @@ void swsl::Rasterizer::FillTriangle(const swsl::Point2D &a, const swsl::Point2D 
 		gfx_float w2 = w2_row;
 
 		shader_input.fragments.data = pixel_offset;
-		for (int x = min_x; x <= max_x; x += SWSL_WIDTH) {
+		for (int x = min_x; x <= max_x; x += MPL_WIDTH) {
 
 			gfx_bool fragment_mask = (w0 | w1 | w2) >= 0.0f;
 
@@ -196,4 +205,4 @@ void swsl::Rasterizer::FillTriangle(const swsl::Point2D &a, const swsl::Point2D 
 	FillTriangle(a, b, c, a_attr, b_attr, c_attr, const_attr);
 }
 
-#endif // GFX_H
+#endif // SWSL_GFX_H_INCLUDED__

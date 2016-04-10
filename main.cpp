@@ -146,25 +146,28 @@ bool LoadShader(const mtlChars &file_name, swsl::Shader &shader)
 		return false;
 	}
 	{
-		swsl::wide_float vary[3] = {  1.0f,  2.0f,  3.0f };
-		swsl::wide_float frag[4] = { -1.0f, -2.0f, -3.0f, -4.0f };
+		// Only a test to see if shader is valid
+		// Not necessary for function
+
+		mpl::wide_float vary[3] = {  1.0f,  2.0f,  3.0f };
+		mpl::wide_float frag[3] = { -1.0f, -2.0f, -3.0f };
 
 		swsl::Shader::InputArrays inputs = {
 			{ NULL, 0 },
-			{ vary, sizeof(vary)/sizeof(swsl::wide_float) },
-			{ frag, sizeof(frag)/sizeof(swsl::wide_float) }
+			{ vary, sizeof(vary)/sizeof(mpl::wide_float) },
+			{ frag, sizeof(frag)/sizeof(mpl::wide_float) }
 		};
 		shader.SetInputArrays(inputs);
-		if (!shader.IsValid() || !shader.Run(swsl::wide_float(0.0f) < swsl::wide_float(1.0f))) {
+		if (!shader.IsValid() || !shader.Run(mpl::wide_float(0.0f) < mpl::wide_float(1.0f))) {
 			std::cout << "Failed to execute shader" << std::endl;
 			return false;
 		}
 
-		for (int i = 0; i < sizeof(frag)/sizeof(swsl::wide_float); ++i) {
-			float frag_comp[SWSL_WIDTH];
+		for (int i = 0; i < sizeof(frag)/sizeof(mpl::wide_float); ++i) {
+			float frag_comp[MPL_WIDTH];
 			frag[i].to_scalar(frag_comp);
 			std::cout << "(";
-			for (int j = 0; j < SWSL_WIDTH; ++j) {
+			for (int j = 0; j < MPL_WIDTH; ++j) {
 				std::cout << frag_comp[j] << ";";
 			}
 			std::cout << ") ";
@@ -181,10 +184,10 @@ bool LoadShader(const mtlChars &file_name, swsl::Shader &shader)
 	return true;
 }
 
-int main(int, char**)
+int InteractiveDemo( void )
 {
 	std::cout << sizeof(char*) * CHAR_BIT << " bit system" << std::endl;
-	std::cout << "SIMD width: " << SWSL_WIDTH << std::endl;
+	std::cout << "SIMD width: " << MPL_WIDTH << std::endl;
 
 	if (SDL_Init(SDL_INIT_VIDEO) == -1) {
 		std::cout << SDL_GetError() << std::endl;
@@ -220,6 +223,7 @@ int main(int, char**)
 
 	raster.CreateBuffers(video->w, video->h);
 	raster.SetShader(&shader);
+	raster.SetRasterMask(0, 0, video->w / 2, video->h / 2);
 
 	while (!quit) {
 
@@ -243,7 +247,8 @@ int main(int, char**)
 
 		Vertex<3> a, b, c;
 
-		mmlMatrix<2,2> rmat = mml2DRotationMatrix((float)SDL_GetTicks() / 1000.0f);
+		//mmlMatrix<2,2> rmat = mml2DRotationMatrix((float)SDL_GetTicks() / 1000.0f);
+		mmlMatrix<2,2> rmat = mmlMatrix<2,2>::IdentityMatrix();
 		mmlVector<2>   at   = a_pos * rmat;
 		mmlVector<2>   bt   = b_pos * rmat;
 		mmlVector<2>   ct   = c_pos * rmat;
@@ -265,7 +270,8 @@ int main(int, char**)
 		c.attributes[1] = 0.0f;
 		c.attributes[2] = 1.0f;
 
-		raster.ClearBuffers();
+		const float rgb[] = { 0.0f, 0.0f, 1.0f };
+		raster.ClearBuffers(rgb);
 
 		Uint32 render_start = SDL_GetTicks();
 		raster.FillTriangle(a.coord, b.coord, c.coord, a.attributes, b.attributes, c.attributes);
@@ -303,4 +309,9 @@ int main(int, char**)
 	SDL_Quit();
 
 	return 0;
+}
+
+int main(int, char**)
+{
+	return InteractiveDemo();
 }

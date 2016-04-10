@@ -1,5 +1,4 @@
-void main(float3 i_color, float3 frag, float depth)
+void main(float3 i_color, float3 frag)
 {
 	frag = i_color;
-	depth = -1.0f;
 }

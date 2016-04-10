@@ -1,11 +1,11 @@
 #ifndef SWSL_SHADER_H
 #define SWSL_SHADER_H
 
+#include "MiniLib/MPL/mplWide.h"
 #include "MiniLib/MTL/mtlList.h"
 #include "MiniLib/MTL/mtlString.h"
 #include "MiniLib/MTL/mtlArray.h"
 
-#include "swsl_wide.h"
 #include "swsl_instr.h"
 
 class Compiler;
@@ -30,8 +30,8 @@ namespace swsl
 	public:
 		struct InputArray
 		{
-			swsl::wide_float *data;
-			int               count;
+			mpl::wide_float *data;
+			int              count;
 		};
 
 		struct InputArrays
@@ -61,7 +61,7 @@ namespace swsl
 		void                            SetInputArrays(InputArrays &inputs);
 		const mtlItem<CompilerMessage> *GetErrors( void ) const;
 		const mtlItem<CompilerMessage> *GetWarnings( void ) const;
-		bool                            Run(const swsl::wide_bool &frag_mask) const;
+		bool                            Run(const mpl::wide_bool &frag_mask) const;
 	};
 
 }

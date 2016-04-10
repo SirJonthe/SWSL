@@ -1,6 +1,4 @@
-void main(float3 i_color, float3 o_frag, float o_depth)
+void main(float3 i_color, float3 o_frag)
 {
-	o_frag.x = i_color.x;
-	o_frag.y = 0.5;
-	o_frag.z = 0.1;
+	o_frag = o_frag + 0.5f;
 }
