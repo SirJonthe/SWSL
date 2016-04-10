@@ -17,6 +17,12 @@
 
 #define video SDL_GetVideoSurface()
 
+mglByteOrder32 ByteOrder( void )
+{
+	static const mglByteOrder32 byte_order = { 0x00000102 };
+	return byte_order;
+}
+
 void print_chars(mtlChars s)
 {
 	for (int i = 0; i < s.GetSize(); ++i) {
@@ -88,7 +94,7 @@ void Printer::Print(const mtlChars &str)
 		}
 
 		if (!mtlChars::IsWhitespace(ch)) {
-			mglDrawCharSmall(ch, (mtlByte*)video->pixels, video->format->BytesPerPixel, mglVideoByteOrder(), video->w, video->h, x, y, r, g, b, size);
+			mglDrawCharSmall(ch, (mtlByte*)video->pixels, video->format->BytesPerPixel, ByteOrder(), video->w, video->h, x, y, r, g, b, size);
 		}
 
 		x += mglFontSmall_CharWidthPx * size;
@@ -123,6 +129,7 @@ void Printer::SetColor(unsigned char _r, unsigned char _g, unsigned char _b)
 
 #include "swsl_compiler.h"
 #include <limits>
+#include <pthread.h>
 
 bool LoadShader(const mtlChars &file_name, swsl::Shader &shader)
 {
@@ -223,7 +230,6 @@ int InteractiveDemo( void )
 
 	raster.CreateBuffers(video->w, video->h);
 	raster.SetShader(&shader);
-	raster.SetRasterMask(0, 0, video->w / 2, video->h / 2);
 
 	while (!quit) {
 
@@ -270,7 +276,7 @@ int InteractiveDemo( void )
 		c.attributes[1] = 0.0f;
 		c.attributes[2] = 1.0f;
 
-		const float rgb[] = { 0.0f, 0.0f, 1.0f };
+		float rgb[] = { 1.0f, 1.0f, 1.0f };
 		raster.ClearBuffers(rgb);
 
 		Uint32 render_start = SDL_GetTicks();
@@ -278,7 +284,7 @@ int InteractiveDemo( void )
 		Uint32 render_end = SDL_GetTicks();
 		Uint32 render_time = render_end - render_start;
 
-		raster.WriteColorBuffer((mtlByte*)video->pixels, video->format->BytesPerPixel, mglVideoByteOrder());
+		raster.WriteColorBuffer((mtlByte*)video->pixels, video->format->BytesPerPixel, ByteOrder());
 
 		if (!shader_status) {
 			p.SetColor(255, 0, 0);

@@ -1,4 +1,4 @@
 void main(float3 i_color, float3 o_frag)
 {
-	o_frag = o_frag + 0.5f;
+	o_frag = i_color;
 }
