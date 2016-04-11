@@ -37,7 +37,8 @@ SOURCES += \
     MiniLib/MTL/mtlRandom.cpp \
 	MiniLib/MTL/mtlString.cpp \
 	parser.cpp \
-    swsl_shader.cpp
+    swsl_shader.cpp \
+    compiler.cpp
 
 HEADERS += \
     swsl_compiler.h \
@@ -89,7 +90,8 @@ HEADERS += \
     MiniLib/MPL/old_mplMask4.h \
     MiniLib/MPL/old_mplTypes.h \
     MiniLib/MPL/mplWide.h \
-    MiniLib/MPL/mplCommon.h
+    MiniLib/MPL/mplCommon.h \
+    compiler.h
 
 macx: {
 	OBJECTIVE_SOURCES += \

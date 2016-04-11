@@ -36,6 +36,7 @@ public:
 
 	void SetBuffer(const mtlChars &buffer);
 	void CopyBuffer(const mtlChars &buffer);
+	static bool BufferFile(const mtlDirectory &p_file, mtlString &p_buffer);
 
 	bool IsEnd( void ) const;
 	bool InQuote( void ) const;

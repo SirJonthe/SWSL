@@ -279,6 +279,15 @@ void Parser::CopyBuffer(const mtlChars &buffer)
 	SkipWhitespaces();
 }
 
+bool Parser::BufferFile(const mtlDirectory &p_file, mtlString &p_buffer)
+{
+	std::ifstream fin(p_file.GetDirectory().GetChars(), std::ios::ate|std::ios::binary);
+	if (!fin.is_open()) { return false; }
+	p_buffer.SetSize((int)fin.tellg());
+	fin.seekg(0, std::ios::beg);
+	return !fin.read(p_buffer.GetChars(), p_buffer.GetSize()).bad();
+}
+
 bool Parser::IsEnd( void ) const
 {
 	return m_reader >= m_buffer.GetSize();
