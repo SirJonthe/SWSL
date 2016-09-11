@@ -105,6 +105,10 @@ struct ExpressionNode
 	virtual bool  IsLeaf( void ) const = 0;
 	virtual void  AppendValue(mtlString &out) = 0;
 	virtual bool  IsConstant( void ) const = 0;
+
+	virtual mtlChars Dbg_Str( void ) const = 0;
+	virtual ExpressionNode *Dbg_Left( void ) const = 0;
+	virtual ExpressionNode *Dbg_Right( void ) const = 0;
 };
 
 struct OperationNode : public ExpressionNode
@@ -119,6 +123,10 @@ struct OperationNode : public ExpressionNode
 	bool  IsLeaf( void ) const { return false; }
 	void  AppendValue(mtlString &out);
 	bool  IsConstant( void ) const { return left->IsConstant() && right->IsConstant(); }
+
+	mtlChars Dbg_Str( void ) const { return mtlChars(operation); }
+	ExpressionNode *Dbg_Left( void ) const { return left; }
+	ExpressionNode *Dbg_Right( void ) const { return right; }
 };
 
 struct ValueNode : public ExpressionNode
@@ -130,6 +138,10 @@ struct ValueNode : public ExpressionNode
 	bool IsLeaf( void ) const { return true; }
 	void AppendValue(mtlString &out);
 	bool IsConstant( void ) const { return term.IsFloat(); }
+
+	mtlChars Dbg_Str( void ) const { return term; }
+	ExpressionNode *Dbg_Left( void ) const { return NULL; }
+	ExpressionNode *Dbg_Right( void ) const { return NULL; }
 };
 
 void ExpressionNode::GetLane(const mtlChars &val, int lane, mtlString &out) const
@@ -265,7 +277,16 @@ bool GenerateTree(ExpressionNode *&node, mtlChars expr)
 		"+-", "*/" //,"|&"
 	};
 
-	expr.TrimBraces();
+	Parser p;
+	p.SetBuffer(expr);
+	mtlList<mtlChars> params;
+	switch (p.Match("(%s)%|%s", params)) {
+	case 0:
+	case 1:
+		expr = params.GetFirst()->GetItem();
+		break;
+	default: return false;
+	}
 
 	if (expr.GetSize() == 0) {
 		node = NULL;
@@ -405,7 +426,7 @@ bool EmitOperand(CompileInstance &inst, const mtlChars &operand)
 			Parser p;
 			p.SetBuffer(operand);
 			mtlList<mtlChars> m;
-			if (p.Match("[%i]", m) == 0) {
+			if (p.MatchPart("[%i]", m) == 0) {
 				int stack_offset;
 				m.GetFirst()->GetItem().ToInt(stack_offset);
 				EmitAddress(inst, inst.scopes.GetLast()->GetItem().rel_sptr - stack_offset);
@@ -418,6 +439,16 @@ bool EmitOperand(CompileInstance &inst, const mtlChars &operand)
 		EmitAddress(inst, GetRelAddress(inst, type->value.var_addr));
 	}
 	return true;
+}
+
+void print_tree(ExpressionNode *tree)
+{
+	if (tree == NULL) { return; }
+	print_tree(tree->Dbg_Left());
+	std::cout << "[";
+	print_ch(tree->Dbg_Str());
+	std::cout << "]";
+	print_tree(tree->Dbg_Right());
 }
 
 bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr)
@@ -438,7 +469,6 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 		AddError(inst, "Malformed expression", expr);
 		return false;
 	}
-
 
 	mtlChars          base_mem = GetBaseMembers(name);
 	bool              result = true;
@@ -462,12 +492,12 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 
 			parser.SetBuffer(op->GetItem());
 
-			switch (parser.Match("%s+=%s%|%s-=%s%|%s*=%s%|%s/=%s%|%s=%s", m, NULL)) {
-			case 0: EmitInstruction(inst, swsl::FADD_MM); break;
-			case 1: EmitInstruction(inst, swsl::FSUB_MM); break;
-			case 2: EmitInstruction(inst, swsl::FMUL_MM); break;
-			case 3: EmitInstruction(inst, swsl::FDIV_MM); break;
-			case 4: EmitInstruction(inst, swsl::FSET_MM); break;
+			switch (parser.MatchPart("%s+=%s%|%s-=%s%|%s*=%s%|%s/=%s%|%s=%s", m, NULL)) {
+			case 0: EmitInstruction(inst, swsl::FLT_ADD_MM); break;
+			case 1: EmitInstruction(inst, swsl::FLT_SUB_MM); break;
+			case 2: EmitInstruction(inst, swsl::FLT_MUL_MM); break;
+			case 3: EmitInstruction(inst, swsl::FLT_DIV_MM); break;
+			case 4: EmitInstruction(inst, swsl::FLT_SET_MM); break;
 			default:
 				AddError(inst, "Invalid syntax", op->GetItem());
 				return false;
@@ -552,7 +582,7 @@ bool CompileScope(CompileInstance &inst, const mtlChars &input, bool branch)
 	scope.parser.SetBuffer(input);
 	mtlList<mtlChars> m;
 	while (result && !scope.parser.IsEnd()) {
-		switch (scope.parser.Match("{%s}%|%w%w(%s){%s}%|if(%s){%s}else{%s}%|if(%s){%s}%|%s;", m, NULL)) {
+		switch (scope.parser.MatchPart("{%s}%|%w%w(%s){%s}%|if(%s){%s}else{%s}%|if(%s){%s}%|%s;", m, NULL)) {
 		case 0: // SCOPE
 			result = CompileScope(inst, m.GetFirst()->GetItem(), false);
 			break;
@@ -606,13 +636,13 @@ bool CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlC
 	mtlList<mtlChars> m;
 	int stack_start = inst.scopes.GetLast()->GetItem().size;
 	while (!p.IsEnd()) {
-		if (p.Match("%w%w", m, NULL) == 0) {
+		if (p.MatchPart("%w%w", m, NULL) == 0) {
 			result &= DeclareVar(inst, m.GetFirst()->GetItem(), m.GetFirst()->GetNext()->GetItem(), "");
 		} else {
 			AddError(inst, "Parameter syntax", params);
 			return false;
 		}
-		p.Match(",", m);
+		p.MatchPart(",", m);
 	}
 	int stack_end = inst.scopes.GetLast()->GetItem().size;
 	result &= CompileScope(inst, body, false);
@@ -704,12 +734,12 @@ void EmitInstruction(CompileInstance &inst, swsl::InstructionSet instr)
 	swsl::Instruction i;
 	if (instr != swsl::END) {
 		if (inst.stack_manip < 0) {
-			i.instr = swsl::UPOP_I;
+			i.instr = swsl::UNS_POP_I;
 			inst.program.AddLast(i);
 			EmitAddress(inst, (swsl::addr_t)(-inst.stack_manip));
 			inst.stack_manip = 0;
 		} else if (inst.stack_manip > 0) {
-			i.instr = swsl::UPUSH_I;
+			i.instr = swsl::UNS_PUSH_I;
 			inst.program.AddLast(i);
 			EmitAddress(inst, (swsl::addr_t)inst.stack_manip);
 			inst.stack_manip = 0;
@@ -858,11 +888,11 @@ bool swsl::Disassembler::Disassemble(const swsl::Shader &shader, mtlString &outp
 	output.Reserve(4096);
 	mtlString num;
 
-	output.Append("0     inputs   ");
+	output.Append("0     inputs      ");
 	num.FromInt(shader.m_program[0].u_addr);
 	output.Append(num);
 	output.Append("\n");
-	output.Append("1     entry    ");
+	output.Append("1     entry       ");
 	num.FromInt(shader.m_program[1].u_addr);
 	output.Append(num);
 	output.Append("\n");
@@ -879,7 +909,7 @@ bool swsl::Disassembler::Disassemble(const swsl::Shader &shader, mtlString &outp
 			return false;
 		}
 		output.Append(instr->name);
-		for (int i = 0; i < (9 - instr->name.GetSize()); ++i) {
+		for (int i = 0; i < (12 - instr->name.GetSize()); ++i) {
 			output.Append(' ');
 		}
 		if (iptr + instr->params - 1 >= shader.m_program.GetSize()) {
@@ -887,7 +917,7 @@ bool swsl::Disassembler::Disassemble(const swsl::Shader &shader, mtlString &outp
 			return false;
 		}
 		for (int i = 0; i < instr->params; ++i) {
-			if (i == instr->params - 1 && instr->const_float_src) {
+			if (i == instr->params - 1 && SWSL_INSTR_IMM_PARAM2(instr->instr)) {
 				num.FromFloat(shader.m_program[iptr++].fl_imm);
 				output.Append(num);
 			} else {

@@ -1,4 +1,0 @@
-void main(float3 i_color, float3 frag, float depth)
-{
-	frag = i_color;
-}

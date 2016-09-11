@@ -31,14 +31,14 @@ SOURCES += \
     MiniLib/MGL/mglText.cpp \
     MiniLib/MGL/mglTexture.cpp \
     MiniLib/MGL/mglTransform.cpp \
-    MiniLib/MTL/mtlDirectory.cpp \
     MiniLib/MTL/mtlMathParser.cpp \
     MiniLib/MTL/mtlParser.cpp \
     MiniLib/MTL/mtlRandom.cpp \
 	MiniLib/MTL/mtlString.cpp \
 	parser.cpp \
     swsl_shader.cpp \
-    compiler.cpp
+    compiler.cpp \
+    MiniLib/MTL/mtlPath.cpp
 
 HEADERS += \
     swsl_compiler.h \
@@ -72,7 +72,6 @@ HEADERS += \
     MiniLib/MTL/mtlAsset.h \
     MiniLib/MTL/mtlBinaryTree.h \
     MiniLib/MTL/mtlBits.h \
-    MiniLib/MTL/mtlDirectory.h \
     MiniLib/MTL/mtlDuplex.h \
     MiniLib/MTL/mtlHashTable.h \
     MiniLib/MTL/mtlList.h \
@@ -91,7 +90,10 @@ HEADERS += \
     MiniLib/MPL/old_mplTypes.h \
     MiniLib/MPL/mplWide.h \
     MiniLib/MPL/mplCommon.h \
-    compiler.h
+    compiler.h \
+    MiniLib/MTL/mtlPath.h \
+    MiniLib/MPL/mplMath.h \
+    swsl_aux.h
 
 macx: {
 	OBJECTIVE_SOURCES += \

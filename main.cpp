@@ -1,3 +1,5 @@
+//#define MPL_FALLBACK_SCALAR
+
 #include <iostream>
 
 #include <omp.h>
@@ -9,11 +11,15 @@
 #include "MiniLib/MML/mmlMatrix.h"
 
 #include "swsl.h"
+#include "compiler.h"
 #include "parser.h"
 #include "swsl_gfx.h"
+#include "swsl_aux.h"
 
 // Things I should look into:
 // Buffers should allocate an extra register at the edges so that screen resolutions that are not multiples of SWSL_WIDTH render properly
+
+// http://forum.devmaster.net/t/rasterizing-with-sse/18590/11
 
 #define video SDL_GetVideoSurface()
 
@@ -21,13 +27,6 @@ mglByteOrder32 ByteOrder( void )
 {
 	static const mglByteOrder32 byte_order = { 0x00000102 };
 	return byte_order;
-}
-
-void print_chars(mtlChars s)
-{
-	for (int i = 0; i < s.GetSize(); ++i) {
-		std::cout << s.GetChars()[i];
-	}
 }
 
 template < int n >
@@ -131,11 +130,29 @@ void Printer::SetColor(unsigned char _r, unsigned char _g, unsigned char _b)
 #include <limits>
 #include <pthread.h>
 
+void OutputSIMDInfo( void )
+{
+	std::cout << sizeof(char*) * CHAR_BIT << " bit system" << std::endl;
+	std::cout <<
+			 #if MPL_SIMD == MPL_SIMD_NONE
+				 "Scalar"
+			 #elif MPL_SIMD == MPL_SIMD_SSE
+				"SSE"
+			 #elif MPL_SIMD == MPL_SIMD_AVX256
+				"AVX256"
+			 #elif MPL_SIMD == MPL_SIMD_AVX512
+				"AVX512
+			 #elif MPL_SIMD == MPL_SIMD_NEON
+				 "NEON"
+			 #endif
+				 << " @ " << MPL_WIDTH << " wide" << std::endl;
+}
+
 bool LoadShader(const mtlChars &file_name, swsl::Shader &shader)
 {
 	swsl::Compiler compiler;
 	mtlString file;
-	if (!mtlParser::BufferFile(file_name, file)) {
+	if (!mtlSyntaxParser::BufferFile(mtlPath(file_name), file)) {
 		std::cout << "Failed to load shader file" << std::endl;
 		return false;
 	}
@@ -144,10 +161,9 @@ bool LoadShader(const mtlChars &file_name, swsl::Shader &shader)
 		const mtlItem<swsl::CompilerMessage> *err = shader.GetErrors();
 		while (err != NULL) {
 			std::cout << "  ";
-			print_chars(err->GetItem().msg);
-			std::cout << ": ";
-			print_chars(err->GetItem().ref);
-			std::cout << std::endl;
+			swsl::print_ch(err->GetItem().msg);
+			swsl::print_ch(": ");
+			swsl::print_line(err->GetItem().ref);
 			err = err->GetNext();
 		}
 		return false;
@@ -169,33 +185,18 @@ bool LoadShader(const mtlChars &file_name, swsl::Shader &shader)
 			std::cout << "Failed to execute shader" << std::endl;
 			return false;
 		}
-
-		for (int i = 0; i < sizeof(frag)/sizeof(mpl::wide_float); ++i) {
-			float frag_comp[MPL_WIDTH];
-			frag[i].to_scalar(frag_comp);
-			std::cout << "(";
-			for (int j = 0; j < MPL_WIDTH; ++j) {
-				std::cout << frag_comp[j] << ";";
-			}
-			std::cout << ") ";
-		}
-		std::cout << std::endl;
 	}
 	{
 		swsl::Disassembler disassembler;
 		mtlString disassembly;
 		disassembler.Disassemble(shader, disassembly);
-		print_chars(disassembly);
-		std::cout << std::endl;
+		swsl::print_line(disassembly);
 	}
 	return true;
 }
 
 int InteractiveDemo( void )
 {
-	std::cout << sizeof(char*) * CHAR_BIT << " bit system" << std::endl;
-	std::cout << "SIMD width: " << MPL_WIDTH << std::endl;
-
 	if (SDL_Init(SDL_INIT_VIDEO) == -1) {
 		std::cout << SDL_GetError() << std::endl;
 		return 1;
@@ -276,8 +277,9 @@ int InteractiveDemo( void )
 		c.attributes[1] = 0.0f;
 		c.attributes[2] = 1.0f;
 
-		float rgb[] = { 1.0f, 1.0f, 1.0f };
-		raster.ClearBuffers(rgb);
+		//float rgb[] = { 1.0f, 1.0f, 1.0f };
+		//raster.ClearBuffers(rgb);
+		raster.ClearBuffers();
 
 		Uint32 render_start = SDL_GetTicks();
 		raster.FillTriangle(a.coord, b.coord, c.coord, a.attributes, b.attributes, c.attributes);
@@ -317,7 +319,146 @@ int InteractiveDemo( void )
 	return 0;
 }
 
+int ParserTest( void )
+{
+	mtlString file_buffer;
+	mtlPath file_path("../test_file.txt");
+	swsl::print_ch("path=");
+	swsl::print_line(file_path.GetPath());
+	if (!mtlSyntaxParser::BufferFile(file_path, file_buffer)) { return 1; }
+	mtlSyntaxParser parser;
+	parser.SetBuffer(file_buffer);
+	mtlArray<mtlChars> m;
+	while (!parser.IsEnd()) {
+		switch (parser.Match("%w:=%i;%|%w:=%r;%|%w:=\"%s\";%|%w[%i]%w:={%i,%i,%i};%|end;%0%|%s+%s;", m)) {
+		case 0:
+			swsl::print_ch("\"");
+			swsl::print_ch(m[0]);
+			swsl::print_ch("\" set to int \"");
+			swsl::print_ch(m[1]);
+			swsl::print_line("\"");
+			break;
+		case 1:
+			swsl::print_ch("\"");
+			swsl::print_ch(m[0]);
+			swsl::print_ch("\" set to real \"");
+			swsl::print_ch(m[1]);
+			swsl::print_line("\"");
+			break;
+		case 2:
+			swsl::print_ch("\"");
+			swsl::print_ch(m[0]);
+			swsl::print_ch("\" set to str \"");
+			swsl::print_ch(m[1]);
+			swsl::print_line("\"");
+			break;
+		case 3:
+			swsl::print_ch("\"");
+			swsl::print_ch(m[2]);
+			swsl::print_ch("\" (type \"");
+			swsl::print_ch(m[0]);
+			swsl::print_ch("[");
+			swsl::print_ch(m[1]);
+			swsl::print_ch("]\") set to (");
+			swsl::print_ch(m[3]);
+			swsl::print_ch(";");
+			swsl::print_ch(m[4]);
+			swsl::print_ch(";");
+			swsl::print_ch(m[5]);
+			swsl::print_line(")");
+			break;
+		case 4:
+			swsl::print_line("Goodbye");
+			break;
+		case 5:
+			swsl::print_ch("term \"");
+			swsl::print_ch(m[0]);
+			swsl::print_ch("\" plus term \"");
+			swsl::print_ch(m[1]);
+			swsl::print_line("\"");
+			break;
+		default:
+			swsl::print_line("Error");
+			return 1;
+		}
+	}
+	return 0;
+}
+
+int PathTest( void )
+{
+	//mtlPath p1("darp/parp/karp.larp", mtlPath::File);
+	//mtlPath p2("../narp/tarp", mtlPath::Directory);
+
+	mtlPath p1("../a.b", mtlPath::File);
+	mtlPath p2("../c.d", mtlPath::File);
+
+	swsl::print_line(p1.GetPath());
+	swsl::print_line(p2.GetPath());
+
+	mtlPath p3 = p1 + p2;
+
+	swsl::print_line(p3.GetPath());
+
+	return 0;
+}
+
+int SplitTest( void )
+{
+	mtlChars str1 = "a, b, c, d";
+	mtlChars str2 = "a, , c, d,";
+
+	mtlList<mtlChars> split;
+	str1.SplitByChar(split, ',');
+
+	mtlItem<mtlChars> *i = split.GetFirst();
+	while (i != NULL) {
+		swsl::print_ch("\"");
+		swsl::print_ch(i->GetItem());
+		swsl::print_line("\"");
+		i = i->GetNext();
+	}
+
+	std::cout << std::endl;
+
+	str2.SplitByChar(split, ',');
+
+	i = split.GetFirst();
+	while (i != NULL) {
+		swsl::print_ch("\"");
+		swsl::print_ch(i->GetItem());
+		swsl::print_line("\"");
+		i = i->GetNext();
+	}
+
+	return 0;
+}
+
+int NewCompilerTest( void )
+{
+	Compiler c;
+	swsl::Shader s;
+
+	if (!c.Compile("../swsl_samples/interactive.swsl", s)) {
+		const mtlItem<Compiler::Message> *err = c.GetError();
+		while (err != NULL) {
+			swsl::print_ch(err->GetItem().err);
+			swsl::print_ch(": ");
+			swsl::print_line(err->GetItem().msg);
+			err = err->GetNext();
+		}
+		return 1;
+	}
+
+	return 0;
+}
+
 int main(int, char**)
 {
-	return InteractiveDemo();
+	OutputSIMDInfo();
+	//return InteractiveDemo();
+	//return ParserTest();
+	//return SplitTest();
+	//return PathTest();
+	return NewCompilerTest();
 }

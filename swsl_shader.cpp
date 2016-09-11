@@ -8,15 +8,7 @@
 #define read_2_instr(reg_a, reg_b) read_1_instr(reg_a); read_1_instr(reg_b)
 
 // Convert an instruction pointer to a value, or dereference the pointer to a value stored in the data cache.
-#define to_addr(reg)             (*(addr_t*)(reg))
 #define to_wide_float(reg)       (mpl::wide_float(*(float*)(reg)))
-#define to_stack_float(reg)      (stack[to_addr(reg)])
-#define to_stack_float_x(reg, x) (stack[(to_addr(reg) + (x))])
-
-#define topstack_to_cmpmask     (*(mpl::wide_bool*)&stack[sptr-1])
-#define pushstack_cmpmask(mask) (*(mpl::wide_bool*)&stack[sptr++] = (mask))
-
-#define stack_to_mask(reg) (*(mpl::wide_bool*)(reg))
 
 void swsl::Shader::Delete( void )
 {
@@ -71,9 +63,10 @@ bool swsl::Shader::Run(const mpl::wide_bool &frag_mask) const
 {
 	mpl::wide_float stack[STACK_SIZE];
 
-	swsl::addr_t iptr = m_program[gMetaData_EntryIndex].u_addr; // instruction pointer
-	swsl::addr_t sptr = 0;                                      // stack pointer
-	swsl::addr_t mptr = 0;                                      // mask pointer
+	swsl::addr_t   iptr = m_program[gMetaData_EntryIndex].u_addr; // instruction pointer
+	swsl::addr_t   sptr = 0;                                      // stack pointer
+	mpl::wide_bool mask_reg = true;                               // current conditional mask (state is pushed and popped from stack)
+	mpl::wide_bool test_reg;                                      // current test register
 
 	const swsl::Instruction *program      = (const Instruction*)(&m_program[0]);
 	const swsl::addr_t       program_size = (addr_t)m_program.GetSize();
@@ -103,219 +96,202 @@ bool swsl::Shader::Run(const mpl::wide_bool &frag_mask) const
 			return true;
 		}
 
-		case swsl::FPUSH_M:
+		case swsl::RETURN:
+			iptr = *((swsl::addr_t*)(&stack[sptr--]));
+			break;
+
+		case swsl::TST_PUSH:
+			stack[sptr++] = *(mpl::wide_float*)(&mask_reg);
+			break;
+
+		case swsl::TST_POP:
+			mask_reg = *(mpl::wide_bool*)(&stack[sptr--]);
+			break;
+
+		case swsl::TST_AND:
+			mask_reg = mask_reg & test_reg;
+			break;
+
+		case swsl::TST_OR:
+			mask_reg = mask_reg | test_reg;
+			break;
+
+		case swsl::TST_INV:
+			mask_reg = !mask_reg;
+			break;
+
+		case swsl::FLT_PUSH_M:
 			stack[sptr] = stack[sptr - program[iptr++].u_addr];
 			++sptr;
 			break;
 
-		case swsl::FPUSH_I:
+		case swsl::FLT_PUSH_I:
 			stack[sptr++] = to_wide_float(program + iptr);
 			++iptr;
 			break;
 
-		case swsl::UPUSH_I:
+		case swsl::UNS_PUSH_I:
 			sptr += program[iptr++].u_addr;
 			break;
 
-		case swsl::FPOP_M: {
+		case swsl::FLT_POP_M: {
 			swsl::addr_t addr = sptr - program[iptr++].u_addr;
 			stack[addr] = stack[--sptr];
 			break;
 		}
 
-		case swsl::UPOP_I:
+		case swsl::UNS_POP_I:
 			sptr -= program[iptr++].u_addr;
 			break;
 
-		case swsl::UJMP_I:
+		case swsl::UNS_JMP_I:
 			iptr = program[iptr].u_addr;
 			++iptr;
 			break;
 
-		case swsl::FSET_MM:
+		case swsl::FLT_MSET_MM:
+			reg_a = stack + sptr - program[iptr++].u_addr;
+			reg_b = stack + sptr - program[iptr++].u_addr;
+			*(mpl::wide_float*)(reg_a) = *(mpl::wide_float*)(reg_b) & *(mpl::wide_float*)(&mask_reg);
+			break;
+
+		case swsl::FLT_MSET_MI:
+			reg_a = stack + sptr - program[iptr++].u_addr;
+			reg_b = &program[iptr++];
+			*(mpl::wide_float*)(reg_a) = *(mpl::wide_float*)(reg_b) & *(mpl::wide_float*)(&mask_reg);
+			break;
+
+		case swsl::FLT_SET_MM:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = stack + sptr - program[iptr++].u_addr;
 			*(mpl::wide_float*)(reg_a) = *(mpl::wide_float*)(reg_b);
 			break;
 
-		case swsl::FSET_MI:
+		case swsl::FLT_SET_MI:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = &program[iptr++];
 			*(mpl::wide_float*)(reg_a) = to_wide_float(reg_b);
 			break;
 
-		case swsl::FADD_MM:
+		case swsl::FLT_ADD_MM:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = stack + sptr - program[iptr++].u_addr;
 			*(mpl::wide_float*)(reg_a) += *(mpl::wide_float*)(reg_b);
 			break;
 
-		case swsl::FADD_MI:
+		case swsl::FLT_ADD_MI:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = &program[iptr++];
 			*(mpl::wide_float*)(reg_a) += to_wide_float(reg_b);
 			break;
 
-		case swsl::FSUB_MM:
+		case swsl::FLT_SUB_MM:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = stack + sptr - program[iptr++].u_addr;
 			*(mpl::wide_float*)(reg_a) -= *(mpl::wide_float*)(reg_b);
 			break;
 
-		case swsl::FSUB_MI:
+		case swsl::FLT_SUB_MI:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = &program[iptr++];
 			*(mpl::wide_float*)(reg_a) -= to_wide_float(reg_b);
 			break;
 
-		case swsl::FMUL_MM:
+		case swsl::FLT_MUL_MM:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = stack + sptr - program[iptr++].u_addr;
 			*(mpl::wide_float*)(reg_a) *= *(mpl::wide_float*)(reg_b);
 			break;
 
-		case swsl::FMUL_MI:
+		case swsl::FLT_MUL_MI:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = &program[iptr++];
 			*(mpl::wide_float*)(reg_a) *= to_wide_float(reg_b);
 			break;
 
-		case swsl::FDIV_MM:
+		case swsl::FLT_DIV_MM:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = stack + sptr - program[iptr++].u_addr;
 			*(mpl::wide_float*)(reg_a) /= *(mpl::wide_float*)(reg_b);
 			break;
 
-		case swsl::FDIV_MI:
+		case swsl::FLT_DIV_MI:
 			reg_a = stack + sptr - program[iptr++].u_addr;
 			reg_b = &program[iptr++];
 			*(mpl::wide_float*)(reg_a) /= to_wide_float(reg_b);
 			break;
 
-		/*case MIN_FF:
-			read_2_instr(reg_a, reg_b);
-			to_ref_float(reg_a) = mpl::wide_float::min(to_ref_float(reg_a), to_ref_float(reg_b));
+		case swsl::FLT_EQ_MM:
+			reg_a = stack + sptr - program[iptr++].u_addr;
+			reg_b = stack + sptr - program[iptr++].u_addr;
+			test_reg = *(mpl::wide_float*)(reg_a) == *(mpl::wide_float*)(reg_b);
 			break;
 
-		case MIN_FC:
-			read_2_instr(reg_a, reg_b);
-			to_ref_float(reg_a) = mpl::wide_float::min(to_ref_float(reg_a), to_const_float(reg_b));
+		case swsl::FLT_EQ_MI:
+			reg_a = stack + sptr - program[iptr++].u_addr;
+			reg_b = &program[iptr++];
+			test_reg = *(mpl::wide_float*)(reg_a) == to_wide_float(reg_b);
 			break;
 
-		case MAX_FF:
-			read_2_instr(reg_a, reg_b);
-			to_ref_float(reg_a) = mpl::wide_float::max(to_ref_float(reg_a), to_ref_float(reg_b));
+		case swsl::FLT_NEQ_MM:
+			reg_a = stack + sptr - program[iptr++].u_addr;
+			reg_b = stack + sptr - program[iptr++].u_addr;
+			test_reg = *(mpl::wide_float*)(reg_a) != *(mpl::wide_float*)(reg_b);
 			break;
 
-		case MAX_FC:
-			read_2_instr(reg_a, reg_b);
-			to_ref_float(reg_a) = mpl::wide_float::max(to_ref_float(reg_a), to_const_float(reg_b));
+		case swsl::FLT_NEQ_MI:
+			reg_a = stack + sptr - program[iptr++].u_addr;
+			reg_b = &program[iptr++];
+			test_reg = *(mpl::wide_float*)(reg_a) != to_wide_float(reg_b);
 			break;
 
-		case SQRT_FF:
-			read_2_instr(reg_a, reg_b);
-			to_ref_float(reg_a) = mpl::wide_float::sqrt(to_ref_float(reg_b));
+		case swsl::FLT_LT_MM:
+			reg_a = stack + sptr - program[iptr++].u_addr;
+			reg_b = stack + sptr - program[iptr++].u_addr;
+			test_reg = *(mpl::wide_float*)(reg_a) < *(mpl::wide_float*)(reg_b);
 			break;
 
-		case SQRT_FC:
-			read_2_instr(reg_a, reg_b);
-			to_ref_float(reg_a) = mpl::wide_float::sqrt(to_const_float(reg_b));
+		case swsl::FLT_LT_MI:
+			reg_a = stack + sptr - program[iptr++].u_addr;
+			reg_b = &program[iptr++];
+			test_reg = *(mpl::wide_float*)(reg_a) < to_wide_float(reg_b);
 			break;
 
-		case EQ_FF:
-			read_2_instr(reg_a, reg_b);
-			pushstack_cmpmask(to_ref_float(reg_a) == to_ref_float(reg_b));
+		case swsl::FLT_LTE_MM:
+			reg_a = stack + sptr - program[iptr++].u_addr;
+			reg_b = stack + sptr - program[iptr++].u_addr;
+			test_reg = *(mpl::wide_float*)(reg_a) <= *(mpl::wide_float*)(reg_b);
 			break;
 
-		case EQ_FC:
-			read_2_instr(reg_a, reg_b);
-			pushstack_cmpmask(to_ref_float(reg_a) == to_const_float(reg_b));
+		case swsl::FLT_LTE_MI:
+			reg_a = stack + sptr - program[iptr++].u_addr;
+			reg_b = &program[iptr++];
+			test_reg = *(mpl::wide_float*)(reg_a) <= to_wide_float(reg_b);
 			break;
 
-		case EQ_CF:
-			read_2_instr(reg_a, reg_b);
-			pushstack_cmpmask(to_const_float(reg_a) == to_ref_float(reg_b));
+		case swsl::FLT_GT_MM:
+			reg_a = stack + sptr - program[iptr++].u_addr;
+			reg_b = stack + sptr - program[iptr++].u_addr;
+			test_reg = *(mpl::wide_float*)(reg_a) > *(mpl::wide_float*)(reg_b);
 			break;
 
-		case NEQ_FF:
-			read_2_instr(reg_a, reg_b);
-			pushstack_cmpmask(to_ref_float(reg_a) != to_ref_float(reg_b));
+		case swsl::FLT_GT_MI:
+			reg_a = stack + sptr - program[iptr++].u_addr;
+			reg_b = &program[iptr++];
+			test_reg = *(mpl::wide_float*)(reg_a) > to_wide_float(reg_b);
 			break;
 
-		case NEQ_FC:
-			read_2_instr(reg_a, reg_b);
-			pushstack_cmpmask(to_ref_float(reg_a) != to_const_float(reg_b));
+		case swsl::FLT_GTE_MM:
+			reg_a = stack + sptr - program[iptr++].u_addr;
+			reg_b = stack + sptr - program[iptr++].u_addr;
+			test_reg = *(mpl::wide_float*)(reg_a) >= *(mpl::wide_float*)(reg_b);
 			break;
 
-		case NEQ_CF:
-			read_2_instr(reg_a, reg_b);
-			pushstack_cmpmask(to_const_float(reg_a) != to_ref_float(reg_b));
+		case swsl::FLT_GTE_MI:
+			reg_a = stack + sptr - program[iptr++].u_addr;
+			reg_b = &program[iptr++];
+			test_reg = *(mpl::wide_float*)(reg_a) >= to_wide_float(reg_b);
 			break;
-
-		case LT_FF:
-			read_2_instr(reg_a, reg_b);
-			pushstack_cmpmask(to_ref_float(reg_a) < to_ref_float(reg_b));
-			break;
-
-		case LT_FC:
-			read_2_instr(reg_a, reg_b);
-			pushstack_cmpmask(to_ref_float(reg_a) < to_const_float(reg_b));
-			break;
-
-		case LT_CF:
-			read_2_instr(reg_a, reg_b);
-			pushstack_cmpmask(to_const_float(reg_a) < to_ref_float(reg_b));
-			break;
-
-		case LE_FF:
-			read_2_instr(reg_a, reg_b);
-			pushstack_cmpmask(to_ref_float(reg_a) <= to_ref_float(reg_b));
-			break;
-
-		case LE_FC:
-			read_2_instr(reg_a, reg_b);
-			pushstack_cmpmask(to_ref_float(reg_a) <= to_const_float(reg_b));
-			break;
-
-		case LE_CF:
-			read_2_instr(reg_a, reg_b);
-			pushstack_cmpmask(to_const_float(reg_a) <= to_ref_float(reg_b));
-			break;
-
-		case GT_FF:
-			read_2_instr(reg_a, reg_b);
-			pushstack_cmpmask(to_ref_float(reg_a) > to_ref_float(reg_b));
-			break;
-
-		case GT_FC:
-			read_2_instr(reg_a, reg_b);
-			pushstack_cmpmask(to_ref_float(reg_a) > to_const_float(reg_b));
-			break;
-
-		case GT_CF:
-			read_2_instr(reg_a, reg_b);
-			pushstack_cmpmask(to_const_float(reg_a) > to_ref_float(reg_b));
-			break;
-
-		case GE_FF:
-			read_2_instr(reg_a, reg_b);
-			pushstack_cmpmask(to_ref_float(reg_a) >= to_ref_float(reg_b));
-			break;
-
-		case GE_FC:
-			read_2_instr(reg_a, reg_b);
-			pushstack_cmpmask(to_ref_float(reg_a) >= to_const_float(reg_b));
-			break;
-
-		case GE_CF:
-			read_2_instr(reg_a, reg_b);
-			pushstack_cmpmask(to_const_float(reg_a) >= to_ref_float(reg_b));
-			break;
-
-		case MRG:
-			read_2_instr(reg_a, reg_b);
-			to_ref_float(reg_a) = mpl::wide_float::merge(to_ref_float(reg_a), to_ref_float(reg_b), topstack_to_cmpmask);
-			break;*/
 
 		default: return false;
 		}

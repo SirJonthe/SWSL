@@ -26,6 +26,7 @@ namespace swsl
 	{
 		friend class swsl::Compiler;
 		friend class swsl::Disassembler;
+		friend class ::Compiler;
 
 	public:
 		struct InputArray
@@ -39,6 +40,13 @@ namespace swsl
 			InputArray constant, varying, fragments;
 			// change to:
 			// InputArray in, inout;
+		};
+
+	private:
+		enum MetaData
+		{
+			NumInputs,
+			EntryIndex
 		};
 
 	private:

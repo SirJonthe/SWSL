@@ -1,3 +1,5 @@
+#include <fstream>
+
 #include "parser.h"
 
 #define OpenBraces   "([{"
@@ -101,7 +103,9 @@ short Parser::ReadChar( void )
 
 short Parser::PeekChar( void ) const
 {
-	return IsEnd() ? EndOfStream : (short)m_buffer[m_reader];
+	if (IsEnd()) { return EndOfStream; }
+	char ch = m_buffer[m_reader];
+	return (mtlChars::IsWhitespace(ch) && m_quote_char == 0) ? ' ' : ch;
 }
 
 bool Parser::VerifyBraces(const mtlChars &str) const
@@ -132,7 +136,7 @@ mtlChars Parser::Read(const mtlChars &format)
 
 	const int end = m_reader;
 	SkipWhitespaces();
-	return m_buffer.GetSubstring(start, end);
+	return mtlChars(m_buffer, start, end);
 }
 
 mtlChars Parser::ReadTo(char ch)
@@ -145,7 +149,7 @@ mtlChars Parser::ReadTo(char ch)
 		ReadChar();
 	}
 
-	mtlChars str = m_buffer.GetSubstring(start, m_reader).GetTrimmed();
+	mtlChars str = mtlChars(m_buffer, start, m_reader).GetTrimmed();
 	SkipWhitespaces();
 	return str;
 }
@@ -207,9 +211,6 @@ int Parser::MatchSingle(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *
 			case 's':
 				out.AddLast(ReadTo((char)ep.PeekChar()));
 				break;
-			case '0':
-				if (ep.PeekChar() != EndOfStream) { result = (int)ExpressionNotFound; }
-				break;
 			default: {
 					/*mtlList<mtlChars> m;
 					mtlChars s;
@@ -247,8 +248,8 @@ int Parser::MatchSingle(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *
 		m_reader = start;
 	}
 	if (seq != NULL) {
-		*seq = this->m_buffer.GetSubstring(start, m_reader);
-		seq->Trim();
+		*seq = mtlChars(m_buffer, start, m_reader);
+		*seq = seq->GetTrimmed();
 	}
 
 	while (m_brace_stack.GetLast() != brace_item && m_brace_stack.GetSize() > 0) {
@@ -279,9 +280,10 @@ void Parser::CopyBuffer(const mtlChars &buffer)
 	SkipWhitespaces();
 }
 
-bool Parser::BufferFile(const mtlDirectory &p_file, mtlString &p_buffer)
+bool Parser::BufferFile(const mtlPath &p_file, mtlString &p_buffer)
 {
-	std::ifstream fin(p_file.GetDirectory().GetChars(), std::ios::ate|std::ios::binary);
+	if (!p_file.IsFile()) { return false; }
+	std::ifstream fin(p_file.GetPath().GetChars(), std::ios::ate|std::ios::binary);
 	if (!fin.is_open()) { return false; }
 	p_buffer.SetSize((int)fin.tellg());
 	fin.seekg(0, std::ios::beg);
@@ -316,7 +318,7 @@ int Parser::GetBraceDepth(char brace_type) const
 	return depth;
 }
 
-int Parser::Match(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *seq)
+int Parser::MatchPart(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *seq)
 {
 	mtlList<mtlChars> exprs;
 	expr.SplitByString(exprs, "%|");
@@ -326,6 +328,25 @@ int Parser::Match(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *seq)
 		int code = MatchSingle(expr_iter->GetItem(), out, seq);
 		switch (code) {
 		case 1:                    return i;
+		case ExpressionInputError: return (int)ExpressionInputError;
+		default:                   break;
+		}
+		++i;
+		expr_iter = expr_iter->GetNext();
+	}
+	return (int)ExpressionNotFound;
+}
+
+int Parser::Match(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *seq)
+{
+	mtlList<mtlChars> exprs;
+	expr.SplitByString(exprs, "%|");
+	mtlItem<mtlChars> *expr_iter = exprs.GetFirst();
+	int i = 0;
+	while (expr_iter != NULL) {
+		int code = MatchSingle(expr_iter->GetItem(), out, seq);
+		switch (code) {
+		case 1:                    if (IsEnd()) { return i; } break;
 		case ExpressionInputError: return (int)ExpressionInputError;
 		default:                   break;
 		}

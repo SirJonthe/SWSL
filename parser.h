@@ -3,6 +3,7 @@
 
 #include "MiniLib/MTL/mtlString.h"
 #include "MiniLib/MTL/mtlList.h"
+#include "MiniLib/MTL/mtlPath.h"
 
 class Parser
 {
@@ -36,13 +37,14 @@ public:
 
 	void SetBuffer(const mtlChars &buffer);
 	void CopyBuffer(const mtlChars &buffer);
-	static bool BufferFile(const mtlDirectory &p_file, mtlString &p_buffer);
+	static bool BufferFile(const mtlPath &p_file, mtlString &p_buffer);
 
 	bool IsEnd( void ) const;
 	bool InQuote( void ) const;
 	int  GetBraceDepth( void ) const;
 	int  GetBraceDepth(char brace_type) const;
 
+	int MatchPart(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *seq = NULL);
 	int Match(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *seq = NULL);
 };
 

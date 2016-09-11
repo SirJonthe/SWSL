@@ -3,6 +3,7 @@
 
 #include "MiniLib/MPL/mplWide.h"
 #include "MiniLib/MTL/mtlArray.h"
+#include "MiniLib/MTL/mtlBits.h"
 
 namespace swsl
 {
@@ -45,9 +46,9 @@ namespace swsl
 	class TextureBuffer
 	{
 	private:
-		mtlArray<unsigned char> m_data; // not a SIMD register because textures are not accessed in blocks of pixels
-		int                     m_width;
-		int                     m_height;
+		mtlArray<mtlByte> m_data; // not a SIMD register because textures are not accessed in blocks of pixels
+		int               m_width;
+		int               m_height;
 	};
 
 }
