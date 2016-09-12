@@ -1,0 +1,15 @@
+ ab_2     :=     10;
+
+cd1:= 1.0;
+	c :="My  spidey   sense is  tingling!";
+
+
+
+
+float[3]
+   	fl3 := {  2,3,	1	};
+
+
+(a + c) - b + d;
+
+end ;
