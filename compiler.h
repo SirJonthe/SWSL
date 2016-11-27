@@ -180,6 +180,7 @@ private:
 	File *AddFile(const mtlChars &filename);
 	void PopFileStack( void );
 	void GenerateExpressionTree(ExprNode *&node, const mtlChars &expr);
+	void SimplifyExpressionTree(ExprNode *&node);
 	TypeInfo ClassifyType(const mtlChars &type_name) const;
 	bool IsKeyword(const mtlChars &str) const;
 	bool IsValidName(const mtlChars &name) const;

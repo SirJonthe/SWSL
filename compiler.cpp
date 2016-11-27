@@ -44,8 +44,14 @@ void Compiler::AddError(const mtlChars &err, const mtlChars &msg)
 
 Compiler::File *Compiler::AddFile(const mtlChars &filename)
 {
-	m_files.AddLast();
-	m_file_stack.AddLast(m_files.GetLast()->GetItem());
+	mtlItem<Compiler::File> *i = m_files.GetFirst();
+	while (i != NULL) {
+		if (i->GetItem().m_path.GetPath().Compare(filename)) { return NULL; }
+	}
+
+	m_files.AddLast().m_path = filename;
+
+	return m_file_stack.AddLast(&m_files.GetLast()->GetItem());
 }
 
 void Compiler::GenerateExpressionTree(Compiler::ExprNode *&node, const mtlChars &expr)
@@ -96,6 +102,11 @@ void Compiler::GenerateExpressionTree(Compiler::ExprNode *&node, const mtlChars 
 		node->str = expr;
 		node->type = node_type;
 	}
+}
+
+void Compiler::SimplifyExpressionTree(Compiler::ExprNode *&node)
+{
+	// Simplifies an expression by evaluating constants nodes
 }
 
 Compiler::TypeInfo Compiler::ClassifyType(const mtlChars &type_name) const
@@ -398,7 +409,7 @@ void Compiler::CompileGlobalCodeUnit(mtlSyntaxParser &parser)
 
 	mtlArray<mtlChars> params;
 	mtlChars seq;
-	switch (parser.Match("import\"%s\"  %|  export struct %w{%s};  %|  struct %w{%s};  %|  export %w%w(%s){%s}  %|  %w%w(%s){%s}  %|  export %s(%s);  %|  %s(%s);  %|  %s", params, &seq)) {
+	switch (parser.Match("import\"%s\"  %|  export struct %w{%s};  %|  struct %w{%s};  %|  export %w%w(%s){%s}  %|  %w%w(%s){%s}  %|  export %w%w(%s);  %|  %w%w(%s);  %|  %s", params, &seq)) {
 	case 0:
 		CompileFile(params[0]); // FIXME: The path needs to be relative to the current location of the file that is being compiled
 		break;
@@ -463,7 +474,6 @@ void Compiler::CompileScope(const mtlChars &scope)
 void Compiler::CompileCondition(const mtlChars &condition)
 {
 	// FIXME
-
 }
 
 void Compiler::CompileIfElse(const mtlChars &condition, const mtlChars &if_code, const mtlChars &else_code)

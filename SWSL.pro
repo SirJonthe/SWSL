@@ -87,13 +87,13 @@ HEADERS += \
     swsl_shader.h \
     MiniLib/MPL/old_mplCommon.h \
     MiniLib/MPL/old_mplMask4.h \
-    MiniLib/MPL/old_mplTypes.h \
     MiniLib/MPL/mplWide.h \
     MiniLib/MPL/mplCommon.h \
     compiler.h \
     MiniLib/MTL/mtlPath.h \
     MiniLib/MPL/mplMath.h \
-    swsl_aux.h
+    swsl_aux.h \
+    MiniLib/MML/mmlInt.h
 
 macx: {
 	OBJECTIVE_SOURCES += \
