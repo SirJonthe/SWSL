@@ -4,9 +4,9 @@ CONFIG -= app_bundle
 CONFIG -= qt
 
 QMAKE_CXXFLAGS += \
-#	-mcpu=cortex-a7 \
-#	-mfloat-abi=hard \
-#	-mfpu=neon-vfpv4 \
+	-mcpu=cortex-a7 \
+	-mfloat-abi=hard \
+	-mfpu=neon-vfpv4 \
 	-fopenmp \
 	-pthread
 

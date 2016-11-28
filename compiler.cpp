@@ -50,8 +50,9 @@ Compiler::File *Compiler::AddFile(const mtlChars &filename)
 	}
 
 	m_files.AddLast().m_path = filename;
+	m_file_stack.AddLast(&m_files.GetLast()->GetItem());
 
-	return m_file_stack.AddLast(&m_files.GetLast()->GetItem());
+	return m_file_stack.GetLast()->GetItem();
 }
 
 void Compiler::GenerateExpressionTree(Compiler::ExprNode *&node, const mtlChars &expr)
