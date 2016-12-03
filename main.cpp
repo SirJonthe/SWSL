@@ -132,7 +132,7 @@ void Printer::SetColor(unsigned char _r, unsigned char _g, unsigned char _b)
 
 void OutputSIMDInfo( void )
 {
-	std::cout << sizeof(char*) * CHAR_BIT << " bit system" << std::endl;
+	std::cout << sizeof(char*) * CHAR_BIT << " bit binary" << std::endl;
 	std::cout <<
 			 #if MPL_SIMD == MPL_SIMD_NONE
 				 "Scalar"
@@ -449,6 +449,12 @@ int NewCompilerTest( void )
 		}
 		return 1;
 	}
+
+	mtlString output;
+	swsl::Disassembler dasm;
+	dasm.Disassemble(s, output);
+
+	swsl::print_ch(output);
 
 	return 0;
 }

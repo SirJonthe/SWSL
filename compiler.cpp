@@ -404,9 +404,7 @@ void Compiler::CompileGlobalCodeUnit(mtlSyntaxParser &parser)
 	swsl::print_ch(rem_num);
 	swsl::print_ch(", \"");
 	swsl::print_ch(parser.GetBufferRemaining());
-	swsl::print_ch("\", ");
-	rem_num.FromInt(parser.GetBufferRemaining()[0]);
-	swsl::print_line(rem_num);
+	swsl::print_ch("\"\n");
 
 	mtlArray<mtlChars> params;
 	mtlChars seq;
