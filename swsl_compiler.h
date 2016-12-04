@@ -1,7 +1,7 @@
 #ifndef SWSL_COMPILER_H
 #define SWSL_COMPILER_H
 
-#include "parser.h"
+#include "swsl_parser.h"
 #include "swsl_shader.h"
 
 namespace swsl

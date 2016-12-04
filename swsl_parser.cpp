@@ -1,6 +1,6 @@
 #include <fstream>
 
-#include "parser.h"
+#include "swsl_parser.h"
 
 #define OpenBraces   "([{"
 #define ClosedBraces ")]}"
@@ -10,9 +10,9 @@
 #define EndOfStream  256
 #define Escape       '\\'
 
-bool Parser::IsFormat(char ch, const mtlChars &format) const
+bool swsl::Parser::IsFormat(char ch, const mtlChars &format) const
 {
-	Parser parser;
+	swsl::Parser parser;
 	parser.SetBuffer(format);
 	bool match = false;
 	char fmt_char;
@@ -59,7 +59,7 @@ bool Parser::IsFormat(char ch, const mtlChars &format) const
 	return match;
 }
 
-void Parser::SkipWhitespaces( void )
+void swsl::Parser::SkipWhitespaces( void )
 {
 	while (!IsEnd() && mtlChars::SameAsAny(m_buffer[m_reader], Whitespaces, sizeof(Whitespaces))) {
 		if (mtlChars::SameAsAny(m_buffer[m_reader], Newlines, sizeof(Newlines))) {
@@ -69,7 +69,7 @@ void Parser::SkipWhitespaces( void )
 	}
 }
 
-short Parser::ReadChar( void )
+short swsl::Parser::ReadChar( void )
 {
 	if (IsEnd()) { return EndOfStream; }
 
@@ -101,16 +101,16 @@ short Parser::ReadChar( void )
 	return (short)ch;
 }
 
-short Parser::PeekChar( void ) const
+short swsl::Parser::PeekChar( void ) const
 {
 	if (IsEnd()) { return EndOfStream; }
 	char ch = m_buffer[m_reader];
 	return (mtlChars::IsWhitespace(ch) && m_quote_char == 0) ? ' ' : ch;
 }
 
-bool Parser::VerifyBraces(const mtlChars &str) const
+bool swsl::Parser::VerifyBraces(const mtlChars &str) const
 {
-	Parser parser;
+	swsl::Parser parser;
 	parser.SetBuffer(str);
 	while (!parser.IsEnd()) {
 		parser.ReadChar();
@@ -118,7 +118,7 @@ bool Parser::VerifyBraces(const mtlChars &str) const
 	return parser.GetBraceDepth() == 0;
 }
 
-mtlChars Parser::Read(const mtlChars &format)
+mtlChars swsl::Parser::Read(const mtlChars &format)
 {
 	if (IsEnd()) { return mtlChars(); }
 
@@ -139,7 +139,7 @@ mtlChars Parser::Read(const mtlChars &format)
 	return mtlChars(m_buffer, start, end);
 }
 
-mtlChars Parser::ReadTo(char ch)
+mtlChars swsl::Parser::ReadTo(char ch)
 {
 	int brace_depth = GetBraceDepth();
 	int start = m_reader;
@@ -154,7 +154,7 @@ mtlChars Parser::ReadTo(char ch)
 	return str;
 }
 
-int Parser::MatchSingle(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *seq)
+int swsl::Parser::MatchSingle(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *seq)
 {
 	//m_brace_stack.RemoveAll();
 
@@ -165,7 +165,7 @@ int Parser::MatchSingle(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *
 	}
 
 	out.RemoveAll();
-	Parser ep;
+	swsl::Parser ep;
 	ep.SetBuffer(expr);
 	int result = 1;
 	int start = m_reader;
@@ -259,10 +259,10 @@ int Parser::MatchSingle(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *
 	return result;
 }
 
-Parser::Parser( void ) : m_copy(), m_buffer(), m_reader(0), m_brace_stack(), m_line(0), m_quote_char(0)
+swsl::Parser::Parser( void ) : m_copy(), m_buffer(), m_reader(0), m_brace_stack(), m_line(0), m_quote_char(0)
 {}
 
-void Parser::SetBuffer(const mtlChars &buffer)
+void swsl::Parser::SetBuffer(const mtlChars &buffer)
 {
 	m_copy.Free();
 	m_buffer = buffer;
@@ -271,7 +271,7 @@ void Parser::SetBuffer(const mtlChars &buffer)
 	SkipWhitespaces();
 }
 
-void Parser::CopyBuffer(const mtlChars &buffer)
+void swsl::Parser::CopyBuffer(const mtlChars &buffer)
 {
 	m_copy.Copy(buffer);
 	m_buffer = m_copy;
@@ -280,7 +280,7 @@ void Parser::CopyBuffer(const mtlChars &buffer)
 	SkipWhitespaces();
 }
 
-bool Parser::BufferFile(const mtlPath &p_file, mtlString &p_buffer)
+bool swsl::Parser::BufferFile(const mtlPath &p_file, mtlString &p_buffer)
 {
 	if (!p_file.IsFile()) { return false; }
 	std::ifstream fin(p_file.GetPath().GetChars(), std::ios::ate|std::ios::binary);
@@ -290,22 +290,22 @@ bool Parser::BufferFile(const mtlPath &p_file, mtlString &p_buffer)
 	return !fin.read(p_buffer.GetChars(), p_buffer.GetSize()).bad();
 }
 
-bool Parser::IsEnd( void ) const
+bool swsl::Parser::IsEnd( void ) const
 {
 	return m_reader >= m_buffer.GetSize();
 }
 
-bool Parser::InQuote( void ) const
+bool swsl::Parser::InQuote( void ) const
 {
 	return m_quote_char != 0;
 }
 
-int Parser::GetBraceDepth( void ) const
+int swsl::Parser::GetBraceDepth( void ) const
 {
 	return m_brace_stack.GetSize();
 }
 
-int Parser::GetBraceDepth(char brace_type) const
+int swsl::Parser::GetBraceDepth(char brace_type) const
 {
 	const mtlItem<char> *iter = m_brace_stack.GetFirst();
 	int depth = 0;
@@ -318,7 +318,7 @@ int Parser::GetBraceDepth(char brace_type) const
 	return depth;
 }
 
-int Parser::MatchPart(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *seq)
+int swsl::Parser::MatchPart(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *seq)
 {
 	mtlList<mtlChars> exprs;
 	expr.SplitByString(exprs, "%|");
@@ -337,7 +337,7 @@ int Parser::MatchPart(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *se
 	return (int)ExpressionNotFound;
 }
 
-int Parser::Match(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *seq)
+int swsl::Parser::Match(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *seq)
 {
 	mtlList<mtlChars> exprs;
 	expr.SplitByString(exprs, "%|");

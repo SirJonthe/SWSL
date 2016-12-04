@@ -57,7 +57,7 @@ struct Definition
 struct Scope
 {
 	mtlList< Definition > defs;
-	Parser                parser;
+	swsl::Parser          parser;
 	int                   size;
 	int                   rel_sptr;
 	int                   nested_branch;
@@ -277,7 +277,7 @@ bool GenerateTree(ExpressionNode *&node, mtlChars expr)
 		"+-", "*/" //,"|&"
 	};
 
-	Parser p;
+	swsl::Parser p;
 	p.SetBuffer(expr);
 	mtlList<mtlChars> params;
 	switch (p.Match("(%s)%|%s", params)) {
@@ -423,7 +423,7 @@ bool EmitOperand(CompileInstance &inst, const mtlChars &operand)
 		if (operand.ToFloat(fl_val)) {
 			EmitImmutable(inst, fl_val);
 		} else {
-			Parser p;
+			swsl::Parser p;
 			p.SetBuffer(operand);
 			mtlList<mtlChars> m;
 			if (p.MatchPart("[%i]", m) == 0) {
@@ -472,7 +472,7 @@ bool AssignVar(CompileInstance &inst, const mtlChars &name, const mtlChars &expr
 
 	mtlChars          base_mem = GetBaseMembers(name);
 	bool              result = true;
-	Parser            parser;
+	swsl::Parser      parser;
 	mtlList<mtlChars> ops;
 	mtlList<mtlChars> m;
 	mtlString         order_str;
@@ -631,7 +631,7 @@ bool CompileFunction(CompileInstance &inst, const mtlChars &ret_type, const mtlC
 		is_main = true;
 	}
 
-	Parser p;
+	swsl::Parser p;
 	p.SetBuffer(params);
 	mtlList<mtlChars> m;
 	int stack_start = inst.scopes.GetLast()->GetItem().size;
@@ -675,7 +675,7 @@ bool CompileStatement(CompileInstance &inst, const mtlChars &statement)
 		return false;
 	}
 
-	Parser parser;
+	swsl::Parser parser;
 	parser.SetBuffer(statement);
 	mtlList<mtlChars> m;
 	mtlChars seq;

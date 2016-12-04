@@ -1,9 +1,12 @@
-#ifndef PARSER_H
-#define PARSER_H
+#ifndef SWSL_PARSER_H
+#define SWSL_PARSER_H
 
 #include "MiniLib/MTL/mtlString.h"
 #include "MiniLib/MTL/mtlList.h"
 #include "MiniLib/MTL/mtlPath.h"
+
+namespace swsl
+{
 
 class Parser
 {
@@ -48,4 +51,6 @@ public:
 	int Match(const mtlChars &expr, mtlList<mtlChars> &out, mtlChars *seq = NULL);
 };
 
-#endif // PARSER_H
+}
+
+#endif // SWSL_PARSER_H

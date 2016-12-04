@@ -7,7 +7,90 @@
 
 #include "swsl_shader.h"
 
+static const mtlChars Keywords[] = {
+	"if", "else", "for", "while",
+	"continue", "break", "return",
+	"const", "mutable",
+	"import", "export",
+	"struct",
+	"void",
+	"bool", "true", "false",
+	"int",   "int2",   "int3",   "int4",
+	"fixed", "fixed2", "fixed3", "fixed4",
+	"unit",  "unit2",  "unit3",  "unit4",
+	"float", "float2", "float3", "float4"
+};
+
 class Compiler
+{
+public:
+	struct Message
+	{
+		mtlString err;
+		mtlString msg;
+	};
+
+private:
+	struct File
+	{
+		mtlPath   m_path;
+		mtlString m_contents;
+	};
+
+private:
+	mtlList<Message> m_errors;
+	mtlList<File>    m_files;
+	mtlList<File*>   m_file_stack;
+	bool             m_global_scope;
+
+protected:
+	void AddError(const mtlChars &err, const mtlChars &msg);
+	File *AddFile(const mtlChars &filename);
+	bool Success( void ) const;
+	virtual void InitializeCompilerState( void );
+	void CompileFile(const mtlChars &filename);
+	void LoadFile(const mtlChars &filename, mtlString &file_contents);
+	void CompileCode(const mtlChars &code);
+	void CompileScope(const mtlChars &code);
+	virtual void PushScope( void ) = 0;
+	virtual void PopScope( void ) = 0;
+	void CompileCodeUnit(mtlSyntaxParser &parser);
+	bool IsGlobalScope( void ) const;
+	void CompileLocalCodeUnit(mtlSyntaxParser &parser);
+	void CompileIfElse(const mtlChars &condition, const mtlChars &if_code, const mtlChars &else_code) ;
+	virtual void EmitElse( void ) = 0;
+	void CompileIf(const mtlChars &condition, const mtlChars &code);
+	virtual void EmitIf(const mtlChars &condition) = 0;
+	void CompileStatement(const mtlChars &statement);
+	virtual void EmitStatement(const mtlChars &statement) = 0;
+	void CompileGlobalCodeUnit(mtlSyntaxParser &parser);
+	void CompileFunction(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params, const mtlChars &scope);
+	virtual void EmitFunctionSignature(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params) = 0;
+	void DeclareFunction(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params);
+	virtual void ProgramErrorCheck( void ) = 0;
+	virtual void ConvertToOutput(swsl::Binary &output) = 0;
+
+public:
+	virtual ~Compiler( void ) {}
+
+	const mtlItem<Message> *GetError( void ) const;
+	bool Compile(mtlChars &filename, swsl::Binary &output);
+};
+
+class CppCompiler : public Compiler
+{
+protected:
+	void PushScope( void );
+	void PopScope( void );
+	void EmitElse( void );
+	void EmitIf(const mtlChars &condition);
+	void EmitStatement(const mtlChars &statement);
+	void EmitFunctionSignature(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params);
+	void ProgramErrorCheck( void );
+	void ConvertToOutput(swsl::Binary &output);
+};
+
+class ByteCodeCompiler /*: public Compiler */
 {
 private:
 	enum NodeType
@@ -178,6 +261,7 @@ private:
 private:
 	void AddError(const mtlChars &err, const mtlChars &msg);
 	File *AddFile(const mtlChars &filename);
+	bool Success( void ) const;
 	void PopFileStack( void );
 	void GenerateExpressionTree(ExprNode *&node, const mtlChars &expr);
 	void SimplifyExpressionTree(ExprNode *&node);
@@ -211,7 +295,6 @@ private:
 	void CompileDeclarationAndExpression(const mtlChars &decl, const mtlChars &expr);
 	void InitializeCompilerState(swsl::Shader &output);
 	void DeclareIntrinsics( void );
-	bool Success( void ) const;
 	void PushScope( void );
 	void PopScope( void );
 	void ModifyStack(int stack_add);

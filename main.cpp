@@ -12,7 +12,7 @@
 
 #include "swsl.h"
 #include "compiler.h"
-#include "parser.h"
+#include "swsl_parser.h"
 #include "swsl_gfx.h"
 #include "swsl_aux.h"
 
@@ -436,11 +436,11 @@ int SplitTest( void )
 
 int NewCompilerTest( void )
 {
-	Compiler c;
+	ByteCodeCompiler c;
 	swsl::Shader s;
 
 	if (!c.Compile("../swsl_samples/interactive.swsl", s)) {
-		const mtlItem<Compiler::Message> *err = c.GetError();
+		const mtlItem<ByteCodeCompiler::Message> *err = c.GetError();
 		while (err != NULL) {
 			swsl::print_ch(err->GetItem().err);
 			swsl::print_ch(": ");

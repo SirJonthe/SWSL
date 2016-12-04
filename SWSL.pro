@@ -35,10 +35,12 @@ SOURCES += \
     MiniLib/MTL/mtlParser.cpp \
     MiniLib/MTL/mtlRandom.cpp \
 	MiniLib/MTL/mtlString.cpp \
-	parser.cpp \
     swsl_shader.cpp \
     compiler.cpp \
-    MiniLib/MTL/mtlPath.cpp
+    MiniLib/MTL/mtlPath.cpp \
+    swsl_parser.cpp \
+    cppcompiler.cpp \
+    bytecodecompiler.cpp
 
 HEADERS += \
     swsl_compiler.h \
@@ -83,7 +85,6 @@ HEADERS += \
     MiniLib/MTL/mtlString.h \
     MiniLib/MTL/mtlStringMap.h \
     MiniLib/MTL/mtlType.h \
-    parser.h \
     swsl_shader.h \
     MiniLib/MPL/old_mplCommon.h \
     MiniLib/MPL/old_mplMask4.h \
@@ -93,7 +94,8 @@ HEADERS += \
     MiniLib/MTL/mtlPath.h \
     MiniLib/MPL/mplMath.h \
     swsl_aux.h \
-    MiniLib/MML/mmlInt.h
+    MiniLib/MML/mmlInt.h \
+    swsl_parser.h
 
 macx: {
 	OBJECTIVE_SOURCES += \
