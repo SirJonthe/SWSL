@@ -79,7 +79,12 @@ public:
 
 class CppCompiler : public Compiler
 {
+private:
+	mtlArray<char> m_buffer;
+	int            m_indent;
+
 protected:
+	void InitializeCompilerState( void );
 	void PushScope( void );
 	void PopScope( void );
 	void EmitElse( void );
@@ -88,6 +93,11 @@ protected:
 	void EmitFunctionSignature(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params);
 	void ProgramErrorCheck( void );
 	void ConvertToOutput(swsl::Binary &output);
+
+private:
+	void Print(const mtlChars &ch);
+	void PrintNL(const mtlChars &ch);
+	void PrintIndent( void );
 };
 
 class ByteCodeCompiler /*: public Compiler */
