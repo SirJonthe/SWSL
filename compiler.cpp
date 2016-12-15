@@ -10,11 +10,11 @@ void Compiler::AddError(const mtlChars &err, const mtlChars &msg)
 	m->msg.Copy(msg);
 }
 
-Compiler::File *Compiler::AddFile(const mtlChars &filename)
+Compiler::File *Compiler::AddFile(const mtlPath &filename)
 {
 	mtlItem<Compiler::File> *i = m_files.GetFirst();
 	while (i != NULL) {
-		if (i->GetItem().m_path.GetPath().Compare(filename)) { return NULL; }
+		if (i->GetItem().m_path.GetPath().Compare(filename.GetPath())) { return NULL; }
 	}
 
 	m_files.AddLast().m_path = filename;
@@ -36,7 +36,7 @@ void Compiler::InitializeCompilerState( void )
 	m_global_scope = true;
 }
 
-void Compiler::CompileFile(const mtlChars &filename)
+void Compiler::CompileFile(const mtlPath &filename)
 {
 	File *f = AddFile(filename);
 	if (f == NULL) { return; }
@@ -45,11 +45,11 @@ void Compiler::CompileFile(const mtlChars &filename)
 	m_files.RemoveLast();
 }
 
-void Compiler::LoadFile(const mtlChars &filename, mtlString &file_contents)
+void Compiler::LoadFile(const mtlPath &filename, mtlString &file_contents)
 {
 	file_contents.Free();
 	if (!mtlSyntaxParser::BufferFile(filename, file_contents)) {
-		AddError("Could not open file", filename);
+		AddError("Could not open file", filename.GetPath());
 	}
 }
 
@@ -180,7 +180,7 @@ const mtlItem<Compiler::Message> *Compiler::GetError( void ) const
 	return m_errors.GetFirst();
 }
 
-bool Compiler::Compile(mtlChars &filename, swsl::Binary &output)
+bool Compiler::Compile(const mtlPath &filename, swsl::Binary &output)
 {
 	InitializeCompilerState();
 	CompileFile(filename);

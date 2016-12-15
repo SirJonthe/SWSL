@@ -4,6 +4,7 @@
 #include "MiniLib/MTL/mtlList.h"
 #include "MiniLib/MTL/mtlStringMap.h"
 #include "MiniLib/MTL/mtlParser.h"
+#include "MiniLib/MTL/mtlPath.h"
 
 #include "swsl_shader.h"
 
@@ -17,7 +18,6 @@ static const mtlChars Keywords[] = {
 	"bool", "true", "false",
 	"int",   "int2",   "int3",   "int4",
 	"fixed", "fixed2", "fixed3", "fixed4",
-	"unit",  "unit2",  "unit3",  "unit4",
 	"float", "float2", "float3", "float4"
 };
 
@@ -45,11 +45,11 @@ private:
 
 protected:
 	void AddError(const mtlChars &err, const mtlChars &msg);
-	File *AddFile(const mtlChars &filename);
+	File *AddFile(const mtlPath &filename);
 	bool Success( void ) const;
 	virtual void InitializeCompilerState( void );
-	void CompileFile(const mtlChars &filename);
-	void LoadFile(const mtlChars &filename, mtlString &file_contents);
+	void CompileFile(const mtlPath &filename);
+	void LoadFile(const mtlPath &filename, mtlString &file_contents);
 	void CompileCode(const mtlChars &code);
 	void CompileScope(const mtlChars &code);
 	virtual void PushScope( void ) = 0;
@@ -74,7 +74,7 @@ public:
 	virtual ~Compiler( void ) {}
 
 	const mtlItem<Message> *GetError( void ) const;
-	bool Compile(mtlChars &filename, swsl::Binary &output);
+	bool Compile(const mtlPath &filename, swsl::Binary &output);
 };
 
 class CppCompiler : public Compiler
@@ -165,7 +165,6 @@ private:
 		Token_Bool,  Token_True,   Token_False,                // Boolean
 		Token_Int,   Token_Int2,   Token_Int3,   Token_Int4,   // Integers
 		Token_Fixed, Token_Fixed2, Token_Fixed3, Token_Fixed4, // Fixed 16.16
-		Token_Unit,  Token_Unit2,  Token_Unit3,  Token_Unit4,  // Fixed 00.32
 		Token_Float, Token_Float2, Token_Float3, Token_Float4, // Floating point
 		Token_Count
 	};
@@ -196,7 +195,6 @@ private:
 		VariableType_Bool,
 		VariableType_Int,
 		VariableType_Fixed,
-		VariableType_Unit,
 		VariableType_Float,
 		VariableType_Struct,
 		VariableType_Unknown
@@ -270,7 +268,7 @@ private:
 
 private:
 	void AddError(const mtlChars &err, const mtlChars &msg);
-	File *AddFile(const mtlChars &filename);
+	File *AddFile(const mtlPath &filename);
 	bool Success( void ) const;
 	void PopFileStack( void );
 	void GenerateExpressionTree(ExprNode *&node, const mtlChars &expr);
@@ -290,7 +288,7 @@ private:
 	Function *DeclareFunction(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params);
 	void DefineFunction(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params, const mtlChars &body);
 	void CompareFunctionSignature(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params);
-	void LoadFile(const mtlChars &filename, mtlString &file_contents);
+	void LoadFile(const mtlPath &filename, mtlString &file_contents);
 	void CompileCodeUnit(mtlSyntaxParser &parser);
 	void CompileLocalCodeUnit(mtlSyntaxParser &parser);
 	void CompileGlobalCodeUnit(mtlSyntaxParser &parser);
@@ -301,7 +299,7 @@ private:
 	void CompileIfElse(const mtlChars &condition, const mtlChars &if_code, const mtlChars &else_code);
 	void CompileIf(const mtlChars &condition, const mtlChars &code);
 	void CompileFunction(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params, const mtlChars &body);
-	void CompileFile(const mtlChars &filename);
+	void CompileFile(const mtlPath &filename);
 	void CompileDeclarationAndExpression(const mtlChars &decl, const mtlChars &expr);
 	void InitializeCompilerState(swsl::Shader &output);
 	void DeclareIntrinsics( void );

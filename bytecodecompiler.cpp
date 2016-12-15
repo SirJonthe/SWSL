@@ -26,11 +26,11 @@ void ByteCodeCompiler::AddError(const mtlChars &err, const mtlChars &msg)
 	m->msg.Copy(msg);
 }
 
-ByteCodeCompiler::File *ByteCodeCompiler::AddFile(const mtlChars &filename)
+ByteCodeCompiler::File *ByteCodeCompiler::AddFile(const mtlPath &filename)
 {
 	mtlItem<ByteCodeCompiler::File> *i = m_files.GetFirst();
 	while (i != NULL) {
-		if (i->GetItem().m_path.GetPath().Compare(filename)) { return NULL; }
+		if (i->GetItem().m_path.GetPath().Compare(filename.GetPath())) { return NULL; }
 	}
 
 	m_files.AddLast().m_path = filename;
@@ -134,18 +134,6 @@ ByteCodeCompiler::TypeInfo ByteCodeCompiler::ClassifyType(const mtlChars &type_n
 	//	v.size = 3;
 	//} else if (v.name.Compare(Keywords[Token_Fixed4], true)) {
 	//	v.type = VariableType_Fixed;
-	//	v.size = 4;
-	//} else if (v.name.Compare(Keywords[Token_Unit], true)) {
-	//	v.type = VariableType_Unit;
-	//	v.size = 1;
-	//} else if (v.name.Compare(Keywords[Token_Unit2], true)) {
-	//	v.type = VariableType_Unit;
-	//	v.size = 2;
-	//} else if (v.name.Compare(Keywords[Token_Unit3], true)) {
-	//	v.type = VariableType_Unit;
-	//	v.size = 3;
-	//} else if (v.name.Compare(Keywords[Token_Unit4], true)) {
-	//	v.type = VariableType_Unit;
 	//	v.size = 4;
 	//}
 	else if (v.name.Compare(Keywords[Token_Float], true)) {
@@ -339,11 +327,11 @@ ByteCodeCompiler::Function *ByteCodeCompiler::DeclareFunction(const mtlChars &re
 	return func;
 }
 
-void ByteCodeCompiler::LoadFile(const mtlChars &filename, mtlString &file_contents)
+void ByteCodeCompiler::LoadFile(const mtlPath &filename, mtlString &file_contents)
 {
 	file_contents.Free();
-	if (!mtlSyntaxParser::BufferFile(filename, file_contents)) {
-		AddError("Could not open file", filename);
+	if (!mtlSyntaxParser::BufferFile(filename.GetPath(), file_contents)) {
+		AddError("Could not open file", filename.GetPath());
 	}
 }
 
@@ -540,7 +528,7 @@ void ByteCodeCompiler::CompareFunctionSignature(const mtlChars &ret_type, const 
 	}
 }
 
-void ByteCodeCompiler::CompileFile(const mtlChars &filename)
+void ByteCodeCompiler::CompileFile(const mtlPath &filename)
 {
 	File *f = AddFile(filename);
 	if (f == NULL) { return; } // early exit to avoid infinite recursion

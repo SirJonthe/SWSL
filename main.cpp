@@ -459,6 +459,36 @@ int NewCompilerTest( void )
 	return 0;
 }
 
+#include <fstream>
+
+int CppCompilerTest( void )
+{
+	std::ofstream fout;
+	fout.open("out.cpp");
+	if (!fout.is_open()) {
+		swsl::print_line("could not open/create out.cpp");
+		return 1;
+	}
+
+	CppCompiler c;
+	swsl::Binary bin;
+
+	if (!c.Compile(mtlPath("../swsl_samples/interactive.swsl"), bin)) {
+		const mtlItem<Compiler::Message> *err = c.GetError();
+		while (err != NULL) {
+			swsl::print_ch(err->GetItem().err);
+			swsl::print_ch(": ");
+			swsl::print_line(err->GetItem().msg);
+			err = err->GetNext();
+		}
+		return 1;
+	}
+
+	fout.write(bin.GetChars(), bin.GetSize());
+
+	return 0;
+}
+
 int main(int, char**)
 {
 	OutputSIMDInfo();
@@ -466,5 +496,6 @@ int main(int, char**)
 	//return ParserTest();
 	//return SplitTest();
 	//return PathTest();
-	return NewCompilerTest();
+	//return NewCompilerTest();
+	return CppCompilerTest();
 }
