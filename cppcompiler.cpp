@@ -42,7 +42,32 @@ void CppCompiler::EmitIf(const mtlChars &condition)
 void CppCompiler::EmitStatement(const mtlChars &statement)
 {
 	PrintIndent();
-	Print(statement);
+	mtlSyntaxParser p;
+	mtlArray<mtlChars> m;
+	p.SetBuffer(statement);
+	switch (p.Match("%w=%S%0 %| %w%w=%S%0 %| w%w%%0 %| %S", m)) {
+	case 0:
+		EmitDst(m[0]);
+		Print("=");
+		EmitExpression(m[1]);
+		break;
+
+	case 1:
+		EmitType(m[0], m[1]);
+		Print("=");
+		EmitExpression(m[2]);
+		break;
+
+	case 2:
+		EmitType(m[0], m[1]);
+		break;
+
+	case 0:
+	case 3:
+	default:
+		Print(statement);
+		break;
+	}
 	PrintNL(";");
 }
 
