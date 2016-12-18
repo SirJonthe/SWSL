@@ -21,6 +21,21 @@ static const mtlChars Keywords[] = {
 	"float", "float2", "float3", "float4"
 };
 
+enum Token
+{
+	Token_If, Token_Else, Token_For, Token_While,          // Conditionals
+	Token_Continue, Token_Break, Token_Return,             // Flow control
+	Token_Const, Token_Mutable,                            // Type traits
+	Token_Import, Token_Export,                            // Availability (include files, only exported symbols visible)
+	Token_Struct,                                          // User defined types
+	Token_Void,                                            // Empty type
+	Token_Bool,  Token_True,   Token_False,                // Boolean
+	Token_Int,   Token_Int2,   Token_Int3,   Token_Int4,   // Integers
+	Token_Fixed, Token_Fixed2, Token_Fixed3, Token_Fixed4, // Fixed 16.16
+	Token_Float, Token_Float2, Token_Float3, Token_Float4, // Floating point
+	Token_Count
+};
+
 class Compiler
 {
 public:
@@ -90,6 +105,10 @@ protected:
 	void EmitElse( void );
 	void EmitIf(const mtlChars &condition);
 	void EmitStatement(const mtlChars &statement);
+	void EmitDst(const mtlChars &dst);
+	void EmitType(const mtlChars &type);
+	void EmitDecl(const mtlChars &type, const mtlChars &name);
+	void EmitExpression(const mtlChars &expr);
 	void EmitFunctionSignature(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params);
 	void ProgramErrorCheck( void );
 	void ConvertToOutput(swsl::Binary &output);
@@ -152,21 +171,6 @@ private:
 		~ExprTerm( void ) {}
 		void Eval(mtlString &out) { out.Append(str); }
 		bool IsEnd( void ) const { return true; }
-	};
-
-	enum Token
-	{
-		Token_If, Token_Else, Token_For, Token_While,          // Conditionals
-		Token_Continue, Token_Break, Token_Return,             // Flow control
-		Token_Const, Token_Mutable,                            // Type traits
-		Token_Import, Token_Export,                            // Availability (include files, only exported symbols visible)
-		Token_Struct,                                          // User defined types
-		Token_Void,                                            // Empty type
-		Token_Bool,  Token_True,   Token_False,                // Boolean
-		Token_Int,   Token_Int2,   Token_Int3,   Token_Int4,   // Integers
-		Token_Fixed, Token_Fixed2, Token_Fixed3, Token_Fixed4, // Fixed 16.16
-		Token_Float, Token_Float2, Token_Float3, Token_Float4, // Floating point
-		Token_Count
 	};
 
 	struct File

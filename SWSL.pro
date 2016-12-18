@@ -96,7 +96,8 @@ HEADERS += \
     MiniLib/MPL/mplMath.h \
     swsl_aux.h \
     MiniLib/MML/mmlInt.h \
-    swsl_parser.h
+    swsl_parser.h \
+    swsl_types.h
 
 macx: {
 	OBJECTIVE_SOURCES += \

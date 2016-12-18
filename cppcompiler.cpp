@@ -45,7 +45,7 @@ void CppCompiler::EmitStatement(const mtlChars &statement)
 	mtlSyntaxParser p;
 	mtlArray<mtlChars> m;
 	p.SetBuffer(statement);
-	switch (p.Match("%w=%S%0 %| %w%w=%S%0 %| w%w%%0 %| %S", m)) {
+	switch (p.Match("%w=%S%0 %| %w%w=%S%0 %| %w%w%0 %| %S", m)) {
 	case 0:
 		EmitDst(m[0]);
 		Print("=");
@@ -53,16 +53,15 @@ void CppCompiler::EmitStatement(const mtlChars &statement)
 		break;
 
 	case 1:
-		EmitType(m[0], m[1]);
+		EmitDecl(m[0], m[1]);
 		Print("=");
 		EmitExpression(m[2]);
 		break;
 
 	case 2:
-		EmitType(m[0], m[1]);
+		EmitDecl(m[0], m[1]);
 		break;
 
-	case 0:
 	case 3:
 	default:
 		Print(statement);
@@ -71,13 +70,78 @@ void CppCompiler::EmitStatement(const mtlChars &statement)
 	PrintNL(";");
 }
 
+void CppCompiler::EmitDst(const mtlChars &dst)
+{
+	Print(dst);
+}
+
+void CppCompiler::EmitType(const mtlChars &type)
+{
+	if (type.Compare(Keywords[Token_Bool], true)) {
+		Print("mpl::wide_bool");
+	} else if (type.Compare(Keywords[Token_Int], true)) {
+		Print("swsl::wide_int1");
+	} else if (type.Compare(Keywords[Token_Int2], true)) {
+		Print("swsl::wide_int2");
+	} else if (type.Compare(Keywords[Token_Int3], true)) {
+		Print("swsl::wide_int3");
+	} else if (type.Compare(Keywords[Token_Int4], true)) {
+		Print("swsl::wide_int4");
+	} else if (type.Compare(Keywords[Token_Fixed], true)) {
+		Print("swsl::wide_fixed1");
+	} else if (type.Compare(Keywords[Token_Fixed2], true)) {
+		Print("swsl::wide_fixed2");
+	} else if (type.Compare(Keywords[Token_Fixed3], true)) {
+		Print("swsl::wide_fixed3");
+	} else if (type.Compare(Keywords[Token_Fixed4], true)) {
+		Print("swsl::wide_fixed4");
+	} else if (type.Compare(Keywords[Token_Float], true)) {
+		Print("swsl::wide_float1");
+	} else if (type.Compare(Keywords[Token_Float2], true)) {
+		Print("swsl::wide_float2");
+	} else if (type.Compare(Keywords[Token_Float3], true)) {
+		Print("swsl::wide_float3");
+	} else if (type.Compare(Keywords[Token_Float4], true)) {
+		Print("swsl::wide_float4");
+	} else {
+		Print(type);
+	}
+}
+
+void CppCompiler::EmitDecl(const mtlChars &type, const mtlChars &name)
+{
+	EmitType(type);
+	Print(" ");
+	Print(name);
+}
+
+void CppCompiler::EmitExpression(const mtlChars &expr)
+{
+	Print(expr);
+}
+
 void CppCompiler::EmitFunctionSignature(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params)
 {
 	PrintIndent();
-	Print(ret_type);
-	Print(" ");
+	EmitType(ret_type);
+	Print("_");
 	Print(func_name);
 	Print("(");
+	mtlArray<mtlChars> m;
+	mtlSyntaxParser p;
+	p.SetBuffer(params);
+	while (!p.IsEnd()) {
+		switch (p.Match("%w%w, %| %w%w%0 %| %s", m)) {
+		case 0:
+		case 1:
+			EmitDecl(m[0], m[1]);
+			break;
+
+		default:
+			AddError("Unknown parameter parsing error", m[0]);
+			break;
+		}
+	}
 	Print(params);
 	PrintNL(")");
 }
