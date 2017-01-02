@@ -464,9 +464,9 @@ int NewCompilerTest( void )
 int CppCompilerTest( void )
 {
 	std::ofstream fout;
-	fout.open("out.cpp");
+	fout.open("../swsl_samples/out.h");
 	if (!fout.is_open()) {
-		swsl::print_line("could not open/create out.cpp");
+		swsl::print_line("could not open/create out.h");
 		return 1;
 	}
 

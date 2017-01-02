@@ -28,6 +28,14 @@ public:
 	wide_vec<wide_t, n> operator&(const wide_vec<wide_t, n> &r) const;
 	wide_vec<wide_t, n> operator|(const wide_vec<wide_t, n> &r) const;
 
+	void set(int a, const wide_vec<wide_t, 1> &x);
+	void set(int a, int b, wide_vec<wide_t, 1> &x);
+	void set(int a, int b, const wide_vec<wide_t, 2> &x);
+	void set(int a, int b, int c, const wide_vec<wide_t, 1> &x);
+	void set(int a, int b, int c, const wide_vec<wide_t, 3> &x);
+	void set(int a, int b, int c, int d, const wide_vec<wide_t, 1> &x);
+	void set(int a, int b, int c, int d, const wide_vec<wide_t, 4> &x);
+
 	wide_t              &operator[](int a);
 	const wide_t        &operator[](int a) const;
 	wide_vec<wide_t, 2>  operator[](int a, int b) const;
@@ -61,7 +69,7 @@ swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator=(const swsl::wide_
 	return *this;
 }
 
-template < typename wide_t, int n>
+template < typename wide_t, int n >
 swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator+(const swsl::wide_vec<wide_t, n> &r)
 {
 	swsl::wide_vec<wide_t, n> o;
@@ -71,7 +79,7 @@ swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator+(const swsl::wide_
 	return o;
 }
 
-template < typename wide_t, int n>
+template < typename wide_t, int n >
 swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator-(const swsl::wide_vec<wide_t, n> &r)
 {
 	swsl::wide_vec<wide_t, n> o;
@@ -81,7 +89,7 @@ swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator-(const swsl::wide_
 	return o;
 }
 
-template < typename wide_t, int n>
+template < typename wide_t, int n >
 swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator*(const swsl::wide_vec<wide_t, n> &r)
 {
 	swsl::wide_vec<wide_t, n> o;
@@ -91,7 +99,7 @@ swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator*(const swsl::wide_
 	return o;
 }
 
-template < typename wide_t, int n>
+template < typename wide_t, int n >
 swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator/(const swsl::wide_vec<wide_t, n> &r)
 {
 	swsl::wide_vec<wide_t, n> o;
@@ -101,7 +109,7 @@ swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator/(const swsl::wide_
 	return o;
 }
 
-template < typename wide_t, int n>
+template < typename wide_t, int n >
 swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator&(const swsl::wide_vec<wide_t, n> &r)
 {
 	swsl::wide_vec<wide_t, n> o;
@@ -111,7 +119,61 @@ swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator&(const swsl::wide_
 	return o;
 }
 
-template < typename wide_t, int n>
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, const wide_vec<wide_t, 1> &x)
+{
+	e[a] = x.e[0];
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, int b, const wide_vec<wide_t, 1> &x)
+{
+	e[a] = x.e[0];
+	e[b] = x.e[0];
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, int b, const wide_vec<wide_t, 2> &x)
+{
+	e[a] = x.e[0];
+	e[b] = x.e[1];
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, int b, int c, const wide_vec<wide_t, 1> &x)
+{
+	e[a] = x.e[0];
+	e[b] = x.e[0];
+	e[c] = x.e[0];
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, int b, int c, const wide_vec<wide_t, 3> &x)
+{
+	e[a] = x.e[0];
+	e[b] = x.e[1];
+	e[c] = x.e[2];
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, int b, int c, int d, const wide_vec<wide_t, 1> &x)
+{
+	e[a] = x.e[0];
+	e[b] = x.e[0];
+	e[c] = x.e[0];
+	e[d] = x.e[0];
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, int b, int c, int d, const wide_vec<wide_t, 4> &x)
+{
+	e[a] = x.e[0];
+	e[b] = x.e[1];
+	e[c] = x.e[2];
+	e[d] = x.e[3];
+}
+
+template < typename wide_t, int n >
 swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator|(const swsl::wide_vec<wide_t, n> &r)
 {
 	swsl::wide_vec<wide_t, n> o;

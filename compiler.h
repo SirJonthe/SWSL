@@ -62,7 +62,7 @@ protected:
 	void AddError(const mtlChars &err, const mtlChars &msg);
 	File *AddFile(const mtlPath &filename);
 	bool Success( void ) const;
-	virtual void InitializeCompilerState( void );
+	virtual void InitializeCompilerState(swsl::Binary &output);
 	void CompileFile(const mtlPath &filename);
 	void LoadFile(const mtlPath &filename, mtlString &file_contents);
 	void CompileCode(const mtlChars &code);
@@ -99,7 +99,7 @@ private:
 	int            m_indent;
 
 protected:
-	void InitializeCompilerState( void );
+	void InitializeCompilerState(swsl::Binary &output);
 	void PushScope( void );
 	void PopScope( void );
 	void EmitElse( void );
@@ -107,6 +107,8 @@ protected:
 	void EmitStatement(const mtlChars &statement);
 	void EmitDst(const mtlChars &dst);
 	void EmitType(const mtlChars &type);
+	void EmitName(const mtlChars &name);
+	void EmitInternalName(const mtlChars &name);
 	void EmitDecl(const mtlChars &type, const mtlChars &name);
 	void EmitExpression(const mtlChars &expr);
 	void EmitFunctionSignature(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params);

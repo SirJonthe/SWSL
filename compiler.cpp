@@ -28,8 +28,9 @@ bool Compiler::Success( void ) const
 	return m_errors.GetSize() == 0;
 }
 
-void Compiler::InitializeCompilerState( void )
+void Compiler::InitializeCompilerState(swsl::Binary &output)
 {
+	output.Free();
 	m_errors.RemoveAll();
 	m_files.RemoveAll();
 	m_file_stack.RemoveAll();
@@ -182,7 +183,7 @@ const mtlItem<Compiler::Message> *Compiler::GetError( void ) const
 
 bool Compiler::Compile(const mtlPath &filename, swsl::Binary &output)
 {
-	InitializeCompilerState();
+	InitializeCompilerState(output);
 	CompileFile(filename);
 	ProgramErrorCheck();
 	ConvertToOutput(output);

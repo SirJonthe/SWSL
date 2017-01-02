@@ -1,14 +1,16 @@
 #include "compiler.h"
+#include "swsl_aux.h"
 
 #define BLOCK 2048
 
-void CppCompiler::InitializeCompilerState( void )
+void CppCompiler::InitializeCompilerState(swsl::Binary &output)
 {
-	Compiler::InitializeCompilerState();
+	Compiler::InitializeCompilerState(output);
 	m_indent = 0;
 	m_buffer.Free();
 	m_buffer.poolMemory = true;
 	m_buffer.SetCapacity(BLOCK);
+	PrintNL("#include \"swsl_types.h\"");
 }
 
 void CppCompiler::PushScope( void )
@@ -48,13 +50,13 @@ void CppCompiler::EmitStatement(const mtlChars &statement)
 	switch (p.Match("%w=%S%0 %| %w%w=%S%0 %| %w%w%0 %| %S", m)) {
 	case 0:
 		EmitDst(m[0]);
-		Print("=");
+		Print(" = ");
 		EmitExpression(m[1]);
 		break;
 
 	case 1:
 		EmitDecl(m[0], m[1]);
-		Print("=");
+		Print(" = ");
 		EmitExpression(m[2]);
 		break;
 
@@ -72,7 +74,7 @@ void CppCompiler::EmitStatement(const mtlChars &statement)
 
 void CppCompiler::EmitDst(const mtlChars &dst)
 {
-	Print(dst);
+	EmitName(dst);
 }
 
 void CppCompiler::EmitType(const mtlChars &type)
@@ -108,11 +110,22 @@ void CppCompiler::EmitType(const mtlChars &type)
 	}
 }
 
+void CppCompiler::EmitName(const mtlChars &name)
+{
+	Print("_");
+	Print(name);
+}
+
+void CppCompiler::EmitInternalName(const mtlChars &name)
+{
+	Print(name);
+}
+
 void CppCompiler::EmitDecl(const mtlChars &type, const mtlChars &name)
 {
 	EmitType(type);
-	Print(" ");
-	Print(name);
+	Print(" "); // add a character initially to avoid naming collisions with compiler-generated variables
+	EmitName(name);
 }
 
 void CppCompiler::EmitExpression(const mtlChars &expr)
@@ -123,16 +136,22 @@ void CppCompiler::EmitExpression(const mtlChars &expr)
 void CppCompiler::EmitFunctionSignature(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params)
 {
 	PrintIndent();
+	Print("inline ");
 	EmitType(ret_type);
-	Print("_");
+	Print(" _");
 	Print(func_name);
 	Print("(");
 	mtlArray<mtlChars> m;
 	mtlSyntaxParser p;
 	p.SetBuffer(params);
+
 	while (!p.IsEnd()) {
 		switch (p.Match("%w%w, %| %w%w%0 %| %s", m)) {
 		case 0:
+			EmitDecl(m[0], m[1]);
+			Print(", ");
+			break;
+
 		case 1:
 			EmitDecl(m[0], m[1]);
 			break;
@@ -142,7 +161,6 @@ void CppCompiler::EmitFunctionSignature(const mtlChars &ret_type, const mtlChars
 			break;
 		}
 	}
-	Print(params);
 	PrintNL(")");
 }
 
