@@ -34,6 +34,7 @@ void Compiler::InitializeCompilerState(swsl::Binary &output)
 	m_errors.RemoveAll();
 	m_files.RemoveAll();
 	m_file_stack.RemoveAll();
+	m_mask_depth = 0;
 	m_global_scope = true;
 }
 
@@ -88,25 +89,21 @@ void Compiler::CompileLocalCodeUnit(mtlSyntaxParser &parser)
 {
 	mtlArray<mtlChars> params;
 	mtlChars seq;
-	switch (parser.Match("{%s}  %|  if(%s){%s}else{%s}  %|  if(%s){%s}  %|  %s;  %|  %s", params, &seq)) {
+	switch (parser.Match("{%s}  %|  if(%S){%s}  %|  %s;  %|  %s", params, &seq)) {
 
 	case 0:
 		CompileScope(params[0]);
 		break;
 
 	case 1:
-		CompileIfElse(params[0], params[1], params[2]);
+		CompileConditional(params[0], params[1], parser);
 		break;
 
 	case 2:
-		CompileIf(params[0], params[1]);
-		break;
-
-	case 3:
 		CompileStatement(params[0]);
 		break;
 
-	case 4:
+	case 3:
 	default:
 		AddError("Unknown local code unit", parser.GetBuffer());
 		break;
@@ -114,17 +111,46 @@ void Compiler::CompileLocalCodeUnit(mtlSyntaxParser &parser)
 	}
 }
 
-void Compiler::CompileIfElse(const mtlChars &condition, const mtlChars &if_code, const mtlChars &else_code)
+void Compiler::CompileConditional(const mtlChars &condition, const mtlChars &body, mtlSyntaxParser &parser)
 {
-	CompileIf(condition, if_code);
-	EmitElse();
-	CompileScope(else_code);
-}
+	++m_mask_depth;
 
-void Compiler::CompileIf(const mtlChars &condition, const mtlChars &body)
-{
+	PushScope();
 	EmitIf(condition);
 	CompileScope(body);
+
+	bool done = false;
+	mtlArray<mtlChars> params;
+	while (!done) {
+
+		++m_mask_depth;
+
+		switch (parser.Match("else if(%S){%s} %| else{%s}", params)) {
+		case 0:
+			EmitElse();
+			PushScope();
+			EmitInverseMask();
+			CompileConditional(params[0], params[1], parser);
+			PopScope();
+			break;
+
+		case 1:
+			EmitElse();
+			PushScope();
+			EmitInverseMask();
+			CompileScope(params[0]);
+			PopScope();
+
+		default:
+			done = true;
+		}
+
+		--m_mask_depth;
+	}
+
+	PopScope();
+
+	--m_mask_depth;
 }
 
 void Compiler::CompileStatement(const mtlChars &statement)
@@ -174,6 +200,11 @@ void Compiler::CompileFunction(const mtlChars &ret_type, const mtlChars &func_na
 void Compiler::DeclareFunction(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params)
 {
 	EmitFunctionSignature(ret_type, func_name, params);
+}
+
+unsigned int Compiler::GetMaskDepth( void ) const
+{
+	return m_mask_depth;
 }
 
 const mtlItem<Compiler::Message> *Compiler::GetError( void ) const

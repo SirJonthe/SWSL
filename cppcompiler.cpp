@@ -138,8 +138,7 @@ void CppCompiler::EmitFunctionSignature(const mtlChars &ret_type, const mtlChars
 	PrintIndent();
 	Print("inline ");
 	EmitType(ret_type);
-	Print(" _");
-	Print(func_name);
+	EmitName(func_name);
 	Print("(");
 	mtlArray<mtlChars> m;
 	mtlSyntaxParser p;
@@ -161,6 +160,9 @@ void CppCompiler::EmitFunctionSignature(const mtlChars &ret_type, const mtlChars
 			break;
 		}
 	}
+	EmitType("bool");
+	Print(" ");
+	EmitInternalName("mask");
 	PrintNL(")");
 }
 

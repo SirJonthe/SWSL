@@ -56,6 +56,7 @@ private:
 	mtlList<Message> m_errors;
 	mtlList<File>    m_files;
 	mtlList<File*>   m_file_stack;
+	unsigned int     m_mask_depth;
 	bool             m_global_scope;
 
 protected:
@@ -72,9 +73,10 @@ protected:
 	void CompileCodeUnit(mtlSyntaxParser &parser);
 	bool IsGlobalScope( void ) const;
 	void CompileLocalCodeUnit(mtlSyntaxParser &parser);
-	void CompileIfElse(const mtlChars &condition, const mtlChars &if_code, const mtlChars &else_code) ;
+	void CompileConditional(const mtlChars &conditional, const mtlChars &body, mtlSyntaxParser &parser);
+	//void CompileIfElse(const mtlChars &condition, const mtlChars &if_code, const mtlChars &else_code) ;
 	virtual void EmitElse( void ) = 0;
-	void CompileIf(const mtlChars &condition, const mtlChars &code);
+	//void CompileIf(const mtlChars &condition, const mtlChars &code);
 	virtual void EmitIf(const mtlChars &condition) = 0;
 	void CompileStatement(const mtlChars &statement);
 	virtual void EmitStatement(const mtlChars &statement) = 0;
@@ -84,6 +86,7 @@ protected:
 	void DeclareFunction(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params);
 	virtual void ProgramErrorCheck( void ) = 0;
 	virtual void ConvertToOutput(swsl::Binary &output) = 0;
+	unsigned int GetMaskDepth( void ) const;
 
 public:
 	virtual ~Compiler( void ) {}
