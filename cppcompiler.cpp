@@ -33,11 +33,33 @@ void CppCompiler::EmitElse( void )
 	PrintNL("else");
 }
 
+void CppCompiler::EmitInverseMask( void )
+{
+	PrintIndent();
+	EmitType("bool");
+	Print(" ");
+	PrintCurMask();
+	Print(" = !");
+	PrintPrevMask();
+	PrintNL(";");
+}
+
 void CppCompiler::EmitIf(const mtlChars &condition)
 {
 	PrintIndent();
-	Print("if (");
+	EmitType("bool");
+	Print(" ");
+	PrintCurMask();
+	Print(" = ( ");
 	Print(condition);
+	Print(" ) & ");
+	PrintPrevMask();
+	PrintNL(";");
+
+	PrintIndent();
+	Print("if (!");
+	PrintCurMask();
+	Print(".all_fail()");
 	PrintNL(")");
 }
 
@@ -160,9 +182,10 @@ void CppCompiler::EmitFunctionSignature(const mtlChars &ret_type, const mtlChars
 			break;
 		}
 	}
+	Print(", ");
 	EmitType("bool");
 	Print(" ");
-	EmitInternalName("mask");
+	PrintMask(0);
 	PrintNL(")");
 }
 
@@ -197,4 +220,22 @@ void CppCompiler::PrintIndent( void )
 	for (int i = 0; i < m_indent; ++i) {
 		Print("\t");
 	}
+}
+
+void CppCompiler::PrintMask(unsigned int mask_num)
+{
+	Print("m");
+	mtlString num;
+	num.FromInt(mask_num);
+	Print(num);
+}
+
+void CppCompiler::PrintCurMask( void )
+{
+	PrintMask(GetMaskDepth());
+}
+
+void CppCompiler::PrintPrevMask( void )
+{
+	PrintMask(GetMaskDepth() - 1);
 }

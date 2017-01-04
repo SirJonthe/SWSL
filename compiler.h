@@ -76,6 +76,7 @@ protected:
 	void CompileConditional(const mtlChars &conditional, const mtlChars &body, mtlSyntaxParser &parser);
 	//void CompileIfElse(const mtlChars &condition, const mtlChars &if_code, const mtlChars &else_code) ;
 	virtual void EmitElse( void ) = 0;
+	virtual void EmitInverseMask( void ) = 0;
 	//void CompileIf(const mtlChars &condition, const mtlChars &code);
 	virtual void EmitIf(const mtlChars &condition) = 0;
 	void CompileStatement(const mtlChars &statement);
@@ -106,6 +107,7 @@ protected:
 	void PushScope( void );
 	void PopScope( void );
 	void EmitElse( void );
+	void EmitInverseMask( void );
 	void EmitIf(const mtlChars &condition);
 	void EmitStatement(const mtlChars &statement);
 	void EmitDst(const mtlChars &dst);
@@ -122,6 +124,9 @@ private:
 	void Print(const mtlChars &ch);
 	void PrintNL(const mtlChars &ch);
 	void PrintIndent( void );
+	void PrintMask(unsigned int mask_num);
+	void PrintCurMask( void );
+	void PrintPrevMask( void );
 };
 
 class ByteCodeCompiler /*: public Compiler */
