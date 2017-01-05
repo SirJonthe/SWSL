@@ -116,7 +116,7 @@ void Compiler::CompileLocalCodeUnit(mtlSyntaxParser &parser)
 {
 	mtlArray<mtlChars> params;
 	mtlChars seq;
-	switch (parser.Match("{%s}  %|  if(%S){%s}  %|  %s;  %|  %s", params, &seq)) {
+	switch (parser.Match("{%s}  %|  if(%S){%s}  %| %w(%s); %|  %s;  %|  %s", params, &seq)) {
 
 	case 0:
 		CompileScope(params[0]);
@@ -127,10 +127,14 @@ void Compiler::CompileLocalCodeUnit(mtlSyntaxParser &parser)
 		break;
 
 	case 2:
-		CompileStatement(params[0]);
+		EmitFunctionCall(params[0], params[1]);
 		break;
 
 	case 3:
+		CompileStatement(params[0]);
+		break;
+
+	case 4:
 	default:
 		AddError("Unknown local code unit", parser.GetBuffer());
 		break;
@@ -150,8 +154,6 @@ void Compiler::CompileConditional(const mtlChars &condition, const mtlChars &bod
 	mtlArray<mtlChars> params;
 	while (!done) {
 
-		//++m_mask_depth;
-
 		switch (parser.Match("else if(%S){%s} %| else{%s}", params)) {
 		case 0:
 			EmitElse();
@@ -166,7 +168,6 @@ void Compiler::CompileConditional(const mtlChars &condition, const mtlChars &bod
 			done = true;
 		}
 
-		//--m_mask_depth;
 	}
 
 	PopScope();
@@ -185,7 +186,7 @@ void Compiler::CompileGlobalCodeUnit(mtlSyntaxParser &parser)
 	mtlChars seq;
 	switch (parser.Match("import\"%s\"  %|  export struct %w{%s};  %|  struct %w{%s};  %|  export %w%w(%s){%s}  %|  %w%w(%s){%s}  %|  export %w%w(%s);  %|  %w%w(%s);  %|  %s", params, &seq)) {
 	case 0:
-		CompileFile(params[0]); // FIXME: The path needs to be relative to the current location of the file that is being compiled
+		CompileFile(params[0]); // TODO: The path needs to be relative to the current location of the file that is being compiled
 		break;
 
 	//case 1:

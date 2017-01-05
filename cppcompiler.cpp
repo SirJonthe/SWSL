@@ -228,6 +228,27 @@ void CppCompiler::EmitFunctionSignature(const mtlChars &ret_type, const mtlChars
 	PrintNL(")");
 }
 
+void CppCompiler::EmitFunctionCall(const mtlChars &name, const mtlChars &params)
+{
+	PrintIndent();
+	PrintFunctionName(name);
+	Print("(");
+	mtlSyntaxParser p;
+	p.SetBuffer(params);
+	mtlArray<mtlChars> m;
+	while (!p.IsEnd()) {
+		switch (p.Match("%s, %| %s", m)) {
+		case 0:
+		case 1:
+			EmitExpression(m[0]);
+			break;
+		}
+		Print(", ");
+	}
+	PrintCurMask();
+	PrintNL(");");
+}
+
 void CppCompiler::ProgramErrorCheck( void ) {}
 
 void CppCompiler::ConvertToOutput(swsl::Binary &output)

@@ -94,6 +94,7 @@ protected:
 	bool IsGlobalScope( void ) const;
 	void CompileLocalCodeUnit(mtlSyntaxParser &parser);
 	void CompileConditional(const mtlChars &conditional, const mtlChars &body, mtlSyntaxParser &parser);
+	virtual void EmitFunctionCall(const mtlChars &name, const mtlChars &params) = 0;
 	//void CompileIfElse(const mtlChars &condition, const mtlChars &if_code, const mtlChars &else_code) ;
 	virtual void EmitElse( void ) = 0;
 	//void CompileIf(const mtlChars &condition, const mtlChars &code);
@@ -138,6 +139,7 @@ protected:
 	void EmitDecl(const mtlChars &type, const mtlChars &name);
 	void EmitExpression(const mtlChars &expr);
 	void EmitFunctionSignature(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params);
+	void EmitFunctionCall(const mtlChars &name, const mtlChars &params);
 	void ProgramErrorCheck( void );
 	void ConvertToOutput(swsl::Binary &output);
 
