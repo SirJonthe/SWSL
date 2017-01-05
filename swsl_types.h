@@ -19,7 +19,8 @@ public:
 	wide_vec(const wide_t &x, const wide_t &y, const wide_t &z) { e[0] = x; e[1] = y; e[2] = z; }
 	wide_vec(const wide_t &x, const wide_t &y, const wide_t &z, const wide_t &w) { e[0] = x; e[1] = y; e[2] = z; e[3] = w; }
 
-	wide_vec<wide_t, n> operator=(const wide_vec<wide_t, n> &v);
+	wide_vec<wide_t, n> &operator=(const wide_t &r);
+	wide_vec<wide_t, n> &operator=(const wide_vec<wide_t, n> &v);
 
 	wide_vec<wide_t, n> operator+(const wide_vec<wide_t, n> &r) const;
 	wide_vec<wide_t, n> operator-(const wide_vec<wide_t, n> &r) const;
@@ -43,6 +44,15 @@ public:
 	wide_vec<wide_t, 4>  operator[](int a, int b, int c, int d) const;
 };
 
+template < typename wide_t, int n >
+inline void wide_vec_merge(wide_vec<wide_t, n> &l, const wide_vec<wide_t, n> &r, const mpl::wide_bool &lmask)
+{
+	for (int i = 0; i < n; ++i) {
+		l = wide_t::merge(l[i], r[i], lmask);
+	}
+}
+
+typedef wide_vec<mpl::wide_bool, 1>      wide_bool1;
 typedef wide_vec<mpl::wide_int, 1>       wide_int1;
 typedef wide_vec<mpl::wide_int, 2>       wide_int2;
 typedef wide_vec<mpl::wide_int, 3>       wide_int3;
@@ -59,7 +69,16 @@ typedef wide_vec<mpl::wide_fixed<16>, 4> wide_fixed4;
 }
 
 template < typename wide_t, int n >
-swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator=(const swsl::wide_vec<wide_t, n> &v)
+swsl::wide_vec<wide_t, n> &swsl::wide_vec<wide_t, n>::operator=(const wide_t &r)
+{
+	for (int i = 0; i < n; ++i) {
+		e[i] = r;
+	}
+	return *this;
+}
+
+template < typename wide_t, int n >
+swsl::wide_vec<wide_t, n> &swsl::wide_vec<wide_t, n>::operator=(const swsl::wide_vec<wide_t, n> &v)
 {
 	if (this != &v) {
 		for (int i = 0; i < n; ++i) {

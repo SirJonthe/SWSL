@@ -3,6 +3,32 @@
 #include "swsl_instr.h"
 #include "swsl_aux.h"
 
+void Compiler::PushScope( void )
+{
+	if (m_scopes.GetSize() > 0) {
+		Scope *prev = &m_scopes.GetLast()->GetItem();
+		Scope *next = &m_scopes.AddLast();
+		next->scope_depth = prev->scope_depth + 1;
+		next->mask_depth = m_mask_depth;
+		next->scope_size = 0;
+
+	} else {
+		Scope *next = &m_scopes.AddLast();
+		next->scope_depth = 1;
+		next->mask_depth = m_mask_depth;
+		next->scope_size = 0;
+	}
+	EmitPushScope();
+}
+
+void Compiler::PopScope( void )
+{
+	EmitPopScope();
+	if (m_scopes.GetSize() > 0) {
+		m_scopes.RemoveLast();
+	}
+}
+
 void Compiler::AddError(const mtlChars &err, const mtlChars &msg)
 {
 	Message *m = &m_errors.AddLast();
@@ -28,7 +54,7 @@ bool Compiler::Success( void ) const
 	return m_errors.GetSize() == 0;
 }
 
-void Compiler::InitializeCompilerState(swsl::Binary &output)
+void Compiler::InitializeBaseCompilerState(swsl::Binary &output, const mtlChars &out_name)
 {
 	output.Free();
 	m_errors.RemoveAll();
@@ -36,6 +62,7 @@ void Compiler::InitializeCompilerState(swsl::Binary &output)
 	m_file_stack.RemoveAll();
 	m_mask_depth = 0;
 	m_global_scope = true;
+	m_out_name = out_name.GetTrimmed(); // TODO: clean the name of whitespaces and special characters
 }
 
 void Compiler::CompileFile(const mtlPath &filename)
@@ -123,29 +150,23 @@ void Compiler::CompileConditional(const mtlChars &condition, const mtlChars &bod
 	mtlArray<mtlChars> params;
 	while (!done) {
 
-		++m_mask_depth;
+		//++m_mask_depth;
 
 		switch (parser.Match("else if(%S){%s} %| else{%s}", params)) {
 		case 0:
 			EmitElse();
-			PushScope();
-			EmitInverseMask();
 			CompileConditional(params[0], params[1], parser);
-			PopScope();
 			break;
 
 		case 1:
 			EmitElse();
-			PushScope();
-			EmitInverseMask();
 			CompileScope(params[0]);
-			PopScope();
 
 		default:
 			done = true;
 		}
 
-		--m_mask_depth;
+		//--m_mask_depth;
 	}
 
 	PopScope();
@@ -207,13 +228,19 @@ unsigned int Compiler::GetMaskDepth( void ) const
 	return m_mask_depth;
 }
 
+const mtlChars &Compiler::GetProgramName( void ) const
+{
+	return m_out_name;
+}
+
 const mtlItem<Compiler::Message> *Compiler::GetError( void ) const
 {
 	return m_errors.GetFirst();
 }
 
-bool Compiler::Compile(const mtlPath &filename, swsl::Binary &output)
+bool Compiler::Compile(const mtlPath &filename, swsl::Binary &output, const mtlChars &out_name)
 {
+	InitializeBaseCompilerState(output, out_name);
 	InitializeCompilerState(output);
 	CompileFile(filename);
 	ProgramErrorCheck();

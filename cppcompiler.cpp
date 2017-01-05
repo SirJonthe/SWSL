@@ -5,7 +5,6 @@
 
 void CppCompiler::InitializeCompilerState(swsl::Binary &output)
 {
-	Compiler::InitializeCompilerState(output);
 	m_indent = 0;
 	m_buffer.Free();
 	m_buffer.poolMemory = true;
@@ -13,14 +12,14 @@ void CppCompiler::InitializeCompilerState(swsl::Binary &output)
 	PrintNL("#include \"swsl_types.h\"");
 }
 
-void CppCompiler::PushScope( void )
+void CppCompiler::EmitPushScope( void )
 {
 	PrintIndent();
 	PrintNL("{");
 	++m_indent;
 }
 
-void CppCompiler::PopScope( void )
+void CppCompiler::EmitPopScope( void )
 {
 	--m_indent;
 	PrintIndent();
@@ -30,18 +29,15 @@ void CppCompiler::PopScope( void )
 void CppCompiler::EmitElse( void )
 {
 	PrintIndent();
-	PrintNL("else");
-}
-
-void CppCompiler::EmitInverseMask( void )
-{
-	PrintIndent();
-	EmitType("bool");
-	Print(" ");
 	PrintCurMask();
-	Print(" = !");
-	PrintPrevMask();
-	PrintNL(";");
+	Print("[0] = !");
+	PrintCurMask();
+	PrintNL("[0];");
+
+	PrintIndent();
+	Print("if ( !(");
+	PrintCurMask();
+	PrintNL("[0].all_fail()) )");
 }
 
 void CppCompiler::EmitIf(const mtlChars &condition)
@@ -50,17 +46,20 @@ void CppCompiler::EmitIf(const mtlChars &condition)
 	EmitType("bool");
 	Print(" ");
 	PrintCurMask();
-	Print(" = ( ");
-	Print(condition);
-	Print(" ) & ");
-	PrintPrevMask();
 	PrintNL(";");
 
 	PrintIndent();
-	Print("if (!");
 	PrintCurMask();
-	Print(".all_fail()");
-	PrintNL(")");
+	Print("[0] = ( ");
+	Print(condition);
+	Print(" ) & ");
+	PrintPrevMask();
+	PrintNL("[0];");
+
+	PrintIndent();
+	Print("if ( !(");
+	PrintCurMask();
+	PrintNL("[0].all_fail()) )");
 }
 
 void CppCompiler::EmitStatement(const mtlChars &statement)
@@ -71,12 +70,18 @@ void CppCompiler::EmitStatement(const mtlChars &statement)
 	p.SetBuffer(statement);
 	switch (p.Match("%w=%S%0 %| %w%w=%S%0 %| %w%w%0 %| %S", m)) {
 	case 0:
+		// IMPROVEMENT: only requires merge if a mask has been declared after dst was declared
+		Print("swsl::wide_vec_merge(");
 		EmitDst(m[0]);
-		Print(" = ");
+		Print(", ");
 		EmitExpression(m[1]);
+		Print(", ");
+		PrintCurMask();
+		Print("[0])");
 		break;
 
 	case 1:
+		// Never requires a masked merge
 		EmitDecl(m[0], m[1]);
 		Print(" = ");
 		EmitExpression(m[2]);
@@ -102,7 +107,7 @@ void CppCompiler::EmitDst(const mtlChars &dst)
 void CppCompiler::EmitType(const mtlChars &type)
 {
 	if (type.Compare(Keywords[Token_Bool], true)) {
-		Print("mpl::wide_bool");
+		Print("swsl::wide_bool1");
 	} else if (type.Compare(Keywords[Token_Int], true)) {
 		Print("swsl::wide_int1");
 	} else if (type.Compare(Keywords[Token_Int2], true)) {
@@ -127,6 +132,39 @@ void CppCompiler::EmitType(const mtlChars &type)
 		Print("swsl::wide_float3");
 	} else if (type.Compare(Keywords[Token_Float4], true)) {
 		Print("swsl::wide_float4");
+	} else {
+		Print(type);
+	}
+}
+
+void CppCompiler::EmitBaseType(const mtlChars &type)
+{
+	if (type.Compare(Keywords[Token_Bool], true)) {
+		Print("mpl::wide_bool");
+	} else if (type.Compare(Keywords[Token_Int], true)) {
+		Print("mpl::wide_int");
+	} else if (type.Compare(Keywords[Token_Int2], true)) {
+		Print("mpl::wide_int");
+	} else if (type.Compare(Keywords[Token_Int3], true)) {
+		Print("mpl::wide_int");
+	} else if (type.Compare(Keywords[Token_Int4], true)) {
+		Print("mpl::wide_int");
+	} else if (type.Compare(Keywords[Token_Fixed], true)) {
+		Print("mpl::wide_fixed");
+	} else if (type.Compare(Keywords[Token_Fixed2], true)) {
+		Print("mpl::wide_fixed");
+	} else if (type.Compare(Keywords[Token_Fixed3], true)) {
+		Print("mpl::wide_fixed");
+	} else if (type.Compare(Keywords[Token_Fixed4], true)) {
+		Print("mpl::wide_fixed");
+	} else if (type.Compare(Keywords[Token_Float], true)) {
+		Print("mpl::wide_float");
+	} else if (type.Compare(Keywords[Token_Float2], true)) {
+		Print("mpl::wide_float");
+	} else if (type.Compare(Keywords[Token_Float3], true)) {
+		Print("mpl::wide_float");
+	} else if (type.Compare(Keywords[Token_Float4], true)) {
+		Print("mpl::wide_float");
 	} else {
 		Print(type);
 	}
@@ -160,7 +198,8 @@ void CppCompiler::EmitFunctionSignature(const mtlChars &ret_type, const mtlChars
 	PrintIndent();
 	Print("inline ");
 	EmitType(ret_type);
-	EmitName(func_name);
+	Print(" ");
+	PrintFunctionName(func_name);
 	Print("(");
 	mtlArray<mtlChars> m;
 	mtlSyntaxParser p;
@@ -238,4 +277,10 @@ void CppCompiler::PrintCurMask( void )
 void CppCompiler::PrintPrevMask( void )
 {
 	PrintMask(GetMaskDepth() - 1);
+}
+
+void CppCompiler::PrintFunctionName(const mtlChars &name)
+{
+	EmitInternalName(GetProgramName());
+	EmitName(name);
 }

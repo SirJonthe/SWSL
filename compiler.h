@@ -52,31 +52,50 @@ private:
 		mtlString m_contents;
 	};
 
+protected:
+	struct Variable
+	{
+		mtlChars type;
+		mtlChars name;
+	};
+
+	struct Scope
+	{
+		mtlList<Variable> vars;
+		unsigned int      scope_depth;
+		unsigned int      mask_depth;
+		unsigned int      scope_size;
+	};
+
 private:
 	mtlList<Message> m_errors;
 	mtlList<File>    m_files;
 	mtlList<File*>   m_file_stack;
+	mtlList<Scope>   m_scopes;
+	mtlChars         m_out_name;
 	unsigned int     m_mask_depth;
 	bool             m_global_scope;
 
 protected:
+	void PushScope( void );
+	void PopScope( void );
 	void AddError(const mtlChars &err, const mtlChars &msg);
 	File *AddFile(const mtlPath &filename);
 	bool Success( void ) const;
-	virtual void InitializeCompilerState(swsl::Binary &output);
+	void InitializeBaseCompilerState(swsl::Binary &output, const mtlChars &out_name);
+	virtual void InitializeCompilerState(swsl::Binary &output) = 0;
 	void CompileFile(const mtlPath &filename);
 	void LoadFile(const mtlPath &filename, mtlString &file_contents);
 	void CompileCode(const mtlChars &code);
 	void CompileScope(const mtlChars &code);
-	virtual void PushScope( void ) = 0;
-	virtual void PopScope( void ) = 0;
+	virtual void EmitPushScope( void ) = 0;
+	virtual void EmitPopScope( void ) = 0;
 	void CompileCodeUnit(mtlSyntaxParser &parser);
 	bool IsGlobalScope( void ) const;
 	void CompileLocalCodeUnit(mtlSyntaxParser &parser);
 	void CompileConditional(const mtlChars &conditional, const mtlChars &body, mtlSyntaxParser &parser);
 	//void CompileIfElse(const mtlChars &condition, const mtlChars &if_code, const mtlChars &else_code) ;
 	virtual void EmitElse( void ) = 0;
-	virtual void EmitInverseMask( void ) = 0;
 	//void CompileIf(const mtlChars &condition, const mtlChars &code);
 	virtual void EmitIf(const mtlChars &condition) = 0;
 	void CompileStatement(const mtlChars &statement);
@@ -88,12 +107,13 @@ protected:
 	virtual void ProgramErrorCheck( void ) = 0;
 	virtual void ConvertToOutput(swsl::Binary &output) = 0;
 	unsigned int GetMaskDepth( void ) const;
+	const mtlChars &GetProgramName( void ) const;
 
 public:
 	virtual ~Compiler( void ) {}
 
 	const mtlItem<Message> *GetError( void ) const;
-	bool Compile(const mtlPath &filename, swsl::Binary &output);
+	bool Compile(const mtlPath &filename, swsl::Binary &output, const mtlChars &out_name);
 };
 
 class CppCompiler : public Compiler
@@ -104,14 +124,15 @@ private:
 
 protected:
 	void InitializeCompilerState(swsl::Binary &output);
-	void PushScope( void );
-	void PopScope( void );
+	void EmitPushScope( void );
+	void EmitPopScope( void );
 	void EmitElse( void );
 	void EmitInverseMask( void );
 	void EmitIf(const mtlChars &condition);
 	void EmitStatement(const mtlChars &statement);
 	void EmitDst(const mtlChars &dst);
 	void EmitType(const mtlChars &type);
+	void EmitBaseType(const mtlChars &type);
 	void EmitName(const mtlChars &name);
 	void EmitInternalName(const mtlChars &name);
 	void EmitDecl(const mtlChars &type, const mtlChars &name);
@@ -127,6 +148,7 @@ private:
 	void PrintMask(unsigned int mask_num);
 	void PrintCurMask( void );
 	void PrintPrevMask( void );
+	void PrintFunctionName(const mtlChars &name);
 };
 
 class ByteCodeCompiler /*: public Compiler */
