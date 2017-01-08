@@ -9,7 +9,7 @@ void CppCompiler::InitializeCompilerState(swsl::Binary &output)
 	m_buffer.Free();
 	m_buffer.poolMemory = true;
 	m_buffer.SetCapacity(BLOCK);
-	PrintNL("#include \"swsl_types.h\"");
+	PrintNL("#include \"swsl_types.h\""); // TODO: make this path relative to output path
 }
 
 void CppCompiler::EmitPushScope( void )
@@ -51,7 +51,7 @@ void CppCompiler::EmitIf(const mtlChars &condition)
 	PrintIndent();
 	PrintCurMask();
 	Print("[0] = ( ");
-	Print(condition);
+	EmitExpression(condition);
 	Print(" ) & ");
 	PrintPrevMask();
 	PrintNL("[0];");
@@ -70,8 +70,8 @@ void CppCompiler::EmitStatement(const mtlChars &statement)
 	p.SetBuffer(statement);
 	switch (p.Match("%w=%S%0 %| %w%w=%S%0 %| %w%w%0 %| %S", m)) {
 	case 0:
-		// IMPROVEMENT: only requires merge if a mask has been declared after dst was declared
-		Print("swsl::wide_vec_merge(");
+		// TODO: only requires merge if a mask has been declared after dst was declared
+		Print("swsl::set(");
 		EmitDst(m[0]);
 		Print(", ");
 		EmitExpression(m[1]);
@@ -190,7 +190,81 @@ void CppCompiler::EmitDecl(const mtlChars &type, const mtlChars &name)
 
 void CppCompiler::EmitExpression(const mtlChars &expr)
 {
-	Print(expr);
+	// NOTE: no need to optimize constant parts of the expression as the C++ compiler will do this for us
+	// functions: always add last mask as final argument in call
+
+	mtlSyntaxParser p;
+	p.SetBuffer(expr);
+	mtlArray<mtlChars> m;
+	mtlChars s;
+
+	while (!p.IsEnd()) {
+		switch (p.Match("(%S) %| + %| - %| * %| / %| && %| || %| == %| != %| < %| <= %| > %| >= %| %r %| . %| %w(%s) %| %w %| %s", m, &s)) {
+		case 0:
+			Print("(");
+			EmitExpression(m[0]);
+			Print(")");
+			break;
+
+		case 1:
+		case 2:
+		case 3:
+		case 4:
+		case 5:
+		case 6:
+		case 7:
+		case 8:
+		case 9:
+		case 10:
+		case 11:
+		case 12:
+			Print(" ");
+			Print(s);
+			Print(" ");
+			break;
+
+		case 13:
+			Print(s);
+			Print("f");
+			p.Match("f");
+			break;
+
+		case 14:
+			if (p.Match("%w", m, &s) == 0) {
+				const mtlChars mems = "xyzw";
+				Print("[");
+				for (int i = 0; i < m[0].GetSize(); ++i) {
+					for (int j = 0; j < mems.GetSize(); ++j) {
+						if (m[0][i] == mems[j]) {
+							mtlString num;
+							num.FromInt(j);
+							Print(num);
+						}
+					}
+					if (i < m[0].GetSize() - 1) {
+						Print(", ");
+					}
+				}
+				Print("]");
+			} else {
+				AddError("Unable to scan members", s);
+				return;
+			}
+			break;
+
+		case 15:
+			EmitFunctionCall(m[0], m[1]);
+			break;
+
+		case 16:
+			EmitName(m[0]);
+			break;
+
+		default:
+			AddError("Unable to scan expression", s);
+			return;
+		}
+	}
 }
 
 void CppCompiler::EmitFunctionSignature(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params)
@@ -218,7 +292,7 @@ void CppCompiler::EmitFunctionSignature(const mtlChars &ret_type, const mtlChars
 
 		default:
 			AddError("Unknown parameter parsing error", m[0]);
-			break;
+			return;
 		}
 	}
 	Print(", ");
@@ -230,12 +304,12 @@ void CppCompiler::EmitFunctionSignature(const mtlChars &ret_type, const mtlChars
 
 void CppCompiler::EmitFunctionCall(const mtlChars &name, const mtlChars &params)
 {
-	PrintIndent();
-	PrintFunctionName(name);
-	Print("(");
 	mtlSyntaxParser p;
 	p.SetBuffer(params);
 	mtlArray<mtlChars> m;
+
+	PrintFunctionName(name);
+	Print("(");
 	while (!p.IsEnd()) {
 		switch (p.Match("%s, %| %s", m)) {
 		case 0:
@@ -246,7 +320,7 @@ void CppCompiler::EmitFunctionCall(const mtlChars &name, const mtlChars &params)
 		Print(", ");
 	}
 	PrintCurMask();
-	PrintNL(");");
+	Print(")");
 }
 
 void CppCompiler::ProgramErrorCheck( void ) {}

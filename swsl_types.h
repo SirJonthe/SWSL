@@ -45,7 +45,7 @@ public:
 };
 
 template < typename wide_t, int n >
-inline void wide_vec_merge(wide_vec<wide_t, n> &l, const wide_vec<wide_t, n> &r, const mpl::wide_bool &lmask)
+inline void set(wide_vec<wide_t, n> &l, const wide_vec<wide_t, n> &r, const mpl::wide_bool &lmask)
 {
 	for (int i = 0; i < n; ++i) {
 		l = wide_t::merge(l[i], r[i], lmask);

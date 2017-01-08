@@ -98,7 +98,8 @@ HEADERS += \
     MiniLib/MML/mmlInt.h \
     swsl_parser.h \
     swsl_types.h \
-    swsl_astgenerator.h
+    swsl_astgenerator.h \
+    swsl_program.h
 
 macx: {
 	OBJECTIVE_SOURCES += \
@@ -126,3 +127,5 @@ unix:!macx: { # unix-like, e.g. linux, freeBSD
 		-lSDL \
 		-lSDLmain
 }
+
+OTHER_FILES +=
