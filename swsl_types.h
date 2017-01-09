@@ -15,9 +15,13 @@ private:
 public:
 	wide_vec( void ) {}
 	wide_vec(const wide_t &x) { for (int i; i < n; ++i) { e[i] = x; } }
+	wide_vec(const wide_t &x, const mpl::wide_bool&) : wide_vec(x) {}
 	wide_vec(const wide_t &x, const wide_t &y) { e[0] = x; e[1] = y; }
+	wide_vec(const wide_t &x, const wide_t &y, const mpl::wide_bool&) : wide_vec(x, y) {}
 	wide_vec(const wide_t &x, const wide_t &y, const wide_t &z) { e[0] = x; e[1] = y; e[2] = z; }
+	wide_vec(const wide_t &x, const wide_t &y, const wide_t &z, const mpl::wide_bool&) : wide_vec(x, y, z) {}
 	wide_vec(const wide_t &x, const wide_t &y, const wide_t &z, const wide_t &w) { e[0] = x; e[1] = y; e[2] = z; e[3] = w; }
+	wide_vec(const wide_t &x, const wide_t &y, const wide_t &z, const wide_t &w, const mpl::wide_bool&) : wide_vec(x, y, z, w) {}
 
 	wide_vec<wide_t, n> &operator=(const wide_t &r);
 	wide_vec<wide_t, n> &operator=(const wide_vec<wide_t, n> &v);
@@ -65,6 +69,36 @@ typedef wide_vec<mpl::wide_fixed<16>, 1> wide_fixed1;
 typedef wide_vec<mpl::wide_fixed<16>, 2> wide_fixed2;
 typedef wide_vec<mpl::wide_fixed<16>, 3> wide_fixed3;
 typedef wide_vec<mpl::wide_fixed<16>, 4> wide_fixed4;
+
+template < typename wide_t, int n >
+swsl::wide_vec<wide_t, n> wide_max(const swsl::wide_vec<wide_t, n> &a, const swsl::wide_vec<wide_t, n> &b, const mpl::wide_bool&)
+{
+	swsl::wide_vec<wide_t, n> o;
+	for (int i = 0; i < n; ++i) {
+		o[i] = wide_t::max(a[i], b[i]);
+	}
+	return o;
+}
+
+template < typename wide_t, int n >
+swsl::wide_vec<wide_t, n> wide_min(const swsl::wide_vec<wide_t, n> &a, const swsl::wide_vec<wide_t, n> &b, const mpl::wide_bool&)
+{
+	swsl::wide_vec<wide_t, n> o;
+	for (int i = 0; i < n; ++i) {
+		o[i] = wide_t::min(a[i], b[i]);
+	}
+	return o;
+}
+
+template < typename wide_t, int n >
+swsl::wide_vec<wide_t, n> wide_abs(const swsl::wide_vec<wide_t, n> &a, const mpl::wide_bool&)
+{
+	swsl::wide_vec<wide_t, n> o;
+	for (int i = 0; i < n; ++i) {
+		o[i] = wide_t::abs(a[i]);
+	}
+	return o;
+}
 
 }
 

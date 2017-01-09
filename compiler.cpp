@@ -216,12 +216,10 @@ void Compiler::CompileFunction(const mtlChars &ret_type, const mtlChars &func_na
 	m_global_scope = false;
 	EmitFunctionSignature(ret_type, func_name, params);
 	CompileScope(scope);
+	if (func_name.Compare("main", true)) {
+		EmitCompatibilityMain(ret_type, func_name, params);
+	}
 	m_global_scope = true;
-}
-
-void Compiler::DeclareFunction(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params)
-{
-	EmitFunctionSignature(ret_type, func_name, params);
 }
 
 unsigned int Compiler::GetMaskDepth( void ) const

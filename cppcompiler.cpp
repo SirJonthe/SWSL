@@ -30,36 +30,32 @@ void CppCompiler::EmitElse( void )
 {
 	PrintIndent();
 	PrintCurMask();
-	Print("[0] = !");
+	Print(" = !");
 	PrintCurMask();
-	PrintNL("[0];");
+	PrintNL(";");
 
 	PrintIndent();
 	Print("if ( !(");
 	PrintCurMask();
-	PrintNL("[0].all_fail()) )");
+	PrintNL(".all_fail()) )");
 }
 
 void CppCompiler::EmitIf(const mtlChars &condition)
 {
 	PrintIndent();
-	EmitType("bool");
+	EmitBaseType("bool");
 	Print(" ");
 	PrintCurMask();
-	PrintNL(";");
-
-	PrintIndent();
-	PrintCurMask();
-	Print("[0] = ( ");
+	Print(" = ( ");
 	EmitExpression(condition);
 	Print(" ) & ");
 	PrintPrevMask();
-	PrintNL("[0];");
+	PrintNL(";");
 
 	PrintIndent();
 	Print("if ( !(");
 	PrintCurMask();
-	PrintNL("[0].all_fail()) )");
+	PrintNL(".all_fail()) )");
 }
 
 void CppCompiler::EmitStatement(const mtlChars &statement)
@@ -77,7 +73,7 @@ void CppCompiler::EmitStatement(const mtlChars &statement)
 		EmitExpression(m[1]);
 		Print(", ");
 		PrintCurMask();
-		Print("[0])");
+		Print(")");
 		break;
 
 	case 1:
@@ -170,6 +166,37 @@ void CppCompiler::EmitBaseType(const mtlChars &type)
 	}
 }
 
+bool CppCompiler::IsReservedName(const mtlChars &name) const
+{
+	return name.Compare(Keywords[Token_Bool],   true) ||
+		   name.Compare(Keywords[Token_Int],    true) ||
+		   name.Compare(Keywords[Token_Int2],   true) ||
+		   name.Compare(Keywords[Token_Int3],   true) ||
+		   name.Compare(Keywords[Token_Int4],   true) ||
+		   name.Compare(Keywords[Token_Fixed],  true) ||
+		   name.Compare(Keywords[Token_Fixed2], true) ||
+		   name.Compare(Keywords[Token_Fixed3], true) ||
+		   name.Compare(Keywords[Token_Fixed4], true) ||
+		   name.Compare(Keywords[Token_Float],  true) ||
+		   name.Compare(Keywords[Token_Float2], true) ||
+		   name.Compare(Keywords[Token_Float3], true) ||
+		   name.Compare(Keywords[Token_Float4], true) ||
+		   name.Compare("max",                  true) ||
+		   name.Compare("min",                  true) ||
+		   name.Compare("abs",                  true) ||
+		   name.Compare("sqrt",                 true) ||
+		   name.Compare("ceil",                 true) ||
+		   name.Compare("floor",                true) ||
+		   name.Compare("round",                true) ||
+		   name.Compare("trunc",                true) ||
+		   name.Compare("sin",                  true) ||
+		   name.Compare("cos",                  true) ||
+		   name.Compare("tan",                  true) ||
+		   name.Compare("asin",                 true) ||
+		   name.Compare("acos",                 true) ||
+		   name.Compare("atan",                 true);
+}
+
 void CppCompiler::EmitName(const mtlChars &name)
 {
 	Print("_");
@@ -225,6 +252,9 @@ void CppCompiler::EmitExpression(const mtlChars &expr)
 
 		case 13:
 			Print(s);
+			if (s.FindFirstChar('.') == -1) {
+				Print(".0");
+			}
 			Print("f");
 			p.Match("f");
 			break;
@@ -295,11 +325,85 @@ void CppCompiler::EmitFunctionSignature(const mtlChars &ret_type, const mtlChars
 			return;
 		}
 	}
-	Print(", ");
-	EmitType("bool");
-	Print(" ");
+	Print(", const ");
+	EmitBaseType("bool");
+	Print(" &");
 	PrintMask(0);
 	PrintNL(")");
+}
+
+void CppCompiler::EmitCompatibilityMain(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params)
+{
+	PrintIndent();
+	Print("inline ");
+	EmitType(ret_type);
+	Print(" ");
+	PrintFunctionName(func_name);
+	Print("(void *params, const ");
+	EmitBaseType("bool");
+	Print(" &");
+	PrintCurMask();
+	PrintNL(")");
+
+	EmitPushScope();
+	PrintIndent();
+
+	if (!ret_type.Compare(Keywords[Token_Void])) {
+		Print("return ");
+	}
+
+	// Print the call to main with custom parameters
+
+	PrintFunctionName(func_name);
+	PrintNL("(");
+
+	mtlSyntaxParser p;
+	mtlArray<mtlChars> m;
+	p.SetBuffer(params);
+	int param_offset = 0;
+	mtlString po_str;
+
+	++m_indent;
+
+	while (!p.IsEnd()) {
+
+		PrintIndent();
+
+		switch (p.Match("%w%w, %| %w%w%0 %| %s", m)) {
+		case 0:
+		case 1:
+			//( (type&)(((char*)params)[sum]) )
+			Print("( (");
+			EmitType(m[0]);
+			Print("&)(((char*)params[");
+			po_str.FromInt(param_offset);
+			Print(po_str);
+			Print("]) )");
+			break;
+
+		default:
+			AddError("Unknown parameter parsing error: ", m[0]);
+			break;
+		}
+		PrintNL(", ");
+	}
+
+	PrintIndent();
+	PrintCurMask();
+	PrintNL("");
+
+	--m_indent;
+
+	PrintIndent();
+	PrintNL(");");
+
+	EmitPopScope();
+}
+
+void CppCompiler::DeclareFunction(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params)
+{
+	EmitFunctionSignature(ret_type, func_name, params);
+	PrintNL(";");
 }
 
 void CppCompiler::EmitFunctionCall(const mtlChars &name, const mtlChars &params)
@@ -308,7 +412,12 @@ void CppCompiler::EmitFunctionCall(const mtlChars &name, const mtlChars &params)
 	p.SetBuffer(params);
 	mtlArray<mtlChars> m;
 
-	PrintFunctionName(name);
+	if (IsReservedName(name)) {
+		Print("swsl::wide_");
+		EmitInternalName(name);
+	} else {
+		PrintFunctionName(name);
+	}
 	Print("(");
 	while (!p.IsEnd()) {
 		switch (p.Match("%s, %| %s", m)) {

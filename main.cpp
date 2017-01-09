@@ -473,7 +473,7 @@ int CppCompilerTest( void )
 	CppCompiler c;
 	swsl::Binary bin;
 
-	if (!c.Compile(mtlPath("../swsl_samples/interactive.swsl"), bin, "test_shader")) {
+	if (!c.Compile(mtlPath("../swsl_samples/interactive.swsl"), bin, "wide")) {
 		const mtlItem<Compiler::Message> *err = c.GetError();
 		while (err != NULL) {
 			swsl::print_ch(err->GetItem().err);

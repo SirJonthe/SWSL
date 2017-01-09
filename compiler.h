@@ -104,7 +104,8 @@ protected:
 	void CompileGlobalCodeUnit(mtlSyntaxParser &parser);
 	void CompileFunction(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params, const mtlChars &scope);
 	virtual void EmitFunctionSignature(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params) = 0;
-	void DeclareFunction(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params);
+	virtual void EmitCompatibilityMain(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params) = 0;
+	virtual void DeclareFunction(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params) = 0;
 	virtual void ProgramErrorCheck( void ) = 0;
 	virtual void ConvertToOutput(swsl::Binary &output) = 0;
 	unsigned int GetMaskDepth( void ) const;
@@ -135,10 +136,13 @@ protected:
 	void EmitType(const mtlChars &type);
 	void EmitBaseType(const mtlChars &type);
 	void EmitName(const mtlChars &name);
+	bool IsReservedName(const mtlChars &name) const;
 	void EmitInternalName(const mtlChars &name);
 	void EmitDecl(const mtlChars &type, const mtlChars &name);
 	void EmitExpression(const mtlChars &expr);
 	void EmitFunctionSignature(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params);
+	void EmitCompatibilityMain(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params);
+	void DeclareFunction(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params);
 	void EmitFunctionCall(const mtlChars &name, const mtlChars &params);
 	void ProgramErrorCheck( void );
 	void ConvertToOutput(swsl::Binary &output);
