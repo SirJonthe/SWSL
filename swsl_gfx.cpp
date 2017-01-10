@@ -48,7 +48,7 @@ void swsl::Rasterizer::CreateBuffers(int width, int height, int components)
 	m_out_buffer.Create(width, height, components); // RGB + depth = 4 components
 	ResetRasterMask();
 }
-#include <iostream>
+
 void swsl::Rasterizer::SetRasterMask(int x1, int y1, int x2, int y2)
 {
 	// raster mask does not necessarily respect the exact boundry specified
@@ -254,3 +254,141 @@ void FillTriangle(mtlByte *pixels, int bytes_per_pixel, int width, int height, c
 	}
 }
 */
+
+
+
+// Reference implementation of native rasterizer
+
+bool swsl::rasterizer::is_top_left(const swsl::Point2D &a, const swsl::Point2D &b) const
+{
+	// strictly connected to winding order
+	return (a.x < b.x && b.y == a.y) || (a.y > b.y);
+}
+
+int swsl::rasterizer::orient_2d(const swsl::Point2D &a, const swsl::Point2D &b, const swsl::Point2D &c) const
+{
+	return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+}
+
+swsl::rasterizer::gfx_float swsl::rasterizer::orient_2d(const swsl::Point2D &a, const swsl::Point2D &b, const swsl::rasterizer::wide_Point2D &c) const
+{
+	wide_Point2D A = { a.x, a.y }, B = { b.x, b.y };
+	return (B.x - A.x) * (c.y - A.y) - (B.y - A.y) * (c.x - A.x);
+}
+
+int swsl::rasterizer::get_mask_width_stride( void ) const
+{
+	return ((m_mask_x2 - m_mask_x1) / MPL_WIDTH) * m_out_buffer.GetPixelStride();
+}
+
+int swsl::rasterizer::ceil_index(int i) const
+{
+	return (i + MPL_WIDTH_MASK) & MPL_WIDTH_INVMASK;
+}
+
+int swsl::rasterizer::floor_index(int i) const
+{
+	return i & MPL_WIDTH_INVMASK;
+}
+
+swsl::rasterizer::rasterizer( void ) : m_width(0), m_height(0), m_mask_x1(0), m_mask_y1(0), m_mask_x2(0), m_mask_y2(0) {}
+
+
+void swsl::rasterizer::create_buffers(int width, int height, int components)
+{
+	m_width = width;
+	m_height = height;
+	m_out_buffer.Create(width, height, components); // RGB + depth = 4 components
+	reset_raster_mask();
+}
+
+void swsl::rasterizer::set_raster_mask(int x1, int y1, int x2, int y2)
+{
+	m_mask_x1 = mmlMax(floor_index(x1), 0);
+	m_mask_y1 = mmlMax(y1, 0);
+	m_mask_x2 = mmlMin(ceil_index(x2), m_width);
+	m_mask_y2 = mmlMin(y2, m_height);
+}
+
+void swsl::rasterizer::reset_raster_mask( void )
+{
+	m_mask_x1 = 0;
+	m_mask_y1 = 0;
+	m_mask_x2 = m_width;
+	m_mask_y2 = m_height;
+}
+
+void swsl::rasterizer::clear_buffers( void )
+{
+	const int  scanline_stride = m_out_buffer.GetScanlineStride();
+	const int  mask_stride     = get_mask_width_stride();
+	gfx_float *buffer_data     = m_out_buffer.GetComponent(m_mask_x1 / MPL_WIDTH, m_mask_y1);
+
+	for (int y = m_mask_y1; y < m_mask_y2; ++y) {
+		mtlClear(buffer_data, mask_stride);
+		buffer_data += scanline_stride;
+	}
+}
+
+void swsl::rasterizer::clear_buffers(const float *component_data)
+{
+	const int  scanline_stride = m_out_buffer.GetScanlineStride();
+	const int  pixel_stride    = m_out_buffer.GetPixelStride();
+	const int  mask_stride     = get_mask_width_stride();
+	gfx_float *buffer_data     = m_out_buffer.GetComponent(m_mask_x1 / MPL_WIDTH, m_mask_y1);
+
+	for (int y = m_mask_y1; y < m_mask_y2; ++y) {
+		for (int x = 0; x < mask_stride;) {
+			for (int n = 0; n < pixel_stride; ++n, ++x) {
+				buffer_data[x] = component_data[n];
+			}
+		}
+		buffer_data += scanline_stride;
+	}
+}
+
+void swsl::rasterizer::write_color_buffer(int src_r_idx, int src_g_idx, int src_b_idx, mtlByte *dst_pixels, int dst_bytes_per_pixel, mglByteOrder32 dst_byte_order)
+{
+	const int        src_scanline_stride = m_out_buffer.GetScanlineStride();
+	const int        dst_scanline_stride = dst_bytes_per_pixel * m_width;
+	const int        src_pixel_stride = m_out_buffer.GetPixelStride();
+	const int        x1 = m_mask_x1 / MPL_WIDTH;
+	const int        x2 = m_mask_x2 / MPL_WIDTH;
+	const gfx_float *src_pixels = m_out_buffer.GetComponent(x1, m_mask_y1);
+	const gfx_float  scale = 255.0f;
+	gfx_float        rf, gf, bf;
+	gfx_int          ri, gi, bi;
+	int              rs[MPL_WIDTH], gs[MPL_WIDTH], bs[MPL_WIDTH];
+
+	dst_pixels += (m_mask_x1 + m_mask_y1 * m_width) * dst_bytes_per_pixel;
+
+	for (int y = m_mask_y1; y < m_mask_y2; ++y) {
+		mtlByte         *dst_pixel = dst_pixels;
+		const gfx_float *src_pixel = src_pixels;
+		for (int x = x1; x < x2; ++x) {
+			rf = *(src_pixel + src_r_idx) * scale;
+			gf = *(src_pixel + src_g_idx) * scale;
+			bf = *(src_pixel + src_b_idx) * scale;
+			ri = gfx_int(rf);
+			gi = gfx_int(gf);
+			bi = gfx_int(bf);
+			ri.to_scalar(rs);
+			gi.to_scalar(gs);
+			bi.to_scalar(bs);
+			for (int n = 0; n < MPL_WIDTH; ++n) {
+				dst_pixel[dst_byte_order.index.r] = rs[n];
+				dst_pixel[dst_byte_order.index.g] = gs[n];
+				dst_pixel[dst_byte_order.index.b] = bs[n];
+				dst_pixel += dst_bytes_per_pixel;
+			}
+			src_pixel += src_pixel_stride;
+		}
+		dst_pixels += dst_scanline_stride;
+		src_pixels += src_scanline_stride;
+	}
+}
+
+void swsl::rasterizer::write_color_buffer(mtlByte *dst_pixels, int dst_bytes_per_pixel, mglByteOrder32 dst_byte_order)
+{
+	write_color_buffer(0, 1, 2, dst_pixels, dst_bytes_per_pixel, dst_byte_order);
+}

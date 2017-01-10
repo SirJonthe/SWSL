@@ -324,6 +324,25 @@ void CppCompiler::EmitFunctionSignature(const mtlChars &ret_type, const mtlChars
 			AddError("Unknown parameter parsing error", m[0]);
 			return;
 		}
+
+		/*switch (p.Match("%[const %| mutable] %w%[&]%w, %[const %| mutable] %w%[&]%w%0 %| %s", m)) {
+		case 0:
+		case 1:
+			swsl::print_ch("qual: ");
+			swsl::print_line(m[0]);
+			swsl::print_ch("type: ");
+			swsl::print_line(m[1]);
+			swsl::print_ch("ref:  ");
+			swsl::print_line(m[2]);
+			swsl::print_ch("name: ");
+			swsl::print_line(m[3]);
+			break;
+
+		default:
+			swsl::print_ch("opt param err: ");
+			swsl::print_line(m[0]);
+			break;
+		}*/
 	}
 	Print(", const ");
 	EmitBaseType("bool");
@@ -352,15 +371,12 @@ void CppCompiler::EmitCompatibilityMain(const mtlChars &ret_type, const mtlChars
 		Print("return ");
 	}
 
-	// Print the call to main with custom parameters
-
 	PrintFunctionName(func_name);
 	PrintNL("(");
 
 	mtlSyntaxParser p;
 	mtlArray<mtlChars> m;
 	p.SetBuffer(params);
-	int param_offset = 0;
 	mtlString po_str;
 
 	++m_indent;
@@ -372,14 +388,31 @@ void CppCompiler::EmitCompatibilityMain(const mtlChars &ret_type, const mtlChars
 		switch (p.Match("%w%w, %| %w%w%0 %| %s", m)) {
 		case 0:
 		case 1:
+		{
 			//( (type&)(((char*)params)[sum]) )
 			Print("( (");
 			EmitType(m[0]);
-			Print("&)(((char*)params[");
-			po_str.FromInt(param_offset);
-			Print(po_str);
-			Print("]) )");
+			Print("&)((char*)params)[");
+			if (po_str.GetSize() > 0) {
+				mtlSyntaxParser p0;
+				mtlArray<mtlChars> m0;
+				p0.SetBuffer(po_str);
+				while (!p0.IsEnd() && p0.Match("%w", m0) == 0) {
+					Print("sizeof(");
+					EmitType(m0[0]);
+					Print(")");
+					if (!p0.IsEnd()) {
+						Print(" + ");
+					}
+				}
+			} else {
+				Print("0");
+			}
+			Print("] )");
+			po_str.Append(m[0]);
+			po_str.Append(" ");
 			break;
+		}
 
 		default:
 			AddError("Unknown parameter parsing error: ", m[0]);
