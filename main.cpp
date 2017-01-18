@@ -322,15 +322,18 @@ int InteractiveDemo( void )
 int ParserTest( void )
 {
 	mtlString file_buffer;
-	mtlPath file_path("../test_file.txt");
+	mtlPath file_path("../swsl_samples/test_file.txt");
 	swsl::print_ch("path=");
 	swsl::print_line(file_path.GetPath());
-	if (!mtlSyntaxParser::BufferFile(file_path, file_buffer)) { return 1; }
+	if (!mtlSyntaxParser::BufferFile(file_path, file_buffer)) {
+		std::cout << "failed to open specified file" << std::endl;
+		return 1;
+	}
 	mtlSyntaxParser parser;
 	parser.SetBuffer(file_buffer);
 	mtlArray<mtlChars> m;
 	while (!parser.IsEnd()) {
-		switch (parser.Match("%w:=%i;%|%w:=%r;%|%w:=\"%s\";%|%w[%i]%w:={%i,%i,%i};%|end;%0%|%s+%s;", m)) {
+		switch (parser.Match("%w:=%i;%|%w:=%r;%|%w:=\"%s\";%|%w[%i]:={%i,%i,%i};%|end;%0%|%s+%s;", m)) {
 		case 0:
 			swsl::print_ch("\"");
 			swsl::print_ch(m[0]);
@@ -354,17 +357,15 @@ int ParserTest( void )
 			break;
 		case 3:
 			swsl::print_ch("\"");
-			swsl::print_ch(m[2]);
-			swsl::print_ch("\" (type \"");
 			swsl::print_ch(m[0]);
 			swsl::print_ch("[");
 			swsl::print_ch(m[1]);
-			swsl::print_ch("]\") set to (");
+			swsl::print_ch("]\" set to arr (");
+			swsl::print_ch(m[2]);
+			swsl::print_ch(";");
 			swsl::print_ch(m[3]);
 			swsl::print_ch(";");
 			swsl::print_ch(m[4]);
-			swsl::print_ch(";");
-			swsl::print_ch(m[5]);
 			swsl::print_line(")");
 			break;
 		case 4:

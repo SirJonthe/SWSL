@@ -297,6 +297,8 @@ void CppCompiler::EmitExpression(const mtlChars &expr)
 	}
 }
 
+static const mtlChars swsl_type_decl_str = "%o(const %| mutable) %w%o(&)%w %| %s";
+
 void CppCompiler::EmitFunctionSignature(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params)
 {
 	PrintIndent();
@@ -310,39 +312,16 @@ void CppCompiler::EmitFunctionSignature(const mtlChars &ret_type, const mtlChars
 	p.SetBuffer(params);
 
 	while (!p.IsEnd()) {
-		switch (p.Match("%w%w, %| %w%w%0 %| %s", m)) {
+		switch (p.Match(swsl_type_decl_str, m)) {
 		case 0:
-			EmitDecl(m[0], m[1]);
-			Print(", ");
-			break;
-
-		case 1:
-			EmitDecl(m[0], m[1]);
+			EmitDecl(m[1], m[3]);
+			if (p.Match(",") == 0) { Print(", "); }
 			break;
 
 		default:
-			AddError("Unknown parameter parsing error", m[0]);
+			AddError("Unknown parameter parsing error (1)", m[0]);
 			return;
 		}
-
-		/*switch (p.Match("%[const %| mutable] %w%[&]%w, %[const %| mutable] %w%[&]%w%0 %| %s", m)) {
-		case 0:
-		case 1:
-			swsl::print_ch("qual: ");
-			swsl::print_line(m[0]);
-			swsl::print_ch("type: ");
-			swsl::print_line(m[1]);
-			swsl::print_ch("ref:  ");
-			swsl::print_line(m[2]);
-			swsl::print_ch("name: ");
-			swsl::print_line(m[3]);
-			break;
-
-		default:
-			swsl::print_ch("opt param err: ");
-			swsl::print_line(m[0]);
-			break;
-		}*/
 	}
 	Print(", const ");
 	EmitBaseType("bool");
@@ -385,13 +364,12 @@ void CppCompiler::EmitCompatibilityMain(const mtlChars &ret_type, const mtlChars
 
 		PrintIndent();
 
-		switch (p.Match("%w%w, %| %w%w%0 %| %s", m)) {
+		switch (p.Match(swsl_type_decl_str, m)) {
 		case 0:
-		case 1:
 		{
 			//( (type&)(((char*)params)[sum]) )
 			Print("( (");
-			EmitType(m[0]);
+			EmitType(m[1]);
 			Print("&)((char*)params)[");
 			if (po_str.GetSize() > 0) {
 				mtlSyntaxParser p0;
@@ -409,15 +387,16 @@ void CppCompiler::EmitCompatibilityMain(const mtlChars &ret_type, const mtlChars
 				Print("0");
 			}
 			Print("] )");
-			po_str.Append(m[0]);
+			po_str.Append(m[1]);
 			po_str.Append(" ");
 			break;
 		}
 
 		default:
-			AddError("Unknown parameter parsing error: ", m[0]);
+			AddError("Unknown parameter parsing error (2)", m[0]);
 			break;
 		}
+		p.Match(",");
 		PrintNL(", ");
 	}
 
