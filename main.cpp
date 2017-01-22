@@ -1,7 +1,7 @@
 //#define MPL_FALLBACK_SCALAR
 
 #include <iostream>
-
+#include <fstream>
 #include <omp.h>
 
 #include <SDL/SDL.h>
@@ -15,6 +15,7 @@
 #include "swsl_parser.h"
 #include "swsl_gfx.h"
 #include "swsl_aux.h"
+#include "swsl_astgen.h"
 
 // Things I should look into:
 // Buffers should allocate an extra register at the edges so that screen resolutions that are not multiples of SWSL_WIDTH render properly
@@ -460,8 +461,6 @@ int NewCompilerTest( void )
 	return 0;
 }
 
-#include <fstream>
-
 int CppCompilerTest( void )
 {
 	std::ofstream fout;
@@ -490,6 +489,170 @@ int CppCompilerTest( void )
 	return 0;
 }
 
+void PrintLVL(const mtlChars &msg, int lvl)
+{
+	for (int i = 0; i < lvl; ++i) { std::cout << "| "; }
+	swsl::print_line(msg);
+}
+
+void PrintLVL(const mtlChars &lbl, const mtlChars &val, int lvl)
+{
+	for (int i = 0; i < lvl; ++i) { std::cout << "| "; }
+	swsl::print_ch(lbl);
+	swsl::print_ch("=");
+	swsl::print_line(val);
+}
+
+void TraverseAST(swsl::Token *t, int lvl, int &errs)
+{
+	if (t != NULL) {
+		switch (t->type) {
+		case swsl::Token::TOKEN_ERR:
+			PrintLVL("+err", lvl);
+			PrintLVL(((swsl::Token_Err*)t)->msg, ((swsl::Token_Err*)t)->err, lvl+1);
+			PrintLVL("-err", lvl);
+			++errs;
+			break;
+
+		case swsl::Token::TOKEN_START:
+			PrintLVL("+tree", lvl);
+			TraverseAST(((swsl::SyntaxTree*)t)->file, lvl+1, errs);
+			PrintLVL("-tree", lvl);
+			break;
+
+		case swsl::Token::TOKEN_DECL_VAR:
+			PrintLVL("+decl_var", lvl);
+			PrintLVL("qlf", ((swsl::Token_DeclVar*)t)->rw, lvl+1);
+			PrintLVL("typ", ((swsl::Token_DeclVar*)t)->type_name, lvl+1);
+			PrintLVL("ref", ((swsl::Token_DeclVar*)t)->ref.GetSize() > 0 ? mtlChars("yes") : mtlChars("no"), lvl+1);
+			PrintLVL("nam", ((swsl::Token_DeclVar*)t)->var_name, lvl+1);
+			PrintLVL("-decl_var", lvl);
+			break;
+
+		case swsl::Token::TOKEN_DECL_FN:
+			PrintLVL("+decl_fn", lvl);
+			TraverseAST(((swsl::Token_DeclFn*)t)->ret, lvl+1, errs);
+			{
+				mtlItem<swsl::Token*> *i = ((swsl::Token_DeclFn*)t)->params.GetFirst();
+				while (i != NULL) {
+					TraverseAST(i->GetItem(), lvl+1, errs);
+					i = i->GetNext();
+				}
+			}
+			PrintLVL("-decl_fn", lvl);
+			break;
+
+		case swsl::Token::TOKEN_DEF_FN:
+			PrintLVL("+def_fn", lvl);
+			TraverseAST(((swsl::Token_DefFn*)t)->sig, lvl+1, errs);
+			TraverseAST(((swsl::Token_DefFn*)t)->body, lvl+1, errs);
+			PrintLVL("-def_fn", lvl);
+			break;
+
+		case swsl::Token::TOKEN_DEF_STRUCT:
+			PrintLVL("+def_struct", ((swsl::Token_DefStruct*)t)->struct_name, lvl);
+			{
+				mtlItem<swsl::Token*> *i = ((swsl::Token_DefStruct*)t)->decls.GetFirst();
+				while (i != NULL) {
+					TraverseAST(i->GetItem(), lvl+1, errs);
+					i = i->GetNext();
+				}
+			}
+			PrintLVL("-def_struct", lvl);
+			break;
+
+		case swsl::Token::TOKEN_FILE:
+			PrintLVL("+file", ((swsl::Token_File*)t)->file_name, lvl);
+			TraverseAST(((swsl::Token_File*)t)->body, lvl+1, errs);
+			PrintLVL("-file", lvl);
+			break;
+
+		case swsl::Token::TOKEN_BODY:
+			PrintLVL("+body", lvl);
+			{
+				mtlItem<swsl::Token*> *i = ((swsl::Token_Body*)t)->tokens.GetFirst();
+				while (i != NULL) {
+					TraverseAST(i->GetItem(), lvl+1, errs);
+					i = i->GetNext();
+				}
+			}
+			PrintLVL("-body", lvl);
+			break;
+
+		case swsl::Token::TOKEN_SET:
+			PrintLVL("+set", lvl);
+			TraverseAST(((swsl::Token_Set*)t)->lhs, lvl+1, errs);
+			TraverseAST(((swsl::Token_Set*)t)->rhs, lvl+1, errs);
+			PrintLVL("-set", lvl);
+			break;
+
+		case swsl::Token::TOKEN_CALL_FN:
+			PrintLVL("+call_fn", lvl);
+			PrintLVL("nam", ((swsl::Token_CallFn*)t)->fn_name, lvl+1);
+			{
+				mtlItem<swsl::Token*> *i = ((swsl::Token_CallFn*)t)->input.GetFirst();
+				while (i != NULL) {
+					TraverseAST(i->GetItem(), lvl+1, errs);
+					i = i->GetNext();
+				}
+			}
+			PrintLVL("-call_fn", lvl);
+			break;
+
+		case swsl::Token::TOKEN_VAL:
+			PrintLVL("val", ((swsl::Token_Val*)t)->val, lvl);
+			break;
+
+		case swsl::Token::TOKEN_EXPR:
+			PrintLVL("+expr", lvl);
+			PrintLVL("op", ((swsl::Token_Expr*)t)->op, lvl+1);
+			TraverseAST(((swsl::Token_Expr*)t)->lhs, lvl+1, errs);
+			TraverseAST(((swsl::Token_Expr*)t)->rhs, lvl+1, errs);
+			PrintLVL("-expr", lvl);
+			break;
+
+		case swsl::Token::TOKEN_IF:
+			PrintLVL("+if", lvl);
+			TraverseAST(((swsl::Token_If*)t)->cond, lvl+1, errs);
+			TraverseAST(((swsl::Token_If*)t)->if_body, lvl+1, errs);
+			TraverseAST(((swsl::Token_If*)t)->el_body, lvl+1, errs);
+			PrintLVL("-if", lvl);
+			break;
+
+		case swsl::Token::TOKEN_WHILE:
+			PrintLVL("+while", lvl);
+			TraverseAST(((swsl::Token_While*)t)->cond, lvl+1, errs);
+			TraverseAST(((swsl::Token_While*)t)->body, lvl+1, errs);
+			PrintLVL("-while", lvl);
+			break;
+
+		case swsl::Token::TOKEN_RET:
+			PrintLVL("+ret", lvl);
+			TraverseAST(((swsl::Token_Ret*)t)->expr, lvl+1, errs);
+			PrintLVL("-ret", lvl);
+			break;
+
+		default:
+			PrintLVL("what type?", lvl);
+			break;
+		}
+	} else {
+		PrintLVL("NULL", lvl);
+	}
+}
+
+int ASTTest( void )
+{
+	swsl::SyntaxTreeGenerator gen;
+	swsl::SyntaxTree *t = gen.Generate("../swsl_samples/interactive.swsl");
+
+	int errs = 0;
+	TraverseAST(t, 0, errs);
+	std::cout << "errs:" << errs << std::endl;
+
+	return errs == 0 ? 0 : 1;
+}
+
 int main(int, char**)
 {
 	OutputSIMDInfo();
@@ -498,5 +661,6 @@ int main(int, char**)
 	//return SplitTest();
 	//return PathTest();
 	//return NewCompilerTest();
-	return CppCompilerTest();
+	//return CppCompilerTest();
+	return ASTTest();
 }

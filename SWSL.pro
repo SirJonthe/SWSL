@@ -41,7 +41,8 @@ SOURCES += \
     MiniLib/MTL/mtlPath.cpp \
     swsl_parser.cpp \
     cppcompiler.cpp \
-    bytecodecompiler.cpp
+    bytecodecompiler.cpp \
+    swsl_astgen.cpp
 
 HEADERS += \
     swsl_compiler.h \
@@ -98,8 +99,8 @@ HEADERS += \
     MiniLib/MML/mmlInt.h \
     swsl_parser.h \
     swsl_types.h \
-    swsl_astgenerator.h \
-    swsl_program.h
+    swsl_program.h \
+    swsl_astgen.h
 
 macx: {
 	OBJECTIVE_SOURCES += \
