@@ -297,7 +297,7 @@ void CppCompiler::EmitExpression(const mtlChars &expr)
 	}
 }
 
-static const mtlChars swsl_type_decl_str = "%o(const %| mutable) %w%o(&)%w %| %s";
+static const mtlChars swsl_type_decl_str = "%?(const %| mutable) %w%?(&)%w %| %s";
 
 void CppCompiler::EmitFunctionSignature(const mtlChars &ret_type, const mtlChars &func_name, const mtlChars &params)
 {

@@ -55,10 +55,11 @@ struct Token_Err : public Token
 
 struct Token_DeclVar : public Token
 {
-	mtlChars rw;
-	mtlChars type_name;
-	mtlChars ref;
-	mtlChars var_name;
+	mtlChars  rw;
+	mtlChars  type_name;
+	mtlChars  ref;
+	mtlChars  var_name;
+	Token    *arr_size; // Token_Expr
 
 	Token_DeclVar(Token *p_parent);
 };

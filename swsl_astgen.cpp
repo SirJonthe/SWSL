@@ -1,6 +1,6 @@
 #include "swsl_astgen.h"
 
-#define decl_str "%o(const %| mutable) %w%o(&)%w"
+#define decl_str "%?(const %| mutable) %w%?(&)%w%?([%S])"
 #define decl_qlf 0
 #define decl_typ 1
 #define decl_ref 2
@@ -233,7 +233,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessExpression(const mtlChars &expr, 
 	mtlArray<mtlChars> m;
 	mtlSyntaxParser p;
 	p.SetBuffer(expr);
-	//switch (p.Match("%s%O(+ %| -)%S %| %S%O(* %| /)%S %| %S%O(== %| != %| < %| <= %| > %| >=)%S %| (%S)%0 %| %w(%s)%0 %| %O(%r %| %w)%0 %| %S", m)) {
+	//switch (p.Match("%s%!(+ %| -)%S %| %S%!(* %| /)%S %| %S%!(== %| != %| <= %| < %| >= %| >)%S %| (%S)%0 %| %w(%s)%0 %| %!(%r %| %w)%0 %| %S", m)) {
 	//case 0:
 	//case 1:
 	//case 2:
@@ -256,7 +256,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessExpression(const mtlChars &expr, 
 	//	token = ProcessError("Syntax(1)", m[0], parent);
 	//	break;
 	//}
-	switch (p.Match("%s+%S %| %s-%S %| %S*%S %| %S/%S %| %S==%S %| %S!=%S %| %S<%S %| %S<=%S %| %S>%S %| %S>=%S %| (%S)%0 %| %w(%s)%0 %| %S", m)) {
+	switch (p.Match("%s+%S %| %s-%S %| %S*%S %| %S/%S %| %S==%S %| %S!=%S %| %S<=%S %| %S<%S %| %S>=%S %| %S>%S %| (%S)%0 %| %w(%s)%0 %| %S", m)) {
 	case 0:
 		token = ProcessOperation(m[0], "+", m[1], parent);
 		break;
@@ -282,19 +282,19 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessExpression(const mtlChars &expr, 
 		break;
 
 	case 6:
-		token = ProcessOperation(m[0], "<", m[1], parent);
-		break;
-
-	case 7:
 		token = ProcessOperation(m[0], "<=", m[1], parent);
 		break;
 
+	case 7:
+		token = ProcessOperation(m[0], "<", m[1], parent);
+		break;
+
 	case 8:
-		token = ProcessOperation(m[0], ">", m[1], parent);
+		token = ProcessOperation(m[0], ">=", m[1], parent);
 		break;
 
 	case 9:
-		token = ProcessOperation(m[0], ">=", m[1], parent);
+		token = ProcessOperation(m[0], ">", m[1], parent);
 		break;
 
 	case 10:

@@ -42,7 +42,8 @@ SOURCES += \
     swsl_parser.cpp \
     cppcompiler.cpp \
     bytecodecompiler.cpp \
-    swsl_astgen.cpp
+    swsl_astgen.cpp \
+    swsl_tokdisp.cpp
 
 HEADERS += \
     swsl_compiler.h \
@@ -100,7 +101,8 @@ HEADERS += \
     swsl_parser.h \
     swsl_types.h \
     swsl_program.h \
-    swsl_astgen.h
+    swsl_astgen.h \
+    swsl_tokdisp.h
 
 macx: {
 	OBJECTIVE_SOURCES += \
