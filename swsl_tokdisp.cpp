@@ -44,8 +44,12 @@ void swsl::TokenDispatcher::Dispatch(const swsl::Token *t)
 			DispatchCallFn(dynamic_cast<const Token_CallFn*>(t));
 			break;
 
-		case swsl::Token::TOKEN_VAL:
-			DispatchVal(dynamic_cast<const Token_Val*>(t));
+		case swsl::Token::TOKEN_VAR:
+			DispatchVar(dynamic_cast<const Token_Var*>(t));
+			break;
+
+		case swsl::Token::TOKEN_LIT:
+			DispatchLit(dynamic_cast<const Token_Lit*>(t));
 			break;
 
 		case swsl::Token::TOKEN_EXPR:
@@ -70,5 +74,14 @@ void swsl::TokenDispatcher::Dispatch(const swsl::Token *t)
 		}
 	} else {
 		DispatchNull();
+	}
+}
+
+void swsl::TokenDispatcher::Dispatch(const mtlList<swsl::Token*> &t)
+{
+	const mtlItem<swsl::Token*> *i = t.GetFirst();
+	while (i != NULL) {
+		Dispatch(i->GetItem());
+		i = i->GetNext();
 	}
 }

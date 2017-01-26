@@ -599,8 +599,16 @@ void TraverseAST(swsl::Token *t, int lvl, int &errs)
 			PrintLVL("-call_fn", lvl);
 			break;
 
-		case swsl::Token::TOKEN_VAL:
-			PrintLVL("val", ((swsl::Token_Val*)t)->val, lvl);
+		case swsl::Token::TOKEN_VAR:
+			PrintLVL("+var", lvl);
+			PrintLVL("nam", ((swsl::Token_Var*)t)->var_name, lvl+1);
+			TraverseAST(((swsl::Token_Var*)t)->idx, lvl+1, errs);
+			TraverseAST(((swsl::Token_Var*)t)->mem, lvl+1, errs);
+			PrintLVL("-var", lvl);
+			break;
+
+		case swsl::Token::TOKEN_LIT:
+			PrintLVL("lit", ((swsl::Token_Lit*)t)->lit, lvl);
 			break;
 
 		case swsl::Token::TOKEN_EXPR:

@@ -1,10 +1,11 @@
 #include "swsl_astgen.h"
 
-#define decl_str "%?(const %| mutable) %w%?(&)%w%?([%S])"
+#define decl_str "%?(const %| mutable) %w%?([%S])%?(&)%w"
 #define decl_qlf 0
 #define decl_typ 1
-#define decl_ref 2
-#define decl_nam 3
+#define decl_siz 2
+#define decl_ref 3
+#define decl_nam 4
 
 swsl::SyntaxTree::SyntaxTree( void ) :
 	Token(NULL, TOKEN_START), file(NULL)
@@ -97,8 +98,18 @@ swsl::Token_CallFn::~Token_CallFn( void )
 	}
 }
 
-swsl::Token_Val::Token_Val(swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_VAL)
+swsl::Token_Var::Token_Var(swsl::Token *p_parent) :
+	Token(p_parent, TOKEN_VAR), idx(NULL), mem(NULL)
+{}
+
+swsl::Token_Var::~Token_Var( void )
+{
+	delete idx;
+	delete mem;
+}
+
+swsl::Token_Lit::Token_Lit(swsl::Token *p_parent) :
+	Token(p_parent, TOKEN_LIT)
 {}
 
 swsl::Token_Expr::Token_Expr(swsl::Token *p_parent) :
@@ -179,11 +190,56 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessFuncCall(const mtlChars &fn_name,
 	return token;
 }
 
-swsl::Token *swsl::SyntaxTreeGenerator::ProcessValue(const mtlChars &val, swsl::Token *parent)
+swsl::Token *swsl::SyntaxTreeGenerator::ProcessLiteral(const mtlChars &lit, swsl::Token *parent)
 {
-	Token_Val *token = new Token_Val(parent);
+	Token_Lit *token = new Token_Lit(parent);
 
-	token->val = val;
+	token->lit = lit;
+	return token;
+}
+
+swsl::Token *swsl::SyntaxTreeGenerator::ProcessVariable(const mtlChars &var, swsl::Token *parent)
+{
+	Token_Var *token = new Token_Var(parent);
+
+	mtlArray<mtlChars> m;
+	mtlSyntaxParser p;
+	p.SetBuffer(var);
+	switch (p.Match("%w%0 %| %w. %| %w[%S]%0 %| %w[%S].", m)) {
+	case 1:
+		token->mem = ProcessVariable(p.GetBufferRemaining(), token);
+	case 0:
+		token->var_name = m[0];
+		break;
+
+	case 3:
+		token->mem = ProcessVariable(p.GetBufferRemaining(), token);
+	case 2:
+		token->var_name = m[0];
+		token->idx = ProcessExpression(m[0], token);
+		break;
+
+	default:
+		delete token;
+		return ProcessError("Operand", var, parent);
+	}
+	return token;
+}
+
+swsl::Token *swsl::SyntaxTreeGenerator::ProcessOperand(const mtlChars &val, swsl::Token *parent)
+{
+	Token *token = NULL;
+
+	mtlArray<mtlChars> m;
+	mtlSyntaxParser p;
+	p.SetBuffer(val);
+
+	if (p.Match("%i%0 %| %r%0", m) > -1) {
+		token = ProcessLiteral(val, parent);
+	} else {
+		token = ProcessVariable(val, parent);
+	}
+
 	return token;
 }
 
@@ -191,7 +247,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessSet(const mtlChars &lhs, const mt
 {
 	Token_Set *token = new Token_Set(parent);
 
-	token->lhs = ProcessValue(lhs, token);
+	token->lhs = ProcessOperand(lhs, token);
 	token->rhs = ProcessExpression(rhs, token);
 	return token;
 }
@@ -249,7 +305,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessExpression(const mtlChars &expr, 
 	//	break;
 
 	//case 5:
-	//	token = ProcessValue(m[0], parent);
+	//	token = ProcessOperand(m[0], parent);
 	//	break;
 
 	//default:
@@ -306,7 +362,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessExpression(const mtlChars &expr, 
 		break;
 
 	case 12:
-		token = ProcessValue(m[0], parent);
+		token = ProcessOperand(m[0], parent);
 		break;
 	}
 	return token;
@@ -466,7 +522,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::LoadFile(const mtlChars &file_name, swsl
 
 	if (!mtlSyntaxParser::BufferFile(file_name, token->content)) {
 		delete token;
-		return ProcessError("File not found", "", parent);
+		return ProcessError("File not found", file_name, parent);
 	}
 	token->file_name = file_name;
 	token->body = ProcessFile(token->content, token);

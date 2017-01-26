@@ -20,7 +20,8 @@ protected:
 	virtual void DispatchBody(const Token_Body*)           = 0;
 	virtual void DispatchSet(const Token_Set*)             = 0;
 	virtual void DispatchCallFn(const Token_CallFn*)       = 0;
-	virtual void DispatchVal(const Token_Val*)             = 0;
+	virtual void DispatchVar(const Token_Var*)             = 0;
+	virtual void DispatchLit(const Token_Lit*)             = 0;
 	virtual void DispatchExpr(const Token_Expr*)           = 0;
 	virtual void DispatchIf(const Token_If*)               = 0;
 	virtual void DispatchWhile(const Token_While*)         = 0;
@@ -30,6 +31,7 @@ public:
 	virtual ~TokenDispatcher( void ) {}
 
 	void Dispatch(const swsl::Token *t);
+	void Dispatch(const mtlList<swsl::Token*> &t);
 };
 
 }

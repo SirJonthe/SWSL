@@ -21,8 +21,9 @@ struct Token
 		TOKEN_BODY       = TOKEN_FILE       << 1,
 		TOKEN_SET        = TOKEN_BODY       << 1,
 		TOKEN_CALL_FN    = TOKEN_SET        << 1,
-		TOKEN_VAL        = TOKEN_CALL_FN    << 1,
-		TOKEN_EXPR       = TOKEN_VAL        << 1,
+		TOKEN_VAR        = TOKEN_CALL_FN    << 1,
+		TOKEN_LIT        = TOKEN_VAR        << 1,
+		TOKEN_EXPR       = TOKEN_LIT        << 1,
 		TOKEN_IF         = TOKEN_EXPR       << 1,
 		TOKEN_WHILE      = TOKEN_IF         << 1,
 		TOKEN_RET        = TOKEN_WHILE      << 1
@@ -127,11 +128,21 @@ struct Token_CallFn : public Token
 	~Token_CallFn( void );
 };
 
-struct Token_Val : public Token
+struct Token_Var : public Token
 {
-	mtlChars val;
+	mtlChars  var_name;
+	Token    *idx; // Token_Expr
+	Token    *mem; // Token_Var
 
-	Token_Val(Token *p_parent);
+	Token_Var(Token *p_parent);
+	~Token_Var( void );
+};
+
+struct Token_Lit : public Token
+{
+	mtlChars lit;
+
+	Token_Lit(Token *p_parent);
 };
 
 struct Token_Expr : public Token
@@ -194,7 +205,9 @@ private:
 	Token *ProcessError(const mtlChars &msg, const mtlChars &err, Token *parent);
 	Token *ProcessDecl(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const mtlChars &fn_name, Token *parent);
 	Token *ProcessFuncCall(const mtlChars &fn_name, const mtlChars &params, Token *parent);
-	Token *ProcessValue(const mtlChars &val, Token *parent);
+	Token *ProcessLiteral(const mtlChars &lit, Token *parent);
+	Token *ProcessVariable(const mtlChars &var, Token *parent);
+	Token *ProcessOperand(const mtlChars &val, Token *parent);
 	Token *ProcessSet(const mtlChars &lhs, const mtlChars &rhs, Token *parent);
 	Token *ProcessFuncDecl(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const mtlChars &fn_name, const mtlChars &params, Token *parent);
 	Token *ProcessOperation(const mtlChars &lhs, const mtlChars &op, const mtlChars &rhs, Token *parent);
