@@ -13,12 +13,16 @@ private:
 	mtlArray<char> m_buffer;
 	int            m_cond_depth;
 	int            m_depth;
+	int            m_errs;
+	mtlChars       m_bin_name;
 
 private:
 	void PrintTabs( void );
 	void Print(const mtlChars &ch);
 	void PrintNewline( void );
 	void PrintMask( void );
+	void PrintType(const mtlChars &type);
+	void OutputBinary(swsl::Binary &bin);
 
 protected:
 	void DispatchBody(const Token_Body *t);
@@ -32,7 +36,6 @@ protected:
 	void DispatchExpr(const Token_Expr *t);
 	void DispatchFile(const Token_File *t);
 	void DispatchIf(const Token_If *t);
-	void DispatchNull( void );
 	void DispatchRet(const Token_Ret *t);
 	void DispatchSet(const Token_Set *t);
 	void DispatchVar(const Token_Var *t);
@@ -40,7 +43,7 @@ protected:
 	void DispatchWhile(const Token_While *t);
 
 public:
-	void Compile(swsl::SyntaxTree *t, swsl::Binary &out_bin);
+	bool Compile(swsl::SyntaxTree *t, const mtlChars &bin_name, swsl::Binary &out_bin);
 };
 
 }

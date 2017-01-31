@@ -16,6 +16,7 @@
 #include "swsl_gfx.h"
 #include "swsl_aux.h"
 #include "swsl_astgen.h"
+#include "swsl_cppcompiler.h"
 
 // Things I should look into:
 // Buffers should allocate an extra register at the edges so that screen resolutions that are not multiples of SWSL_WIDTH render properly
@@ -661,6 +662,23 @@ int ASTTest( void )
 	return errs == 0 ? 0 : 1;
 }
 
+int CppCompiler2Test( void )
+{
+	swsl::SyntaxTreeGenerator gen;
+	std::cout << "Generating tree..." << std::flush;
+	swsl::SyntaxTree *t = gen.Generate("../swsl_samples/test.swsl");
+	std::cout << "done" << std::endl;
+	swsl::CppCompiler c;
+	swsl::Binary bin;
+	std::cout << "Compiling tree..." << std::flush;
+	if (!c.Compile(t, "wide", bin)) {
+		std::cout << "COMPILATION FAILED" << std::endl;
+		return 1;
+	}
+	std::cout << "done" << std::endl;
+	return 0;
+}
+
 int main(int, char**)
 {
 	OutputSIMDInfo();
@@ -670,5 +688,6 @@ int main(int, char**)
 	//return PathTest();
 	//return NewCompilerTest();
 	//return CppCompilerTest();
-	return ASTTest();
+	//return ASTTest();
+	return CppCompiler2Test();
 }

@@ -9,7 +9,7 @@ namespace swsl
 class TokenDispatcher
 {
 protected:
-	virtual void DispatchNull( void )                      = 0;
+	virtual void DispatchNull( void )                      {}
 	virtual void DispatchErr(const Token_Err*)             = 0;
 	virtual void DispatchEntry(const SyntaxTree*)          = 0;
 	virtual void DispatchDeclVar(const Token_DeclVar*)     = 0;

@@ -199,6 +199,8 @@ struct Token_Ret : public Token
 //	void RecursiveLoad(const mtlChars &entry_file);
 //};
 
+// TODO: Syntax tree generator must do all detect all coding errors
+
 class SyntaxTreeGenerator
 {
 private:
@@ -206,7 +208,7 @@ private:
 	Token *ProcessDecl(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const mtlChars &fn_name, Token *parent);
 	Token *ProcessFuncCall(const mtlChars &fn_name, const mtlChars &params, Token *parent);
 	Token *ProcessLiteral(const mtlChars &lit, Token *parent);
-	Token *ProcessVariable(const mtlChars &var, Token *parent);
+	Token *ProcessVariable(mtlSyntaxParser &var, Token *parent);
 	Token *ProcessOperand(const mtlChars &val, Token *parent);
 	Token *ProcessSet(const mtlChars &lhs, const mtlChars &rhs, Token *parent);
 	Token *ProcessFuncDecl(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const mtlChars &fn_name, const mtlChars &params, Token *parent);
