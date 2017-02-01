@@ -56,19 +56,18 @@ inline void set(wide_vec<wide_t, n> &l, const wide_vec<wide_t, n> &r, const mpl:
 	}
 }
 
-typedef wide_vec<mpl::wide_bool, 1>      wide_bool1;
 typedef wide_vec<mpl::wide_int, 1>       wide_int1;
 typedef wide_vec<mpl::wide_int, 2>       wide_int2;
 typedef wide_vec<mpl::wide_int, 3>       wide_int3;
 typedef wide_vec<mpl::wide_int, 4>       wide_int4;
-typedef wide_vec<mpl::wide_float, 1>     wide_float1;
-typedef wide_vec<mpl::wide_float, 2>     wide_float2;
-typedef wide_vec<mpl::wide_float, 3>     wide_float3;
-typedef wide_vec<mpl::wide_float, 4>     wide_float4;
 typedef wide_vec<mpl::wide_fixed<16>, 1> wide_fixed1;
 typedef wide_vec<mpl::wide_fixed<16>, 2> wide_fixed2;
 typedef wide_vec<mpl::wide_fixed<16>, 3> wide_fixed3;
 typedef wide_vec<mpl::wide_fixed<16>, 4> wide_fixed4;
+typedef wide_vec<mpl::wide_float, 1>     wide_float1;
+typedef wide_vec<mpl::wide_float, 2>     wide_float2;
+typedef wide_vec<mpl::wide_float, 3>     wide_float3;
+typedef wide_vec<mpl::wide_float, 4>     wide_float4;
 
 template < typename wide_t, int n >
 swsl::wide_vec<wide_t, n> wide_max(const swsl::wide_vec<wide_t, n> &a, const swsl::wide_vec<wide_t, n> &b, const mpl::wide_bool&)

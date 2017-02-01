@@ -7,6 +7,9 @@
 #define decl_ref 3
 #define decl_nam 4
 
+#define builtin_types { "void", "bool", "int", "int2", "int3", "int4", "float", "float2", "float3", "float4" }
+#define keywords      { "const", "mutable", "if", "else", "while", "return" }
+
 swsl::SyntaxTree::SyntaxTree( void ) :
 	Token(NULL, TOKEN_START), file(NULL)
 {}
@@ -19,9 +22,19 @@ swsl::Token_Err::Token_Err(swsl::Token *p_parent) :
 	Token(p_parent, TOKEN_ERR)
 {}
 
-swsl::Token_DeclVar::Token_DeclVar(swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_DECL_VAR), arr_size(NULL)
+swsl::Token_Word::Token_Word(Token *p_parent) :
+	Token(p_parent, TOKEN_WORD)
 {}
+
+swsl::Token_DeclVar::Token_DeclVar(swsl::Token *p_parent) :
+	Token(p_parent, TOKEN_DECL_VAR), type_name(NULL), var_name(NULL), arr_size(NULL)
+{}
+swsl::Token_DeclVar::~Token_DeclVar( void )
+{
+	delete type_name;
+	delete var_name;
+	delete arr_size;
+}
 
 swsl::Token_DeclFn::Token_DeclFn(swsl::Token *p_parent) :
 	Token(p_parent, TOKEN_DECL_FN), ret(NULL)
@@ -46,7 +59,7 @@ swsl::Token_DefFn::~Token_DefFn( void )
 }
 
 swsl::Token_DefStruct::Token_DefStruct(swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_DEF_STRUCT)
+	Token(p_parent, TOKEN_DEF_STRUCT), struct_name(NULL)
 {}
 swsl::Token_DefStruct::~Token_DefStruct( void )
 {
@@ -87,10 +100,11 @@ swsl::Token_Set::~Token_Set( void )
 }
 
 swsl::Token_CallFn::Token_CallFn(swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_CALL_FN)
+	Token(p_parent, TOKEN_CALL_FN), fn_name(NULL)
 {}
 swsl::Token_CallFn::~Token_CallFn( void )
 {
+	delete fn_name;
 	mtlItem<Token*> *i = input.GetFirst();
 	while (i != NULL) {
 		delete i->GetItem();
@@ -99,18 +113,23 @@ swsl::Token_CallFn::~Token_CallFn( void )
 }
 
 swsl::Token_Var::Token_Var(swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_VAR), idx(NULL), mem(NULL)
+	Token(p_parent, TOKEN_VAR), var_name(NULL), idx(NULL), mem(NULL)
 {}
 
 swsl::Token_Var::~Token_Var( void )
 {
+	delete var_name;
 	delete idx;
 	delete mem;
 }
 
 swsl::Token_Lit::Token_Lit(swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_LIT)
+	Token(p_parent, TOKEN_LIT), lit(NULL)
 {}
+swsl::Token_Lit::~Token_Lit( void )
+{
+	delete lit;
+}
 
 swsl::Token_Expr::Token_Expr(swsl::Token *p_parent) :
 	Token(p_parent, TOKEN_EXPR), lhs(NULL), rhs(NULL)
@@ -157,14 +176,46 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessError(const mtlChars &msg, const 
 	return token;
 }
 
+swsl::Token *swsl::SyntaxTreeGenerator::ProcessFindVar(const mtlChars &name, Token *parent)
+{
+	if (FindVar(name, parent)) {
+		Token_Word *token = new Token_Word(parent);
+
+		token->word = name;
+		return token;
+	}
+	return ProcessError("Undeclared", name, parent);
+}
+
+swsl::Token *swsl::SyntaxTreeGenerator::ProcessNewName(const mtlChars &name, Token *parent)
+{
+	if (VerifyName(name) && NewName(name, parent)) {
+		Token_Word *token = new Token_Word(parent);
+
+		token->word = name;
+		return token;
+	}
+	return ProcessError("Collision", name, parent);
+}
+
+swsl::Token *swsl::SyntaxTreeGenerator::ProcessFindType(const mtlChars &name, Token *parent)
+{
+	if (FindType(name, parent)) {
+		Token_Word *token = new Token_Word(parent);
+
+		token->word = name;
+		return token;
+	}
+	return ProcessError("Undefined", name, parent);
+}
+
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessDecl(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const mtlChars &fn_name, swsl::Token *parent)
 {
 	Token_DeclVar *token = new Token_DeclVar(parent);
 
-	token->rw = rw;
-	token->type_name = type_name;
-	token->ref = ref;
-	token->var_name = fn_name;
+	token->type_name = ProcessFindType(type_name, token);
+	token->var_name = ProcessNewName(fn_name, token);
+	token->read_write = ProcessReadWrite(rw, ref, token);
 	return token;
 }
 
@@ -172,7 +223,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessFuncCall(const mtlChars &fn_name,
 {
 	Token_CallFn *token = new Token_CallFn(parent);
 
-	token->fn_name = fn_name;
+	token->fn_name = ProcessNewName(fn_name, parent);
 	mtlArray<mtlChars> m;
 	mtlSyntaxParser p;
 	p.SetBuffer(params);
@@ -205,13 +256,13 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessVariable(mtlSyntaxParser &var, sw
 	case 1:
 		token->mem = ProcessVariable(var, token);
 	case 0:
-		token->var_name = m[0];
+		token->var_name = ProcessFindVar(m[0], token);
 		break;
 
 	case 3:
 		token->mem = ProcessVariable(var, token);
 	case 2:
-		token->var_name = m[0];
+		token->var_name = ProcessFindVar(m[0], token);
 		token->idx = ProcessExpression(m[0], token);
 		break;
 

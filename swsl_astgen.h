@@ -13,7 +13,8 @@ struct Token
 	{
 		TOKEN_ERR        = 0,
 		TOKEN_START      = 1,
-		TOKEN_DECL_VAR   = TOKEN_START      << 1,
+		TOKEN_WORD       = TOKEN_START      << 1,
+		TOKEN_DECL_VAR   = TOKEN_WORD       << 1,
 		TOKEN_DECL_FN    = TOKEN_DECL_VAR   << 1,
 		TOKEN_DEF_FN     = TOKEN_DECL_FN    << 1,
 		TOKEN_DEF_STRUCT = TOKEN_DEF_FN     << 1,
@@ -29,8 +30,8 @@ struct Token
 		TOKEN_RET        = TOKEN_WHILE      << 1
 	};
 
-	const Token     * const parent;
-	const TokenType         type;
+	const Token     *const parent;
+	const TokenType        type;
 
 	Token(Token *p_parent, TokenType p_type) :
 		parent(p_parent), type(p_type)
@@ -54,15 +55,28 @@ struct Token_Err : public Token
 	Token_Err(Token *p_parent);
 };
 
+struct Token_Word
+{
+	mtlChars word;
+
+	Token_Word(Token *p_parent);
+};
+
 struct Token_DeclVar : public Token
 {
-	mtlChars  rw;
-	mtlChars  type_name;
-	mtlChars  ref;
-	mtlChars  var_name;
-	Token    *arr_size; // Token_Expr
+	Token *type_name; // Token_Word
+	Token *var_name;  // Token_Word
+	Token *arr_size;  // Token_Expr
+	enum ReadWrite
+	{
+		RW_MUTABLE = 0,
+		RW_CONST   = 1,
+		RW_AUTO    = 0,
+		RW_REF     = 2
+	} read_write;
 
 	Token_DeclVar(Token *p_parent);
+	~TokenDeclVar( void );
 };
 
 struct Token_DeclFn : public Token
@@ -76,7 +90,7 @@ struct Token_DeclFn : public Token
 
 struct Token_DefFn : public Token
 {
-	Token *sig; // Token_DeclFn
+	Token *sig;  // Token_DeclFn
 	Token *body; // Token_Body
 
 	Token_DefFn(Token *p_parent);
@@ -85,8 +99,8 @@ struct Token_DefFn : public Token
 
 struct Token_DefStruct : public Token
 {
-	mtlChars        struct_name;
-	mtlList<Token*> decls;
+	Token           *struct_name; // Token_Word
+	mtlList<Token*>  decls;       // Token_DeclVar
 
 	Token_DefStruct(Token *p_parent);
 	~Token_DefStruct( void );
@@ -121,8 +135,8 @@ struct Token_Set : public Token
 
 struct Token_CallFn : public Token
 {
-	mtlChars        fn_name;
-	mtlList<Token*> input; // Token_Expr
+	Token           *fn_name; // Token_Word
+	mtlList<Token*>  input;   // Token_Expr
 
 	Token_CallFn(Token *p_parent);
 	~Token_CallFn( void );
@@ -130,9 +144,9 @@ struct Token_CallFn : public Token
 
 struct Token_Var : public Token
 {
-	mtlChars  var_name;
-	Token    *idx; // Token_Expr
-	Token    *mem; // Token_Var
+	Token *var_name; // Token_Word
+	Token *idx;      // Token_Expr
+	Token *mem;      // Token_Var
 
 	Token_Var(Token *p_parent);
 	~Token_Var( void );
@@ -140,9 +154,10 @@ struct Token_Var : public Token
 
 struct Token_Lit : public Token
 {
-	mtlChars lit;
+	Token *lit; // Token_Word
 
 	Token_Lit(Token *p_parent);
+	~Token_Lit( void );
 };
 
 struct Token_Expr : public Token
@@ -205,6 +220,9 @@ class SyntaxTreeGenerator
 {
 private:
 	Token *ProcessError(const mtlChars &msg, const mtlChars &err, Token *parent);
+	Token *ProcessFindVar(const mtlChars &name, Token *parent);
+	Token *ProcessNewName(const mtlChars &name, Token *parent);
+	Token *ProcessFindType(const mtlChars &name, Token *parent);
 	Token *ProcessDecl(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const mtlChars &fn_name, Token *parent);
 	Token *ProcessFuncCall(const mtlChars &fn_name, const mtlChars &params, Token *parent);
 	Token *ProcessLiteral(const mtlChars &lit, Token *parent);
