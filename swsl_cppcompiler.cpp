@@ -60,7 +60,9 @@ void swsl::CppCompiler::PrintType(const mtlChars &type)
 	} else if (type.Compare("float4", true)) {
 		Print("swsl::wide_float4");
 	} else {
-		// TODO: print something here
+		Print(m_bin_name);
+		Print("_");
+		Print(type);
 	}
 }
 
