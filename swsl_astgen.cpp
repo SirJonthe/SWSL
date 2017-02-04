@@ -12,23 +12,12 @@
 #define decl_nam 3
 
 #define built_in_n 10
-#define keywords_n 6
+#define keywords_n 8
 static const mtlChars built_in_types[built_in_n] = { "void", "bool", "int", "int2", "int3", "int4", "float", "float2", "float3", "float4" };
-static const mtlChars keywords[keywords_n] = { "const", "mutable", "if", "else", "while", "return" };
-
-bool IsReserved(const mtlChars &name)
-{
-	for (int i = 0; i < built_in_n; ++i) {
-		if (name.Compare(built_in_types[i], true)) { return true; }
-	}
-	for (int i = 0; i < keywords_n; ++i) {
-		if (name.Compare(keywords[i], true)) { return true; }
-	}
-	return false;
-}
+static const mtlChars keywords[keywords_n] = { "const", "mutable", "if", "else", "while", "return", "true", "false" };
 
 swsl::SyntaxTree::SyntaxTree( void ) :
-	Token(NULL, TOKEN_START), file(NULL)
+	Token(NULL, TOKEN_START), file(NULL), errs(0)
 {}
 swsl::SyntaxTree::~SyntaxTree( void )
 {
@@ -39,23 +28,11 @@ swsl::Token_Err::Token_Err(const swsl::Token *p_parent) :
 	Token(p_parent, TOKEN_ERR)
 {}
 
-swsl::Token_Flag::Token_Flag(const swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_FLAG), flag(false)
-{}
-
-swsl::Token_Word::Token_Word(const swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_WORD)
-{}
-
 swsl::Token_DeclVar::Token_DeclVar(const swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_DECL_VAR), is_const(NULL), type_name(NULL), is_ref(NULL), var_name(NULL), arr_size(NULL)
+	Token(p_parent, TOKEN_DECL_VAR), R_type_def(NULL), arr_size(NULL)
 {}
 swsl::Token_DeclVar::~Token_DeclVar( void )
 {
-	delete is_const;
-	delete type_name;
-	delete is_ref;
-	delete var_name;
 	delete arr_size;
 }
 
@@ -86,7 +63,6 @@ swsl::Token_DefStruct::Token_DefStruct(const swsl::Token *p_parent) :
 {}
 swsl::Token_DefStruct::~Token_DefStruct( void )
 {
-	delete struct_name;
 	delete struct_body;
 }
 
@@ -124,7 +100,6 @@ swsl::Token_CallFn::Token_CallFn(const swsl::Token *p_parent) :
 {}
 swsl::Token_CallFn::~Token_CallFn( void )
 {
-	delete fn_name;
 	mtlItem<Token*> *i = input.GetFirst();
 	while (i != NULL) {
 		delete i->GetItem();
@@ -133,12 +108,11 @@ swsl::Token_CallFn::~Token_CallFn( void )
 }
 
 swsl::Token_Var::Token_Var(const swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_VAR), var_decl(NULL), var_name(NULL), idx(NULL), mem(NULL)
+	Token(p_parent, TOKEN_VAR), R_var_decl(NULL), var_name(NULL), idx(NULL), mem(NULL)
 {}
 
 swsl::Token_Var::~Token_Var( void )
 {
-	delete var_name;
 	delete idx;
 	delete mem;
 }
@@ -187,13 +161,77 @@ swsl::Token_Ret::~Token_Ret( void )
 	delete expr;
 }
 
-swsl::Token *swsl::SyntaxTreeGenerator::ProcessError(const mtlChars &msg, const mtlChars &err, const swsl::Token *parent)
+bool swsl::SyntaxTreeGenerator::IsReserved(const mtlChars &name)
 {
-	Token_Err *token = new Token_Err(parent);
+	for (int i = 0; i < built_in_n; ++i) {
+		if (name.Compare(built_in_types[i], true)) { return true; }
+	}
+	for (int i = 0; i < keywords_n; ++i) {
+		if (name.Compare(keywords[i], true)) { return true; }
+	}
+	return false;
+}
 
-	token->err = err;
-	token->msg = msg;
-	return token;
+bool swsl::SyntaxTreeGenerator::VerifyName(const mtlChars &name)
+{
+	if (name.GetSize() > 0 && !IsReserved(name)) {
+		for (int i = 1; i < name.GetSize(); ++i) {
+			if (!mtlChars::IsAlphanumeric(name[i]) && name[i] != '_') { return false; }
+		}
+		return mtlChars::IsAlpha(name[0]) || name[0] == '_';
+	}
+	return false;
+}
+
+bool swsl::SyntaxTreeGenerator::CmpVarDeclName(const mtlChars &name, const swsl::Token_DeclVar *tok)
+{
+	return tok != NULL && name.Compare(tok->var_name, true);
+}
+
+bool swsl::SyntaxTreeGenerator::CmpFnDeclName(const mtlChars &name, const swsl::Token_DeclFn *tok)
+{
+	return tok != NULL && CmpVarDeclName(name, dynamic_cast<Token_DeclVar*>(tok->ret));
+}
+
+bool swsl::SyntaxTreeGenerator::CmpFnDefName(const mtlChars &name, const swsl::Token_DefFn *tok)
+{
+	return tok != NULL && CmpFnDeclName(name, dynamic_cast<Token_DeclFn*>(tok->sig));
+}
+
+bool swsl::SyntaxTreeGenerator::CmpStructDefName(const mtlChars &name, const swsl::Token_DefStruct *tok)
+{
+	return tok != NULL && name.Compare(tok->struct_name, true);
+}
+
+bool swsl::SyntaxTreeGenerator::NewName(const mtlChars &name, const swsl::Token *parent)
+{
+	while (parent != NULL && parent->type != Token::TOKEN_BODY) {
+		parent = parent->parent;
+	}
+
+	if (parent != NULL && parent->type == Token::TOKEN_BODY) {
+		const mtlItem<Token*> *i = dynamic_cast<const Token_Body*>(parent)->tokens.GetFirst();
+		while (i != NULL) {
+			const Token *t = i->GetItem();
+			switch (t->type) {
+			case Token::TOKEN_DECL_FN:
+				if (CmpFnDeclName(name, dynamic_cast<const Token_DeclFn*>(t))) { return false; }
+				break;
+			case Token::TOKEN_DECL_VAR:
+				if (CmpVarDeclName(name, dynamic_cast<const Token_DeclVar*>(t))) { return false; }
+				break;
+			case Token::TOKEN_DEF_FN:
+				if (CmpFnDefName(name, dynamic_cast<const Token_DefFn*>(t))) { return false; }
+				break;
+			case Token::TOKEN_DEF_STRUCT:
+				if (CmpStructDefName(name, dynamic_cast<const Token_DefStruct*>(t))) { return false; }
+				break;
+			default: break;
+			}
+			i = i->GetNext();
+		}
+	}
+	return true;
 }
 
 bool swsl::SyntaxTreeGenerator::FindVar(const mtlChars &name, const swsl::Token *parent)
@@ -207,8 +245,7 @@ bool swsl::SyntaxTreeGenerator::FindVar(const mtlChars &name, const swsl::Token 
 				while (decl_iter != NULL) {
 					if (decl_iter->GetItem()->type == Token::TOKEN_DECL_VAR) {
 						Token_DeclVar *decl = dynamic_cast<Token_DeclVar*>(decl_iter->GetItem());
-						Token_Word    *word = decl != NULL ? dynamic_cast<Token_Word*>(decl->var_name) : NULL;
-						if (word != NULL && name.Compare(word->word, true)) { return true; }
+						if (decl != NULL && name.Compare(decl->var_name, true)) { return true; }
 					}
 					decl_iter = decl_iter->GetNext();
 				}
@@ -219,6 +256,23 @@ bool swsl::SyntaxTreeGenerator::FindVar(const mtlChars &name, const swsl::Token 
 		}
 	}
 	return false;
+}
+
+bool swsl::SyntaxTreeGenerator::FindType(const mtlChars &name, const swsl::Token *parent)
+{
+	if (parent != NULL) {
+	}
+
+}
+
+swsl::Token *swsl::SyntaxTreeGenerator::ProcessError(const mtlChars &msg, const mtlChars &err, const swsl::Token *parent)
+{
+	Token_Err *token = new Token_Err(parent);
+
+	++root->errs;
+	token->err = err;
+	token->msg = msg;
+	return token;
 }
 
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessFindVar(const mtlChars &name, const swsl::Token *parent)
@@ -232,21 +286,6 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessFindVar(const mtlChars &name, con
 	return ProcessError("Undeclared", name, parent);
 }
 
-bool swsl::SyntaxTreeGenerator::VerifyName(const mtlChars &name)
-{
-	if (name.GetSize() > 0) {
-		for (int i = 1; i < name.GetSize(); ++i) {
-			if (!mtlChars::IsAlphanumeric(name[i]) && name[i] != '_') { return false; }
-		}
-		return mtlChars::IsAlpha(name[0]) || name[0] == '_';
-	}
-	return false;
-}
-
-bool swsl::SyntaxTreeGenerator::NewName(const mtlChars &name, const swsl::Token *parent)
-{
-}
-
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessNewName(const mtlChars &name, const swsl::Token *parent)
 {
 	if (VerifyName(name) && NewName(name, parent)) {
@@ -255,11 +294,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessNewName(const mtlChars &name, con
 		token->word = name;
 		return token;
 	}
-	return ProcessError("Collision", name, parent);
-}
-
-bool swsl::SyntaxTreeGenerator::FindType(const mtlChars &name, const swsl::Token *parent)
-{
+	return ProcessError("Naming", name, parent);
 }
 
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessFindType(const mtlChars &name, const swsl::Token *parent)
@@ -273,46 +308,13 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessFindType(const mtlChars &name, co
 	return ProcessError("Undefined", name, parent);
 }
 
-swsl::Token *swsl::SyntaxTreeGenerator::ProcessConst(const mtlChars &mut, const swsl::Token *parent)
-{
-	if (mut.Compare("const", true) || mut.GetSize() == 0) {
-		Token_Flag *token = new Token_Flag(parent);
-
-		token->flag = true;
-		return token;
-	} else if (mut.Compare("mutable", true)) {
-		Token_Flag *token = new Token_Flag(parent);
-
-		token->flag = false;
-		return token;
-	}
-
-	return ProcessError("Qualifier", mut, parent);
-}
-
-swsl::Token *swsl::SyntaxTreeGenerator::ProcessRef(const mtlChars &ref, const swsl::Token *parent)
-{
-	if (ref.Compare("&")) {
-		Token_Flag *token = new Token_Flag(parent);
-
-		token->flag = true;
-		return token;
-	} else if (ref.GetSize() == 0) {
-		Token_Flag *token = new Token_Flag(parent);
-
-		token->flag = false;
-		return token;
-	}
-	return ProcessError("Ref", ref, parent);
-}
-
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessDecl(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const mtlChars &fn_name, const swsl::Token *parent)
 {
 	Token_DeclVar *token = new Token_DeclVar(parent);
 
-	token->is_const = ProcessConst(rw, token);
+	token->is_const = rw.Compare("mutable", true) ? false : true;
 	token->type_name = ProcessFindType(type_name, token);
-	token->is_ref = ProcessRef(ref, token);
+	token->is_ref = (ref.GetSize() == 1 && ref[0] == '&');
 	token->var_name = ProcessNewName(fn_name, token);
 	return token;
 }
@@ -337,32 +339,20 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessFuncCall(const mtlChars &fn_name,
 	return token;
 }
 
-swsl::Token *swsl::SyntaxTreeGenerator::ProcessWord(const mtlChars &word, const swsl::Token *parent)
-{
-	Token_Word *token = new Token_Word(parent);
-
-	token->word = word;
-	return token;
-}
-
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessLiteral(const mtlChars &lit, const swsl::Token *parent)
 {
 	Token_Lit *token = new Token_Lit(parent);
 
-	mtlSyntaxParser p;
-	p.SetBuffer(lit);
+	token->lit = lit;
 	if (lit.IsInt()) {
-		token->lit = ProcessWord(lit, parent);
-		token->lit_type = Token_Lit::INT;
+		token->lit = lit;
+		token->lit_type = Token_Lit::TYPE_INT;
 	} else if (lit.IsFloat()) {
-		token->lit = ProcessWord(lit, parent);
-		token->lit_type = Token_Lit::FLOAT;
+		token->lit_type = Token_Lit::TYPE_FLOAT;
 	} else if (lit.Compare("true", true) || lit.Compare("false", true)) {
-		token->lit = ProcessWord(lit, parent);
-		token->lit_type = Token_Lit::BOOL;
+		token->lit_type = Token_Lit::TYPE_BOOL;
 	} else {
-		token->lit = ProcessError("Literal", lit, token);
-		token->lit_type = Token_Lit::INT;
+		token->lit_type = Token_Lit::TYPE_ERR;
 	}
 	return token;
 }
@@ -691,8 +681,8 @@ swsl::Token *swsl::SyntaxTreeGenerator::LoadFile(const mtlChars &file_name, cons
 
 swsl::SyntaxTree *swsl::SyntaxTreeGenerator::Generate(const mtlChars &entry_file)
 {
-	SyntaxTree *tree = new SyntaxTree();
+	root = new SyntaxTree();
 
-	tree->file = LoadFile(entry_file, tree);
-	return tree;
+	root->file = LoadFile(entry_file, root);
+	return root;
 }

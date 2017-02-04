@@ -41,6 +41,7 @@ protected:
 	void DispatchVar(const Token_Var *t);
 	void DispatchLit(const Token_Lit *);
 	void DispatchWhile(const Token_While *t);
+	void DispatchWord(const Token_Word *t);
 
 public:
 	bool Compile(swsl::SyntaxTree *t, const mtlChars &bin_name, swsl::Binary &out_bin);

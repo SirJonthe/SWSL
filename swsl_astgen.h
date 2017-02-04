@@ -13,9 +13,7 @@ struct Token
 	{
 		TOKEN_ERR        = 0,
 		TOKEN_START      = 1,
-		TOKEN_FLAG       = TOKEN_START      << 1,
-		TOKEN_WORD       = TOKEN_FLAG       << 1,
-		TOKEN_DECL_VAR   = TOKEN_WORD       << 1,
+		TOKEN_DECL_VAR   = TOKEN_START      << 1,
 		TOKEN_DECL_FN    = TOKEN_DECL_VAR   << 1,
 		TOKEN_DEF_FN     = TOKEN_DECL_FN    << 1,
 		TOKEN_DEF_STRUCT = TOKEN_DEF_FN     << 1,
@@ -43,6 +41,7 @@ struct Token
 struct SyntaxTree : public Token
 {
 	Token *file; // Token_File
+	int    errs;
 
 	SyntaxTree( void );
 	~SyntaxTree( void );
@@ -56,13 +55,6 @@ struct Token_Err : public Token
 	Token_Err(const Token *p_parent);
 };
 
-struct Token_Flag : public Token
-{
-	bool flag;
-
-	Token_Flag(const Token *p_parent);
-};
-
 struct Token_Word : public Token
 {
 	mtlChars word;
@@ -72,11 +64,12 @@ struct Token_Word : public Token
 
 struct Token_DeclVar : public Token
 {
-	Token *is_const;  // Token_Flag
-	Token *type_name; // Token_Word
-	Token *is_ref;    // Token_Flag
-	Token *var_name;  // Token_Word
-	Token *arr_size;  // Token_Expr
+	Token    *R_type_def; // Token_DefStruct - DO NOT TRAVERSE OR DELETE THIS (CYCLICAL)
+	Token    *arr_size;   // Token_Expr
+	mtlChars  type_name;  // Token_Word
+	mtlChars  var_name;   // Token_Word
+	bool      is_ref;
+	bool      is_const;
 
 	Token_DeclVar(const Token *p_parent);
 	~Token_DeclVar( void );
@@ -102,8 +95,8 @@ struct Token_DefFn : public Token
 
 struct Token_DefStruct : public Token
 {
-	Token *struct_name; // Token_Word
-	Token *struct_body; // Token_Body
+	mtlChars  struct_name; // Token_Word
+	Token    *struct_body; // Token_Body
 
 	Token_DefStruct(const Token *p_parent);
 	~Token_DefStruct( void );
@@ -138,7 +131,7 @@ struct Token_Set : public Token
 
 struct Token_CallFn : public Token
 {
-	Token           *fn_name; // Token_Word
+	mtlChars         fn_name; // Token_Word
 	mtlList<Token*>  input;   // Token_Expr
 
 	Token_CallFn(const Token *p_parent);
@@ -147,10 +140,10 @@ struct Token_CallFn : public Token
 
 struct Token_Var : public Token
 {
-	Token *var_decl;  // Token_DeclVar - DO NOT TRAVERSE OR DELETE THIS (CYCLICAL)
-	Token *var_name;  // Token_Word
-	Token *idx;       // Token_Expr
-	Token *mem;       // Token_Var
+	Token    *R_var_decl; // Token_DeclVar - DO NOT TRAVERSE OR DELETE THIS (CYCLICAL)
+	Token    *idx;        // Token_Expr
+	Token    *mem;        // Token_Var
+	mtlChars  var_name;   // Token_Word
 
 	Token_Var(const Token *p_parent);
 	~Token_Var( void );
@@ -161,9 +154,10 @@ struct Token_Lit : public Token
 	Token *lit; // Token_Word
 	enum LitType
 	{
-		BOOL,
-		INT,
-		FLOAT
+		TYPE_ERR,
+		TYPE_BOOL,
+		TYPE_INT,
+		TYPE_FLOAT
 	} lit_type;
 
 	Token_Lit(const Token *p_parent);
@@ -229,18 +223,26 @@ struct Token_Ret : public Token
 class SyntaxTreeGenerator
 {
 private:
-	Token *ProcessError(const mtlChars &msg, const mtlChars &err, const Token *parent);
-	bool   FindVar(const mtlChars &name, const Token *parent);
-	Token *ProcessFindVar(const mtlChars &name, const Token *parent);
+	SyntaxTree *root;
+
+private:
+	bool   IsReserved(const mtlChars &name);
 	bool   VerifyName(const mtlChars &name);
+	bool   CmpVarDeclName(const mtlChars &name, const Token_DeclVar *tok);
+	bool   CmpFnDeclName(const mtlChars &name, const Token_DeclFn *tok);
+	bool   CmpFnDefName(const mtlChars &name, const Token_DefFn *tok);
+	bool   CmpStructDefName(const mtlChars &name, const Token_DefStruct *tok);
 	bool   NewName(const mtlChars &name, const Token *parent);
+	bool   FindVar(const mtlChars &name, const Token *parent); // RETURN TOKEN
+	bool   FindType(const mtlChars &name, const Token *parent); // RETURN TOKEN
+
+private:
+	Token *ProcessError(const mtlChars &msg, const mtlChars &err, const Token *parent);
+	Token *ProcessFindVar(const mtlChars &name, const Token *parent);
 	Token *ProcessNewName(const mtlChars &name, const Token *parent);
 	Token *ProcessFindType(const mtlChars &name, const Token *parent);
-	Token *ProcessConst(const mtlChars &mut, const Token *parent);
-	Token *ProcessRef(const mtlChars &ref, const Token *parent);
 	Token *ProcessDecl(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const mtlChars &fn_name, const Token *parent);
 	Token *ProcessFuncCall(const mtlChars &fn_name, const mtlChars &params, const Token *parent);
-	Token *ProcessWord(const mtlChars &word, const Token *parent);
 	Token *ProcessLiteral(const mtlChars &lit, const Token *parent);
 	Token *ProcessVariable(mtlSyntaxParser &var, const Token *parent);
 	Token *ProcessOperand(const mtlChars &val, const Token *parent);

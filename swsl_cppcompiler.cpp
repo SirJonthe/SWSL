@@ -88,7 +88,7 @@ void swsl::CppCompiler::DispatchBody(const Token_Body *t)
 void swsl::CppCompiler::DispatchCallFn(const Token_CallFn *t)
 {
 	PrintTabs();
-	Print(t->fn_name);
+	Dispatch(t->fn_name);
 	Print("(");
 	const mtlItem<swsl::Token*> *i = t->input.GetFirst();
 	while (i != NULL) {
@@ -119,13 +119,16 @@ void swsl::CppCompiler::DispatchDeclFn(const Token_DeclFn *t)
 void swsl::CppCompiler::DispatchDeclVar(const Token_DeclVar *t)
 {
 	PrintTabs();
-	if (t->rw.GetSize() > 0) {
-		Print(t->rw);
-		Print(" ");
+	if (t->is_const) {
+		Print("const ");
+	} else {
+		Print("mutable ");
 	}
 	PrintType(t->type_name);
 	Print(" ");
-	Print(t->ref);
+	if (t->is_ref) {
+		Print("&");
+	}
 	if (t->arr_size != NULL) {
 		Print("[");
 		Dispatch(t->arr_size);
@@ -145,12 +148,12 @@ void swsl::CppCompiler::DispatchDefFn(const Token_DefFn *t)
 void swsl::CppCompiler::DispatchDefStruct(const Token_DefStruct *t)
 {
 	Print("struct ");
-	Print(t->struct_name);
+	Dispatch(t->struct_name);
 	Print("{");
 
 	++m_depth;
 
-	Dispatch(t->decls);
+	Dispatch(t->struct_body);
 
 	--m_depth;
 
@@ -255,7 +258,7 @@ void swsl::CppCompiler::DispatchSet(const Token_Set *t)
 
 void swsl::CppCompiler::DispatchVar(const Token_Var *t)
 {
-	Print(t->var_name);
+	Dispatch(t->var_name);
 	if (t->idx != NULL) {
 		Print("[");
 		Dispatch(t->idx);
@@ -269,13 +272,7 @@ void swsl::CppCompiler::DispatchVar(const Token_Var *t)
 
 void swsl::CppCompiler::DispatchLit(const Token_Lit *t)
 {
-	if (t->lit.Compare("true", true)) {
-		Print("MPL_TRUE");
-	} else if (t->lit.Compare("false", true)) {
-		Print("MPL_FALSE");
-	} else {
-		Print(t->lit);
-	}
+	Dispatch(t->lit);
 }
 
 void swsl::CppCompiler::DispatchWhile(const Token_While *t)
@@ -290,6 +287,17 @@ void swsl::CppCompiler::DispatchWhile(const Token_While *t)
 	Dispatch(t->body);
 
 	--m_cond_depth;
+}
+
+void swsl::CppCompiler::DispatchWord(const Token_Word *t)
+{
+	if (t->word.Compare("true", true)) {
+		Print("MPL_TRUE");
+	} else if (t->word.Compare("false", true)) {
+		Print("MPL_FALSE");
+	} else {
+		Print(t->word);
+	}
 }
 
 bool swsl::CppCompiler::Compile(swsl::SyntaxTree *t, const mtlChars &bin_name, swsl::Binary &out_bin)
