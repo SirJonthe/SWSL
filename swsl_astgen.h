@@ -151,17 +151,15 @@ struct Token_Var : public Token
 
 struct Token_Lit : public Token
 {
-	Token *lit; // Token_Word
+	mtlChars lit;
 	enum LitType
 	{
-		TYPE_ERR,
 		TYPE_BOOL,
 		TYPE_INT,
 		TYPE_FLOAT
 	} lit_type;
 
 	Token_Lit(const Token *p_parent);
-	~Token_Lit( void );
 };
 
 struct Token_Expr : public Token
@@ -239,7 +237,6 @@ private:
 private:
 	Token *ProcessError(const mtlChars &msg, const mtlChars &err, const Token *parent);
 	Token *ProcessFindVar(const mtlChars &name, const Token *parent);
-	Token *ProcessNewName(const mtlChars &name, const Token *parent);
 	Token *ProcessFindType(const mtlChars &name, const Token *parent);
 	Token *ProcessDecl(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const mtlChars &fn_name, const Token *parent);
 	Token *ProcessFuncCall(const mtlChars &fn_name, const mtlChars &params, const Token *parent);

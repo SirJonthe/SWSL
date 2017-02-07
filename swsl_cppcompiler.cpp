@@ -88,7 +88,7 @@ void swsl::CppCompiler::DispatchBody(const Token_Body *t)
 void swsl::CppCompiler::DispatchCallFn(const Token_CallFn *t)
 {
 	PrintTabs();
-	Dispatch(t->fn_name);
+	Print(t->fn_name);
 	Print("(");
 	const mtlItem<swsl::Token*> *i = t->input.GetFirst();
 	while (i != NULL) {
@@ -148,7 +148,7 @@ void swsl::CppCompiler::DispatchDefFn(const Token_DefFn *t)
 void swsl::CppCompiler::DispatchDefStruct(const Token_DefStruct *t)
 {
 	Print("struct ");
-	Dispatch(t->struct_name);
+	Print(t->struct_name);
 	Print("{");
 
 	++m_depth;
@@ -258,7 +258,7 @@ void swsl::CppCompiler::DispatchSet(const Token_Set *t)
 
 void swsl::CppCompiler::DispatchVar(const Token_Var *t)
 {
-	Dispatch(t->var_name);
+	Print(t->var_name);
 	if (t->idx != NULL) {
 		Print("[");
 		Dispatch(t->idx);
@@ -272,7 +272,18 @@ void swsl::CppCompiler::DispatchVar(const Token_Var *t)
 
 void swsl::CppCompiler::DispatchLit(const Token_Lit *t)
 {
-	Dispatch(t->lit);
+	if (t->lit_type == Token_Lit::TYPE_BOOL) {
+		if (t->lit.Compare("false", true)) {
+			Print("MPL_FALSE");
+		} else {
+			Print("MPL_TRUE");
+		}
+	} else {
+		Print(t->lit);
+		if (t->lit_type == Token_Lit::TYPE_FLOAT) {
+			Print("f");
+		}
+	}
 }
 
 void swsl::CppCompiler::DispatchWhile(const Token_While *t)
@@ -287,17 +298,6 @@ void swsl::CppCompiler::DispatchWhile(const Token_While *t)
 	Dispatch(t->body);
 
 	--m_cond_depth;
-}
-
-void swsl::CppCompiler::DispatchWord(const Token_Word *t)
-{
-	if (t->word.Compare("true", true)) {
-		Print("MPL_TRUE");
-	} else if (t->word.Compare("false", true)) {
-		Print("MPL_FALSE");
-	} else {
-		Print(t->word);
-	}
 }
 
 bool swsl::CppCompiler::Compile(swsl::SyntaxTree *t, const mtlChars &bin_name, swsl::Binary &out_bin)
