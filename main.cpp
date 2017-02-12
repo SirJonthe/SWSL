@@ -498,11 +498,19 @@ int CppCompiler2Test( void )
 	std::cout << "done" << std::endl;
 	swsl::CppCompiler c;
 	swsl::Binary bin;
-	std::cout << "Compiling tree..." << std::flush;
+	std::cout << "Compiling tree..." << std::endl;
 	if (!c.Compile(t, "wide", bin)) {
-		std::cout << "COMPILATION FAILED" << std::endl;
+		std::cout << "failed" << std::endl;
 		return 1;
 	}
+	std::cout << "done" << std::endl;
+	std::cout << "Writing output..." << std::flush;
+	std::ofstream fout("../swsl_samples/out.h", std::ios::binary);
+	if (!fout.is_open()) {
+		std::cout << "failed" << std::endl;
+		return 1;
+	}
+	fout.write(bin.GetChars(), bin.GetSize());
 	std::cout << "done" << std::endl;
 	return 0;
 }

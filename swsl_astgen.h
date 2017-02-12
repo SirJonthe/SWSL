@@ -11,22 +11,23 @@ struct Token
 {
 	enum TokenType
 	{
-		TOKEN_ERR        = 0,
-		TOKEN_START      = 1,
-		TOKEN_DECL_VAR   = TOKEN_START      << 1,
-		TOKEN_DECL_FN    = TOKEN_DECL_VAR   << 1,
-		TOKEN_DEF_FN     = TOKEN_DECL_FN    << 1,
-		TOKEN_DEF_STRUCT = TOKEN_DEF_FN     << 1,
-		TOKEN_FILE       = TOKEN_DEF_STRUCT << 1,
-		TOKEN_BODY       = TOKEN_FILE       << 1,
-		TOKEN_SET        = TOKEN_BODY       << 1,
-		TOKEN_CALL_FN    = TOKEN_SET        << 1,
-		TOKEN_VAR        = TOKEN_CALL_FN    << 1,
-		TOKEN_LIT        = TOKEN_VAR        << 1,
-		TOKEN_EXPR       = TOKEN_LIT        << 1,
-		TOKEN_IF         = TOKEN_EXPR       << 1,
-		TOKEN_WHILE      = TOKEN_IF         << 1,
-		TOKEN_RET        = TOKEN_WHILE      << 1
+		TOKEN_ERR        = 1,
+		TOKEN_ROOT       = TOKEN_ERR      << 1,
+		TOKEN_TYPE       = TOKEN_ROOT     << 1,
+		TOKEN_DECL_VAR   = TOKEN_TYPE     << 1,
+		TOKEN_DECL_FN    = TOKEN_DECL_VAR << 1,
+		TOKEN_DEF_VAR    = TOKEN_DECL_FN  << 1,
+		TOKEN_DEF_FN     = TOKEN_DEF_VAR  << 1,
+		TOKEN_FILE       = TOKEN_DEF_FN   << 1,
+		TOKEN_BODY       = TOKEN_FILE     << 1,
+		TOKEN_SET        = TOKEN_BODY     << 1,
+		TOKEN_CALL_FN    = TOKEN_SET      << 1,
+		TOKEN_VAR        = TOKEN_CALL_FN  << 1,
+		TOKEN_LIT        = TOKEN_VAR      << 1,
+		TOKEN_EXPR       = TOKEN_LIT      << 1,
+		TOKEN_IF         = TOKEN_EXPR     << 1,
+		TOKEN_WHILE      = TOKEN_IF       << 1,
+		TOKEN_RET        = TOKEN_WHILE    << 1
 	};
 
 	const Token     *const parent;
@@ -38,6 +39,14 @@ struct Token
 	virtual ~Token( void ) {}
 };
 
+struct Token_Err : public Token
+{
+	mtlChars err;
+	mtlChars msg;
+
+	Token_Err(const Token *p_parent);
+};
+
 struct SyntaxTree : public Token
 {
 	Token *file; // Token_File
@@ -47,24 +56,19 @@ struct SyntaxTree : public Token
 	~SyntaxTree( void );
 };
 
-struct Token_Err : public Token
+struct Token_Type : public Token
 {
-	mtlChars err;
-	mtlChars msg;
+	mtlChars               type_name;
+	const mtlList<Token*> *mem;
+	bool                   is_ref;
+	bool                   is_const;
 
-	Token_Err(const Token *p_parent);
-};
-
-struct Token_Word : public Token
-{
-	mtlChars word;
-
-	Token_Word(const Token *p_parent);
+	Token_Type(const Token *p_parent);
 };
 
 struct Token_DeclVar : public Token
 {
-	Token    *R_type_def; // Token_DefStruct - DO NOT TRAVERSE OR DELETE THIS (CYCLICAL)
+	Token    *decl_type;  // Token_Type
 	Token    *arr_size;   // Token_Expr
 	mtlChars  type_name;  // Token_Word
 	mtlChars  var_name;   // Token_Word
@@ -77,6 +81,8 @@ struct Token_DeclVar : public Token
 
 struct Token_DeclFn : public Token
 {
+	Token           *decl_type; // Token_Type
+	mtlChars         fn_name;
 	Token           *ret;    // Token_DeclVar
 	mtlList<Token*>  params; // Token_DeclVar
 
@@ -84,22 +90,22 @@ struct Token_DeclFn : public Token
 	~Token_DeclFn( void );
 };
 
+struct Token_DefVar : public Token
+{
+	mtlChars  var_name; // Token_Word
+	Token    *body;     // Token_Body
+
+	Token_DefVar(const Token *p_parent);
+	~Token_DefVar( void );
+};
+
 struct Token_DefFn : public Token
 {
-	Token *sig;  // Token_DeclFn
+	Token *head;  // Token_DeclFn
 	Token *body; // Token_Body
 
 	Token_DefFn(const Token *p_parent);
 	~Token_DefFn( void );
-};
-
-struct Token_DefStruct : public Token
-{
-	mtlChars  struct_name; // Token_Word
-	Token    *struct_body; // Token_Body
-
-	Token_DefStruct(const Token *p_parent);
-	~Token_DefStruct( void );
 };
 
 struct Token_File : public Token
@@ -140,7 +146,7 @@ struct Token_CallFn : public Token
 
 struct Token_Var : public Token
 {
-	Token    *R_var_decl; // Token_DeclVar - DO NOT TRAVERSE OR DELETE THIS (CYCLICAL)
+	Token    *decl_type;  // Token_Type
 	Token    *idx;        // Token_Expr
 	Token    *mem;        // Token_Var
 	mtlChars  var_name;   // Token_Word
@@ -229,15 +235,15 @@ private:
 	bool   CmpVarDeclName(const mtlChars &name, const Token_DeclVar *tok);
 	bool   CmpFnDeclName(const mtlChars &name, const Token_DeclFn *tok);
 	bool   CmpFnDefName(const mtlChars &name, const Token_DefFn *tok);
-	bool   CmpStructDefName(const mtlChars &name, const Token_DefStruct *tok);
+	bool   CmpVarDefName(const mtlChars &name, const Token_DefVar *tok);
 	bool   NewName(const mtlChars &name, const Token *parent);
 	bool   FindVar(const mtlChars &name, const Token *parent); // RETURN TOKEN
 	bool   FindType(const mtlChars &name, const Token *parent); // RETURN TOKEN
 
 private:
 	Token *ProcessError(const mtlChars &msg, const mtlChars &err, const Token *parent);
-	Token *ProcessFindVar(const mtlChars &name, const Token *parent);
-	Token *ProcessFindType(const mtlChars &name, const Token *parent);
+	//Token *ProcessFindVar(const mtlChars &name, const Token *parent);
+	//Token *ProcessFindType(const mtlChars &name, const Token *parent);
 	Token *ProcessDecl(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const mtlChars &fn_name, const Token *parent);
 	Token *ProcessFuncCall(const mtlChars &fn_name, const mtlChars &params, const Token *parent);
 	Token *ProcessLiteral(const mtlChars &lit, const Token *parent);
@@ -252,8 +258,8 @@ private:
 	Token *ProcessReturn(const mtlChars &expr, const Token *parent);
 	Token *ProcessBody(const mtlChars &body, const Token *parent);
 	Token *ProcessFuncDef(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const mtlChars &fn_name, const mtlChars &params, const mtlChars &body, const Token *parent);
-	Token *ProcessStructMem(const mtlChars &decls);
-	Token *ProcessStructDef(const mtlChars &struct_name, const mtlChars &decls, const Token *parent);
+	Token *ProcessVarMemDecl(const mtlChars &decls);
+	Token *ProcessVarDef(const mtlChars &struct_name, const mtlChars &decls, const Token *parent);
 	Token *ProcessFile(const mtlChars &contents, const Token *parent);
 	Token *LoadFile(const mtlChars &file_name, const Token *parent);
 

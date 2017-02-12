@@ -8,8 +8,8 @@ void swsl::TokenDispatcher::Dispatch(const swsl::Token *t)
 			DispatchErr(dynamic_cast<const Token_Err*>(t));
 			break;
 
-		case swsl::Token::TOKEN_START:
-			DispatchEntry(dynamic_cast<const SyntaxTree*>(t));
+		case swsl::Token::TOKEN_ROOT:
+			DispatchRoot(dynamic_cast<const SyntaxTree*>(t));
 			break;
 
 		case swsl::Token::TOKEN_DECL_VAR:
@@ -20,12 +20,12 @@ void swsl::TokenDispatcher::Dispatch(const swsl::Token *t)
 			DispatchDeclFn(dynamic_cast<const Token_DeclFn*>(t));
 			break;
 
-		case swsl::Token::TOKEN_DEF_FN:
-			DispatchDefFn(dynamic_cast<const Token_DefFn*>(t));
+		case swsl::Token::TOKEN_DEF_VAR:
+			DispatchDefVar(dynamic_cast<const Token_DefVar*>(t));
 			break;
 
-		case swsl::Token::TOKEN_DEF_STRUCT:
-			DispatchDefStruct(dynamic_cast<const Token_DefStruct*>(t));
+		case swsl::Token::TOKEN_DEF_FN:
+			DispatchDefFn(dynamic_cast<const Token_DefFn*>(t));
 			break;
 
 		case swsl::Token::TOKEN_FILE:

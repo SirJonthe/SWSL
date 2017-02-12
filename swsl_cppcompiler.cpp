@@ -41,7 +41,9 @@ void swsl::CppCompiler::OutputBinary(swsl::Binary &bin)
 
 void swsl::CppCompiler::PrintType(const mtlChars &type)
 {
-	if (type.Compare("bool", true)) {
+	if (type.Compare("void", true)) {
+		Print("void");
+	} else if (type.Compare("bool", true)) {
 		Print("mpl::wide_bool");
 	} else if (type.Compare("int", true)) {
 		Print("swsl::wide_int1");
@@ -114,6 +116,7 @@ void swsl::CppCompiler::DispatchDeclFn(const Token_DeclFn *t)
 		Print(";");
 	}
 	PrintNewline();
+	PrintNewline();
 }
 
 void swsl::CppCompiler::DispatchDeclVar(const Token_DeclVar *t)
@@ -140,27 +143,27 @@ void swsl::CppCompiler::DispatchDeclVar(const Token_DeclVar *t)
 
 void swsl::CppCompiler::DispatchDefFn(const Token_DefFn *t)
 {
-	Dispatch(t->sig);
+	Dispatch(t->head);
 	Dispatch(t->body);
 	PrintNewline();
 }
 
-void swsl::CppCompiler::DispatchDefStruct(const Token_DefStruct *t)
+void swsl::CppCompiler::DispatchDefVar(const Token_DefVar *t)
 {
 	Print("struct ");
-	Print(t->struct_name);
+	Print(t->var_name);
 	Print("{");
 
 	++m_depth;
 
-	Dispatch(t->struct_body);
+	Dispatch(t->body);
 
 	--m_depth;
 
 	Print("}");
 }
 
-void swsl::CppCompiler::DispatchEntry(const SyntaxTree *t)
+void swsl::CppCompiler::DispatchRoot(const SyntaxTree *t)
 {
 	Print("#include \"swsl_types.h\"");
 	PrintNewline();
@@ -172,12 +175,13 @@ void swsl::CppCompiler::DispatchEntry(const SyntaxTree *t)
 void swsl::CppCompiler::DispatchErr(const Token_Err *t)
 {
 	++m_errs;
+	std::cout << " > ";
 	for (int i = 0; i < t->msg.GetSize(); ++i) {
 		std::cout << t->msg[i];
 	}
 	std::cout << ": ";
 	for (int i = 0; i < t->err.GetSize(); ++i) {
-		std::cout << t->err[i];
+		if (!mtlChars::IsNewline(t->err[i]) && t->err[i] != '\t') { std::cout << t->err[i]; }
 	}
 	std::cout << std::endl;
 }
@@ -254,6 +258,7 @@ void swsl::CppCompiler::DispatchSet(const Token_Set *t)
 	Print(" = ");
 	Dispatch(t->rhs);
 	Print(";");
+	PrintNewline();
 }
 
 void swsl::CppCompiler::DispatchVar(const Token_Var *t)

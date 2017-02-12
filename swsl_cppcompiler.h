@@ -30,8 +30,8 @@ protected:
 	void DispatchDeclFn(const Token_DeclFn *t);
 	void DispatchDeclVar(const Token_DeclVar *t);
 	void DispatchDefFn(const Token_DefFn *t);
-	void DispatchDefStruct(const Token_DefStruct *t);
-	void DispatchEntry(const SyntaxTree *t);
+	void DispatchDefVar(const Token_DefVar *t);
+	void DispatchRoot(const SyntaxTree *t);
 	void DispatchErr(const Token_Err *t);
 	void DispatchExpr(const Token_Expr *t);
 	void DispatchFile(const Token_File *t);

@@ -5,6 +5,8 @@
 // Arrays should always be declared
 // Type[5] var_name := { a, b, c, d, e };
 
+#define err_str "%s; %| %s{%s} %| %s"
+
 #define decl_str "%?(const %| mutable) %w%?(&)%w"
 #define decl_qlf 0
 #define decl_typ 1
@@ -16,31 +18,37 @@
 static const mtlChars built_in_types[built_in_n] = { "void", "bool", "int", "int2", "int3", "int4", "float", "float2", "float3", "float4" };
 static const mtlChars keywords[keywords_n] = { "const", "mutable", "if", "else", "while", "return", "true", "false" };
 
+swsl::Token_Err::Token_Err(const swsl::Token *p_parent) :
+	Token(p_parent, TOKEN_ERR)
+{}
+
 swsl::SyntaxTree::SyntaxTree( void ) :
-	Token(NULL, TOKEN_START), file(NULL), errs(0)
+	Token(NULL, TOKEN_ROOT), file(NULL), errs(0)
 {}
 swsl::SyntaxTree::~SyntaxTree( void )
 {
 	delete file;
 }
 
-swsl::Token_Err::Token_Err(const swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_ERR)
-{}
-
 swsl::Token_DeclVar::Token_DeclVar(const swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_DECL_VAR), R_type_def(NULL), arr_size(NULL)
+	Token(p_parent, TOKEN_DECL_VAR), decl_type(NULL), arr_size(NULL)
 {}
 swsl::Token_DeclVar::~Token_DeclVar( void )
 {
+	delete decl_type;
 	delete arr_size;
 }
 
+swsl::Token_Type::Token_Type(const Token *p_parent) :
+	Token(p_parent, TOKEN_TYPE)
+{}
+
 swsl::Token_DeclFn::Token_DeclFn(const swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_DECL_FN), ret(NULL)
+	Token(p_parent, TOKEN_DECL_FN), decl_type(NULL), ret(NULL)
 {}
 swsl::Token_DeclFn::~Token_DeclFn( void )
 {
+	delete decl_type;
 	delete ret;
 	mtlItem<Token*> *i = params.GetFirst();
 	while (i != NULL) {
@@ -50,20 +58,20 @@ swsl::Token_DeclFn::~Token_DeclFn( void )
 }
 
 swsl::Token_DefFn::Token_DefFn(const swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_DEF_FN), sig(NULL), body(NULL)
+	Token(p_parent, TOKEN_DEF_FN), head(NULL), body(NULL)
 {}
 swsl::Token_DefFn::~Token_DefFn( void )
 {
-	delete sig;
+	delete head;
 	delete body;
 }
 
-swsl::Token_DefStruct::Token_DefStruct(const swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_DEF_STRUCT), struct_name(NULL), struct_body(NULL)
+swsl::Token_DefVar::Token_DefVar(const swsl::Token *p_parent) :
+	Token(p_parent, TOKEN_DEF_VAR), body(NULL)
 {}
-swsl::Token_DefStruct::~Token_DefStruct( void )
+swsl::Token_DefVar::~Token_DefVar( void )
 {
-	delete struct_body;
+	delete body;
 }
 
 swsl::Token_File::Token_File(const swsl::Token *p_parent) :
@@ -108,11 +116,12 @@ swsl::Token_CallFn::~Token_CallFn( void )
 }
 
 swsl::Token_Var::Token_Var(const swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_VAR), R_var_decl(NULL), var_name(NULL), idx(NULL), mem(NULL)
+	Token(p_parent, TOKEN_VAR), decl_type(NULL), idx(NULL), mem(NULL)
 {}
 
 swsl::Token_Var::~Token_Var( void )
 {
+	delete decl_type;
 	delete idx;
 	delete mem;
 }
@@ -186,17 +195,31 @@ bool swsl::SyntaxTreeGenerator::CmpVarDeclName(const mtlChars &name, const swsl:
 
 bool swsl::SyntaxTreeGenerator::CmpFnDeclName(const mtlChars &name, const swsl::Token_DeclFn *tok)
 {
-	return tok != NULL && CmpVarDeclName(name, dynamic_cast<Token_DeclVar*>(tok->ret));
+	if (tok != NULL) {
+		try {
+			return CmpVarDeclName(name, dynamic_cast<Token_DeclVar*>(tok->ret));
+		} catch (...) {
+			return false;
+		}
+	}
+	return false;
 }
 
 bool swsl::SyntaxTreeGenerator::CmpFnDefName(const mtlChars &name, const swsl::Token_DefFn *tok)
 {
-	return tok != NULL && CmpFnDeclName(name, dynamic_cast<Token_DeclFn*>(tok->sig));
+	if (tok != NULL) {
+		try {
+			return CmpFnDeclName(name, dynamic_cast<Token_DeclFn*>(tok->head));
+		} catch (...) {
+			return false;
+		}
+	}
+	return false;
 }
 
-bool swsl::SyntaxTreeGenerator::CmpStructDefName(const mtlChars &name, const swsl::Token_DefStruct *tok)
+bool swsl::SyntaxTreeGenerator::CmpVarDefName(const mtlChars &name, const swsl::Token_DefVar *tok)
 {
-	return tok != NULL && name.Compare(tok->struct_name, true);
+	return tok != NULL && name.Compare(tok->var_name, true);
 }
 
 bool swsl::SyntaxTreeGenerator::NewName(const mtlChars &name, const swsl::Token *parent)
@@ -219,8 +242,8 @@ bool swsl::SyntaxTreeGenerator::NewName(const mtlChars &name, const swsl::Token 
 			case Token::TOKEN_DEF_FN:
 				if (CmpFnDefName(name, dynamic_cast<const Token_DefFn*>(t))) { return false; }
 				break;
-			case Token::TOKEN_DEF_STRUCT:
-				if (CmpStructDefName(name, dynamic_cast<const Token_DefStruct*>(t))) { return false; }
+			case Token::TOKEN_DEF_VAR:
+				if (CmpVarDefName(name, dynamic_cast<const Token_DefVar*>(t))) { return false; }
 				break;
 			default: break;
 			}
@@ -254,13 +277,6 @@ bool swsl::SyntaxTreeGenerator::FindVar(const mtlChars &name, const swsl::Token 
 	return false;
 }
 
-bool swsl::SyntaxTreeGenerator::FindType(const mtlChars &name, const swsl::Token *parent)
-{
-	if (parent != NULL) {
-	}
-
-}
-
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessError(const mtlChars &msg, const mtlChars &err, const swsl::Token *parent)
 {
 	Token_Err *token = new Token_Err(parent);
@@ -271,7 +287,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessError(const mtlChars &msg, const 
 	return token;
 }
 
-swsl::Token *swsl::SyntaxTreeGenerator::ProcessFindVar(const mtlChars &name, const swsl::Token *parent)
+/*swsl::Token *swsl::SyntaxTreeGenerator::ProcessFindVar(const mtlChars &name, const swsl::Token *parent)
 {
 	if (FindVar(name, parent)) {
 		Token_Word *token = new Token_Word(parent);
@@ -291,7 +307,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessFindType(const mtlChars &name, co
 		return token;
 	}
 	return ProcessError("Undefined", name, parent);
-}
+}*/
 
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessDecl(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const mtlChars &fn_name, const swsl::Token *parent)
 {
@@ -347,7 +363,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessVariable(mtlSyntaxParser &var, co
 	Token_Var *token = new Token_Var(parent);
 
 	mtlArray<mtlChars> m;
-	switch (var.Match("%w%0 %| %w. %| %w[%S]%0 %| %w[%S]. %| %s", m)) {
+	switch (var.Match("%w%0 %| %w. %| %w[%S]%0 %| %w[%S]. %| " err_str, m)) {
 	case 1:
 		token->mem = ProcessVariable(var, token);
 	case 0:
@@ -405,7 +421,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessFuncDecl(const mtlChars &rw, cons
 	mtlSyntaxParser p;
 	p.SetBuffer(params);
 	while (!p.IsEnd()) {
-		switch (p.Match(decl_str "%| %s", m)) {
+		switch (p.Match(decl_str " %| " err_str, m)) {
 		case 0:
 			token->params.AddLast(ProcessDecl(m[decl_qlf], m[decl_typ], m[decl_ref], m[decl_nam], token));
 			break;
@@ -435,7 +451,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessExpression(const mtlChars &expr, 
 	mtlArray<mtlChars> m;
 	mtlSyntaxParser p;
 	p.SetBuffer(expr);
-	switch (p.Match("%s+%S %| %s-%S %| %S*%S %| %S/%S %| %S==%S %| %S!=%S %| %S<=%S %| %S<%S %| %S>=%S %| %S>%S %| (%S)%0 %| %w(%s)%0 %| %S", m)) {
+	switch (p.Match("%s+%S %| %s-%S %| %S*%S %| %S/%S %| %S==%S %| %S!=%S %| %S<=%S %| %S<%S %| %S>=%S %| %S>%S %| (%S)%0 %| %w(%s)%0 %| " err_str, m)) {
 	case 0:
 		token = ProcessOperation(m[0], "+", m[1], parent);
 		break;
@@ -541,7 +557,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessBody(const mtlChars &body, const 
 	mtlSyntaxParser p;
 	p.SetBuffer(body);
 	while (!p.IsEnd()) {
-		switch (p.Match("{%s} %| if(%S){%s} %| while(%S){%s} %| return %s; %| " decl_str ":=%S; %| " decl_str "; %| %w:=%S; %| %s", m)) {
+		switch (p.Match("{%s} %| if(%S){%s} %| while(%S){%s} %| return %s; %| " decl_str "=%S; %| " decl_str "; %| %w=%S; %| " err_str, m)) {
 		case 0:
 			token->tokens.AddLast(ProcessBody(m[0], token));
 			break;
@@ -583,12 +599,12 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessFuncDef(const mtlChars &rw, const
 {
 	Token_DefFn *token = new Token_DefFn(parent);
 
-	token->sig = ProcessFuncDecl(rw, type_name, ref, fn_name, params, token);
+	token->head = ProcessFuncDecl(rw, type_name, ref, fn_name, params, token);
 	token->body = ProcessBody(body, token);
 	return token;
 }
 
-swsl::Token *swsl::SyntaxTreeGenerator::ProcessStructMem(const mtlChars &decls)
+swsl::Token *swsl::SyntaxTreeGenerator::ProcessVarMemDecl(const mtlChars &decls)
 {
 	Token_Body *token = new Token_Body(NULL);
 
@@ -596,7 +612,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessStructMem(const mtlChars &decls)
 	mtlSyntaxParser p;
 	p.SetBuffer(decls);
 	while (!p.IsEnd()) {
-		switch (p.Match(decl_str "; %| %s", m)) {
+		switch (p.Match(decl_str "; %| " err_str, m)) {
 		case 0:
 			token->tokens.AddLast(ProcessDecl(m[decl_qlf], m[decl_typ], m[decl_ref], m[decl_nam], token));
 			break;
@@ -609,13 +625,13 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessStructMem(const mtlChars &decls)
 	return token;
 }
 
-swsl::Token *swsl::SyntaxTreeGenerator::ProcessStructDef(const mtlChars &struct_name, const mtlChars &decls, const swsl::Token *parent)
+swsl::Token *swsl::SyntaxTreeGenerator::ProcessVarDef(const mtlChars &struct_name, const mtlChars &decls, const swsl::Token *parent)
 {
 	if (VerifyName(struct_name) && NewName(struct_name, parent)) {
-		Token_DefStruct *token = new Token_DefStruct(parent);
+		Token_DefVar *token = new Token_DefVar(parent);
 
-		token->struct_name = struct_name;
-		token->struct_body = ProcessBody(decls, parent);
+		token->var_name = struct_name;
+		token->body = ProcessVarMemDecl(decls);
 		return token;
 	}
 	return ProcessError("Collision", struct_name, parent);
@@ -629,7 +645,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessFile(const mtlChars &contents, co
 	mtlSyntaxParser p;
 	p.SetBuffer(contents);
 	while (!p.IsEnd()) {
-		switch (p.Match(decl_str "(%s); %| " decl_str "(%s){%s} %| struct %w{%s}; %| import\"%S\" %| %s", m)) {
+		switch (p.Match(decl_str "(%s); %| " decl_str "(%s){%s} %| struct %w{%s}; %| import\"%S\" %| " err_str, m)) {
 		case 0:
 			token->tokens.AddLast(ProcessFuncDecl(m[decl_qlf], m[decl_typ], m[decl_ref], m[decl_nam], m[4], token));
 			break;
@@ -639,7 +655,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessFile(const mtlChars &contents, co
 			break;
 
 		case 2:
-			token->tokens.AddLast(ProcessStructDef(m[0], m[1], token));
+			token->tokens.AddLast(ProcessVarDef(m[0], m[1], token));
 			break;
 
 		case 3:
