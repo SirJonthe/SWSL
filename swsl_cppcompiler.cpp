@@ -132,6 +132,7 @@ void swsl::CppCompiler::DispatchDeclVar(const Token_DeclVar *t)
 	if (t->is_ref) {
 		Print("&");
 	}
+	Print(t->var_name);
 	if (t->arr_size != NULL) {
 		Print("[");
 		Dispatch(t->arr_size);
@@ -190,7 +191,9 @@ void swsl::CppCompiler::DispatchExpr(const Token_Expr *t)
 {
 	Print("(");
 	Dispatch(t->lhs);
+	Print(" ");
 	Print(t->op);
+	Print(" ");
 	Dispatch(t->rhs);
 	Print(")");
 }
@@ -220,6 +223,7 @@ void swsl::CppCompiler::DispatchIf(const Token_If *t)
 
 	PrintTabs();
 	Print("if ( !(");
+	PrintMask();
 	Print(".all_fail() )");
 	PrintNewline();
 	Dispatch(t->if_body);

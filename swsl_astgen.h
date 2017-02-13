@@ -241,7 +241,7 @@ private:
 	bool   FindType(const mtlChars &name, const Token *parent); // RETURN TOKEN
 
 private:
-	Token *ProcessError(const mtlChars &msg, const mtlChars &err, const Token *parent);
+	Token *ProcessError(const mtlChars &msg, mtlChars err, const Token *parent);
 	//Token *ProcessFindVar(const mtlChars &name, const Token *parent);
 	//Token *ProcessFindType(const mtlChars &name, const Token *parent);
 	Token *ProcessDecl(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const mtlChars &fn_name, const Token *parent);
