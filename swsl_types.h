@@ -265,4 +265,18 @@ swsl::wide_vec<wide_t, 4> swsl::wide_vec<wide_t, n>::operator[](int a, int b, in
 	return swsl::wide_vec<wide_t, 4>(e[a], e[b], e[c], e[d]);
 }
 
+template < typename wide_t, int n >
+class wide_array
+{
+private:
+	wide_t e[n];
+
+public:
+	wide_t &operator[](int i) { return e[i]; }
+	const wide_t &operator[](int i) const { return e[i]; }
+	// TODO
+	// wide_setter<wide_t> &operator[](const mpl::wide_int &i);
+	// const wide_t operator[](const mpl::wide_int &i) const;
+};
+
 #endif // SWSL_TYPES_H

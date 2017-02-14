@@ -87,21 +87,6 @@ void swsl::CppCompiler::DispatchBody(const Token_Body *t)
 	PrintNewline();
 }
 
-void swsl::CppCompiler::DispatchCallFn(const Token_CallFn *t)
-{
-	PrintTabs();
-	Print(t->fn_name);
-	Print("(");
-	const mtlItem<swsl::Token*> *i = t->input.GetFirst();
-	while (i != NULL) {
-		Dispatch(i->GetItem());
-		Print(", ");
-		i = i->GetNext();
-	}
-	PrintMask();
-	Print(")");
-}
-
 void swsl::CppCompiler::DispatchDeclFn(const Token_DeclFn *t)
 {
 	Dispatch(t->ret);
@@ -119,9 +104,30 @@ void swsl::CppCompiler::DispatchDeclFn(const Token_DeclFn *t)
 	PrintNewline();
 }
 
+void swsl::CppCompiler::DispatchDeclType(const Token_DeclType *t)
+{
+	if (t->is_const) {
+		Print("const ");
+	}
+	if (t->arr_size != NULL) {
+		Print("swsl::wide_array<");
+	}
+	Print(t->type_name);
+	if (t->arr_size != NULL) {
+		Print(", ");
+		Dispatch(t->arr_size);
+		Print(">");
+	}
+	if (t->is_ref) {
+		Print("&");
+	}
+}
+
 void swsl::CppCompiler::DispatchDeclVar(const Token_DeclVar *t)
 {
-	PrintTabs();
+	if (!t->is_param) {
+		PrintTabs();
+	}
 	if (t->is_const) {
 		Print("const ");
 	} else {
@@ -138,8 +144,12 @@ void swsl::CppCompiler::DispatchDeclVar(const Token_DeclVar *t)
 		Dispatch(t->arr_size);
 		Print("]");
 	}
-	Print(";");
-	PrintNewline();
+	if (!t->is_param) {
+		Print(";");
+		PrintNewline();
+	} else {
+		Print(", ");
+	}
 }
 
 void swsl::CppCompiler::DispatchDefFn(const Token_DefFn *t)
@@ -164,14 +174,6 @@ void swsl::CppCompiler::DispatchDefVar(const Token_DefVar *t)
 	Print("}");
 }
 
-void swsl::CppCompiler::DispatchRoot(const SyntaxTree *t)
-{
-	Print("#include \"swsl_types.h\"");
-	PrintNewline();
-	PrintNewline();
-	Dispatch(t->file);
-}
-
 #include <iostream>
 void swsl::CppCompiler::DispatchErr(const Token_Err *t)
 {
@@ -182,7 +184,15 @@ void swsl::CppCompiler::DispatchErr(const Token_Err *t)
 	}
 	std::cout << ": ";
 	for (int i = 0; i < t->err.GetSize(); ++i) {
-		if (!mtlChars::IsNewline(t->err[i]) && t->err[i] != '\t') { std::cout << t->err[i]; }
+		if (mtlChars::IsWhitespace(t->err[i])) {
+			std::cout << " ";
+			while (mtlChars::IsWhitespace(t->err[i])) {
+				++i;
+			}
+			--i;
+		} else {
+			std::cout << t->err[i];
+		}
 	}
 	std::cout << std::endl;
 }
@@ -248,24 +258,38 @@ void swsl::CppCompiler::DispatchIf(const Token_If *t)
 	--m_cond_depth;
 }
 
-void swsl::CppCompiler::DispatchRet(const Token_Ret *t)
-{
-	Print("return ");
-	Dispatch(t->expr);
-	Print(";");
-}
-
-void swsl::CppCompiler::DispatchSet(const Token_Set *t)
+void swsl::CppCompiler::DispatchReadFn(const Token_ReadFn *t)
 {
 	PrintTabs();
-	Dispatch(t->lhs);
-	Print(" = ");
-	Dispatch(t->rhs);
-	Print(";");
-	PrintNewline();
+	Print(t->fn_name);
+	Print("(");
+	const mtlItem<swsl::Token*> *i = t->input.GetFirst();
+	while (i != NULL) {
+		Dispatch(i->GetItem());
+		Print(", ");
+		i = i->GetNext();
+	}
+	PrintMask();
+	Print(")");
 }
 
-void swsl::CppCompiler::DispatchVar(const Token_Var *t)
+void swsl::CppCompiler::DispatchReadLit(const Token_ReadLit *t)
+{
+	if (t->lit_type == Token_ReadLit::TYPE_BOOL) {
+		if (t->lit.Compare("false", true)) {
+			Print("MPL_FALSE");
+		} else {
+			Print("MPL_TRUE");
+		}
+	} else {
+		Print(t->lit);
+		if (t->lit_type == Token_ReadLit::TYPE_FLOAT) {
+			Print("f");
+		}
+	}
+}
+
+void swsl::CppCompiler::DispatchReadVar(const Token_ReadVar *t)
 {
 	Print(t->var_name);
 	if (t->idx != NULL) {
@@ -279,20 +303,29 @@ void swsl::CppCompiler::DispatchVar(const Token_Var *t)
 	}
 }
 
-void swsl::CppCompiler::DispatchLit(const Token_Lit *t)
+void swsl::CppCompiler::DispatchRet(const Token_Ret *t)
 {
-	if (t->lit_type == Token_Lit::TYPE_BOOL) {
-		if (t->lit.Compare("false", true)) {
-			Print("MPL_FALSE");
-		} else {
-			Print("MPL_TRUE");
-		}
-	} else {
-		Print(t->lit);
-		if (t->lit_type == Token_Lit::TYPE_FLOAT) {
-			Print("f");
-		}
-	}
+	Print("return ");
+	Dispatch(t->expr);
+	Print(";");
+}
+
+void swsl::CppCompiler::DispatchRoot(const SyntaxTree *t)
+{
+	Print("#include \"swsl_types.h\"");
+	PrintNewline();
+	PrintNewline();
+	Dispatch(t->file);
+}
+
+void swsl::CppCompiler::DispatchSet(const Token_Set *t)
+{
+	PrintTabs();
+	Dispatch(t->lhs);
+	Print(" = ");
+	Dispatch(t->rhs);
+	Print(";");
+	PrintNewline();
 }
 
 void swsl::CppCompiler::DispatchWhile(const Token_While *t)

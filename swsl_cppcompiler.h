@@ -26,20 +26,21 @@ private:
 
 protected:
 	void DispatchBody(const Token_Body *t);
-	void DispatchCallFn(const Token_CallFn *t);
 	void DispatchDeclFn(const Token_DeclFn *t);
+	void DispatchDeclType(const Token_DeclType *t);
 	void DispatchDeclVar(const Token_DeclVar *t);
 	void DispatchDefFn(const Token_DefFn *t);
 	void DispatchDefVar(const Token_DefVar *t);
-	void DispatchRoot(const SyntaxTree *t);
 	void DispatchErr(const Token_Err *t);
 	void DispatchExpr(const Token_Expr *t);
 	void DispatchFile(const Token_File *t);
 	void DispatchIf(const Token_If *t);
+	void DispatchReadFn(const Token_ReadFn *t);
+	void DispatchReadLit(const Token_ReadLit *);
+	void DispatchReadVar(const Token_ReadVar *t);
 	void DispatchRet(const Token_Ret *t);
+	void DispatchRoot(const SyntaxTree *t);
 	void DispatchSet(const Token_Set *t);
-	void DispatchVar(const Token_Var *t);
-	void DispatchLit(const Token_Lit *);
 	void DispatchWhile(const Token_While *t);
 
 public:
