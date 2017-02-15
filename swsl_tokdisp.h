@@ -12,6 +12,7 @@ protected:
 	virtual void DispatchNull( void )                    {}
 	virtual void DispatchErr(const Token_Err*)           = 0;
 	virtual void DispatchRoot(const SyntaxTree*)         = 0;
+	virtual void DispatchAlias(const Token_Alias*)       = 0;
 	virtual void DispatchDeclType(const Token_DeclType*) = 0;
 	virtual void DispatchDeclVar(const Token_DeclVar*)   = 0;
 	virtual void DispatchDeclFn(const Token_DeclFn*)     = 0;

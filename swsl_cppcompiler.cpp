@@ -27,6 +27,18 @@ void swsl::CppCompiler::PrintMask( void )
 	Print(num);
 }
 
+void swsl::CppCompiler::PrintVarName(const mtlChars &name)
+{
+	Print("_");
+	Print(name);
+}
+
+void swsl::CppCompiler::PrintExportName(const mtlChars &name)
+{
+	Print(m_bin_name);
+	PrintVarName(name);
+}
+
 void swsl::CppCompiler::OutputBinary(swsl::Binary &bin)
 {
 	if (m_errs == 0) {
@@ -68,6 +80,14 @@ void swsl::CppCompiler::PrintType(const mtlChars &type)
 	}
 }
 
+void swsl::CppCompiler::DispatchAlias(const Token_Alias *t)
+{
+	if (t->scope == 0) {
+		Print(m_bin_name);
+	}
+	PrintVarName(t->alias);
+}
+
 void swsl::CppCompiler::DispatchBody(const Token_Body *t)
 {
 	if (m_depth > 0) {
@@ -89,7 +109,10 @@ void swsl::CppCompiler::DispatchBody(const Token_Body *t)
 
 void swsl::CppCompiler::DispatchDeclFn(const Token_DeclFn *t)
 {
-	Dispatch(t->ret);
+	Print("inline ");
+	Dispatch(t->decl_type);
+	Print(" ");
+	PrintExportName(t->fn_name);
 	Print("(");
 	Dispatch(t->params);
 	Print("const ");
@@ -99,20 +122,20 @@ void swsl::CppCompiler::DispatchDeclFn(const Token_DeclFn *t)
 	Print(")");
 	if (t->parent != NULL && t->parent->type != swsl::Token::TOKEN_DEF_FN) {
 		Print(";");
+		PrintNewline();
 	}
-	PrintNewline();
 	PrintNewline();
 }
 
 void swsl::CppCompiler::DispatchDeclType(const Token_DeclType *t)
 {
-	if (t->is_const) {
+	if (t->is_const && !t->type_name.Compare("void")) {
 		Print("const ");
 	}
 	if (t->arr_size != NULL) {
 		Print("swsl::wide_array<");
 	}
-	Print(t->type_name);
+	PrintType(t->type_name);
 	if (t->arr_size != NULL) {
 		Print(", ");
 		Dispatch(t->arr_size);
@@ -125,26 +148,20 @@ void swsl::CppCompiler::DispatchDeclType(const Token_DeclType *t)
 
 void swsl::CppCompiler::DispatchDeclVar(const Token_DeclVar *t)
 {
-	if (!t->is_param) {
+	const bool is_param = t->parent != NULL && t->parent->type == Token::TOKEN_DECL_FN;
+
+	if (!is_param) {
 		PrintTabs();
 	}
-	if (t->is_const) {
-		Print("const ");
-	} else {
-		Print("mutable ");
-	}
-	PrintType(t->type_name);
+	Dispatch(t->decl_type);
 	Print(" ");
-	if (t->is_ref) {
-		Print("&");
-	}
-	Print(t->var_name);
+	PrintVarName(t->var_name);
 	if (t->arr_size != NULL) {
 		Print("[");
 		Dispatch(t->arr_size);
 		Print("]");
 	}
-	if (!t->is_param) {
+	if (!is_param) {
 		Print(";");
 		PrintNewline();
 	} else {
@@ -162,7 +179,7 @@ void swsl::CppCompiler::DispatchDefFn(const Token_DefFn *t)
 void swsl::CppCompiler::DispatchDefVar(const Token_DefVar *t)
 {
 	Print("struct ");
-	Print(t->var_name);
+	PrintExportName(t->var_name);
 	Print("{");
 
 	++m_depth;
@@ -245,6 +262,7 @@ void swsl::CppCompiler::DispatchIf(const Token_If *t)
 
 		PrintTabs();
 		Print("if ( !(");
+		PrintMask();
 		Print(".all_fail() )");
 		PrintNewline();
 		Dispatch(t->el_body);
@@ -312,10 +330,20 @@ void swsl::CppCompiler::DispatchRet(const Token_Ret *t)
 
 void swsl::CppCompiler::DispatchRoot(const SyntaxTree *t)
 {
+	Print("#ifndef ");
+	Print(m_bin_name);
+	Print("_included__");
+	PrintNewline();
+	Print("#define ");
+	Print(m_bin_name);
+	Print("_included__");
+	PrintNewline();
+	PrintNewline();
 	Print("#include \"swsl_types.h\"");
 	PrintNewline();
 	PrintNewline();
 	Dispatch(t->file);
+	Print("#endif");
 }
 
 void swsl::CppCompiler::DispatchSet(const Token_Set *t)

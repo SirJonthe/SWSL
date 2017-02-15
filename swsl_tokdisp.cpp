@@ -12,6 +12,14 @@ void swsl::TokenDispatcher::Dispatch(const swsl::Token *t)
 			DispatchRoot(dynamic_cast<const SyntaxTree*>(t));
 			break;
 
+		case swsl::Token::TOKEN_ALIAS:
+			DispatchAlias(dynamic_cast<const Token_Alias*>(t));
+			break;
+
+		case swsl::Token::TOKEN_DECL_TYPE:
+			DispatchDeclType(dynamic_cast<const Token_DeclType*>(t));
+			break;
+
 		case swsl::Token::TOKEN_DECL_VAR:
 			DispatchDeclVar(dynamic_cast<const Token_DeclVar*>(t));
 			break;

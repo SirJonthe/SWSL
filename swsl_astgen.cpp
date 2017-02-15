@@ -30,6 +30,10 @@ swsl::SyntaxTree::~SyntaxTree( void )
 	delete file;
 }
 
+swsl::Token_Alias::Token_Alias(const Token *p_parent) :
+	Token(p_parent, TOKEN_ALIAS)
+{}
+
 swsl::Token_DeclType::Token_DeclType(const Token *p_parent) :
 	Token(p_parent, TOKEN_DECL_TYPE), arr_size(NULL)
 {}
@@ -48,12 +52,11 @@ swsl::Token_DeclVar::~Token_DeclVar( void )
 }
 
 swsl::Token_DeclFn::Token_DeclFn(const swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_DECL_FN), decl_type(NULL), ret(NULL)
+	Token(p_parent, TOKEN_DECL_FN), decl_type(NULL)
 {}
 swsl::Token_DeclFn::~Token_DeclFn( void )
 {
 	delete decl_type;
-	delete ret;
 	mtlItem<Token*> *i = params.GetFirst();
 	while (i != NULL) {
 		delete i->GetItem();
@@ -199,14 +202,7 @@ bool swsl::SyntaxTreeGenerator::CmpVarDeclName(const mtlChars &name, const swsl:
 
 bool swsl::SyntaxTreeGenerator::CmpFnDeclName(const mtlChars &name, const swsl::Token_DeclFn *tok)
 {
-	if (tok != NULL) {
-		try {
-			return CmpVarDeclName(name, dynamic_cast<Token_DeclVar*>(tok->ret));
-		} catch (...) {
-			return false;
-		}
-	}
-	return false;
+	return tok != NULL && name.Compare(tok->fn_name, true);
 }
 
 bool swsl::SyntaxTreeGenerator::CmpFnDefName(const mtlChars &name, const swsl::Token_DefFn *tok)
@@ -323,15 +319,22 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessFindType(const mtlChars &name, co
 	return ProcessError("Undefined(" to_str(ProcessFindType) ")", name, parent);
 }*/
 
-swsl::Token *swsl::SyntaxTreeGenerator::ProcessDecl(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const mtlChars &var_name, bool is_param, const swsl::Token *parent)
+swsl::Token *swsl::SyntaxTreeGenerator::ProcessDeclType(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const swsl::Token *parent)
 {
-	Token_DeclVar *token = new Token_DeclVar(parent);
+	Token_DeclType *token = new Token_DeclType(parent);
 
 	token->is_const = rw.Compare("mutable", true) ? false : true;
 	token->type_name = type_name;
 	token->is_ref = (ref.GetSize() == 1 && ref[0] == '&');
-	token->var_name = var_name;
-	token->is_param = is_param;
+	return token;
+}
+
+swsl::Token *swsl::SyntaxTreeGenerator::ProcessDeclVar(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const mtlChars &var_name, const swsl::Token *parent)
+{
+	Token_DeclVar *token = new Token_DeclVar(parent);
+
+	token->decl_type = ProcessDeclType(rw, type_name, ref, token);
+	token->var_name  = var_name;
 	return token;
 }
 
@@ -428,7 +431,8 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessFuncDecl(const mtlChars &rw, cons
 {
 	Token_DeclFn *token = new Token_DeclFn(parent);
 
-	token->ret = ProcessDecl(rw, type_name, ref, fn_name, false, token);
+	token->fn_name = fn_name;
+	token->decl_type = ProcessDeclType(rw, type_name, ref, token);
 	mtlArray<mtlChars> m;
 	mtlSyntaxParser p;
 	p.SetBuffer(params);
@@ -436,7 +440,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessFuncDecl(const mtlChars &rw, cons
 	while (!p.IsEnd()) {
 		switch (p.Match(decl_str " %| %s", m)) {
 		case 0:
-			token->params.AddLast(ProcessDecl(m[decl_qlf], m[decl_typ], m[decl_ref], m[decl_nam], true, token));
+			token->params.AddLast(ProcessDeclVar(m[decl_qlf], m[decl_typ], m[decl_ref], m[decl_nam], token));
 			break;
 		default:
 			token->params.AddLast(ProcessError("Syntax(" to_str(ProcessFuncDecl) ")", m[0], token));
@@ -590,12 +594,12 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessBody(const mtlChars &body, const 
 			break;
 
 		case 4:
-			token->tokens.AddLast(ProcessDecl(m[decl_qlf], m[decl_typ], m[decl_ref], m[decl_nam], false, token));
+			token->tokens.AddLast(ProcessDeclVar(m[decl_qlf], m[decl_typ], m[decl_ref], m[decl_nam], token));
 			token->tokens.AddLast(ProcessSet(m[decl_nam], m[decl_nam + 1], token));
 			break;
 
 		case 5:
-			token->tokens.AddLast(ProcessDecl(m[decl_qlf], m[decl_typ], m[decl_ref], m[decl_nam], false, token));
+			token->tokens.AddLast(ProcessDeclVar(m[decl_qlf], m[decl_typ], m[decl_ref], m[decl_nam], token));
 			break;
 
 		case 6:
@@ -630,7 +634,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessVarMemDecl(const mtlChars &decls)
 	while (!p.IsEnd()) {
 		switch (p.Match(decl_str "; %| %s", m)) {
 		case 0:
-			token->tokens.AddLast(ProcessDecl(m[decl_qlf], m[decl_typ], m[decl_ref], m[decl_nam], false, token));
+			token->tokens.AddLast(ProcessDeclVar(m[decl_qlf], m[decl_typ], m[decl_ref], m[decl_nam], token));
 			break;
 
 		default:

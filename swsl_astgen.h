@@ -13,7 +13,8 @@ struct Token
 	{
 		TOKEN_ERR        = 1,
 		TOKEN_ROOT       = TOKEN_ERR       << 1,
-		TOKEN_DECL_TYPE  = TOKEN_ROOT      << 1,
+		TOKEN_ALIAS      = TOKEN_ROOT      << 1,
+		TOKEN_DECL_TYPE  = TOKEN_ALIAS     << 1,
 		TOKEN_DECL_VAR   = TOKEN_DECL_TYPE << 1,
 		TOKEN_DECL_FN    = TOKEN_DECL_VAR  << 1,
 		TOKEN_DEF_VAR    = TOKEN_DECL_FN   << 1,
@@ -56,6 +57,14 @@ struct SyntaxTree : public Token
 	~SyntaxTree( void );
 };
 
+struct Token_Alias : public Token
+{
+	mtlChars alias;
+	int      scope;
+
+	Token_Alias(const Token *p_parent);
+};
+
 struct Token_DeclType : public Token
 {
 	mtlChars               type_name;
@@ -72,11 +81,7 @@ struct Token_DeclVar : public Token
 {
 	Token    *decl_type;  // Token_DeclType
 	Token    *arr_size;   // Token_Expr
-	mtlChars  type_name;  // Token_Word
-	mtlChars  var_name;   // Token_Word
-	bool      is_ref;
-	bool      is_const;
-	bool      is_param;
+	mtlChars  var_name;
 
 	Token_DeclVar(const Token *p_parent);
 	~Token_DeclVar( void );
@@ -86,7 +91,6 @@ struct Token_DeclFn : public Token
 {
 	Token           *decl_type; // Token_DeclType
 	mtlChars         fn_name;
-	Token           *ret;       // Token_DeclVar
 	mtlList<Token*>  params;    // Token_DeclVar
 
 	Token_DeclFn(const Token *p_parent);
@@ -247,7 +251,8 @@ private:
 	Token *ProcessError(const mtlChars &msg, mtlChars err, const Token *parent);
 	//Token *ProcessFindVar(const mtlChars &name, const Token *parent);
 	//Token *ProcessFindType(const mtlChars &name, const Token *parent);
-	Token *ProcessDecl(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const mtlChars &var_name, bool is_param, const Token *parent);
+	Token *ProcessDeclType(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const Token *parent);
+	Token *ProcessDeclVar(const mtlChars &rw, const mtlChars &type_name, const mtlChars &ref, const mtlChars &var_name, const Token *parent);
 	Token *ProcessFuncCall(const mtlChars &fn_name, const mtlChars &params, const Token *parent);
 	Token *ProcessLiteral(const mtlChars &lit, const Token *parent);
 	Token *ProcessVariable(mtlSyntaxParser &var, const Token *parent);
