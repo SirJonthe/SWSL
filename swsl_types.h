@@ -33,13 +33,29 @@ public:
 	wide_vec<wide_t, n> operator&(const wide_vec<wide_t, n> &r) const;
 	wide_vec<wide_t, n> operator|(const wide_vec<wide_t, n> &r) const;
 
+	void set(int a, const wide_t &x);
 	void set(int a, const wide_vec<wide_t, 1> &x);
+	void set(int a, int b, const wide_t &x);
 	void set(int a, int b, wide_vec<wide_t, 1> &x);
 	void set(int a, int b, const wide_vec<wide_t, 2> &x);
+	void set(int a, int b, int c, const wide_t &x);
 	void set(int a, int b, int c, const wide_vec<wide_t, 1> &x);
 	void set(int a, int b, int c, const wide_vec<wide_t, 3> &x);
+	void set(int a, int b, int c, int d, const wide_t &x);
 	void set(int a, int b, int c, int d, const wide_vec<wide_t, 1> &x);
 	void set(int a, int b, int c, int d, const wide_vec<wide_t, 4> &x);
+
+	void set(int a, const wide_t &x, const mpl::wide_bool &lmask);
+	void set(int a, const wide_vec<wide_t, 1> &x, const mpl::wide_bool &lmask);
+	void set(int a, int b, const wide_t &x, const mpl::wide_bool &lmask);
+	void set(int a, int b, wide_vec<wide_t, 1> &x, const mpl::wide_bool &lmask);
+	void set(int a, int b, const wide_vec<wide_t, 2> &x, const mpl::wide_bool &lmask);
+	void set(int a, int b, int c, const wide_t &x, const mpl::wide_bool &lmask);
+	void set(int a, int b, int c, const wide_vec<wide_t, 1> &x, const mpl::wide_bool &lmask);
+	void set(int a, int b, int c, const wide_vec<wide_t, 3> &x, const mpl::wide_bool &lmask);
+	void set(int a, int b, int c, int d, const wide_t &x, const mpl::wide_bool &lmask);
+	void set(int a, int b, int c, int d, const wide_vec<wide_t, 1> &x, const mpl::wide_bool &lmask);
+	void set(int a, int b, int c, int d, const wide_vec<wide_t, 4> &x, const mpl::wide_bool &lmask);
 
 	wide_t              &operator[](int a);
 	const wide_t        &operator[](int a) const;
@@ -47,14 +63,6 @@ public:
 	wide_vec<wide_t, 3>  operator[](int a, int b, int c) const;
 	wide_vec<wide_t, 4>  operator[](int a, int b, int c, int d) const;
 };
-
-template < typename wide_t, int n >
-inline void set(wide_vec<wide_t, n> &l, const wide_vec<wide_t, n> &r, const mpl::wide_bool &lmask)
-{
-	for (int i = 0; i < n; ++i) {
-		l = wide_t::merge(l[i], r[i], lmask);
-	}
-}
 
 typedef wide_vec<mpl::wide_int, 1>       wide_int1;
 typedef wide_vec<mpl::wide_int, 2>       wide_int2;
@@ -172,9 +180,32 @@ swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator&(const swsl::wide_
 }
 
 template < typename wide_t, int n >
+swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator|(const swsl::wide_vec<wide_t, n> &r)
+{
+	swsl::wide_vec<wide_t, n> o;
+	for (int i = 0; i < n; ++i) {
+		o.e[i] = e[i] | r.e[i];
+	}
+	return o;
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, const wide_t &x,)
+{
+	e[a] = x;
+}
+
+template < typename wide_t, int n >
 void swsl::wide_vec<wide_t, n>::set(int a, const wide_vec<wide_t, 1> &x)
 {
 	e[a] = x.e[0];
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, int b, const wide_t &x)
+{
+	e[a] = x;
+	e[b] = x;
 }
 
 template < typename wide_t, int n >
@@ -192,6 +223,14 @@ void swsl::wide_vec<wide_t, n>::set(int a, int b, const wide_vec<wide_t, 2> &x)
 }
 
 template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, int b, int c, const wide_t &x)
+{
+	e[a] = x;
+	e[b] = x;
+	e[c] = x;
+}
+
+template < typename wide_t, int n >
 void swsl::wide_vec<wide_t, n>::set(int a, int b, int c, const wide_vec<wide_t, 1> &x)
 {
 	e[a] = x.e[0];
@@ -205,6 +244,15 @@ void swsl::wide_vec<wide_t, n>::set(int a, int b, int c, const wide_vec<wide_t, 
 	e[a] = x.e[0];
 	e[b] = x.e[1];
 	e[c] = x.e[2];
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, int b, int c, int d, const wide_t &x)
+{
+	e[a] = x;
+	e[b] = x;
+	e[c] = x;
+	e[d] = x;
 }
 
 template < typename wide_t, int n >
@@ -226,13 +274,87 @@ void swsl::wide_vec<wide_t, n>::set(int a, int b, int c, int d, const wide_vec<w
 }
 
 template < typename wide_t, int n >
-swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator|(const swsl::wide_vec<wide_t, n> &r)
+void swsl::wide_vec<wide_t, n>::set(int a, const wide_t &x, const mpl::wide_bool &lmask)
 {
-	swsl::wide_vec<wide_t, n> o;
-	for (int i = 0; i < n; ++i) {
-		o.e[i] = e[i] | r.e[i];
-	}
-	return o;
+	e[a] = wide_t::merge(e[a], x, lmask);
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, const wide_vec<wide_t, 1> &x, const mpl::wide_bool &lmask)
+{
+	e[a] = wide_t::merge(e[a], x.e[0], lmask);
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, int b, const wide_t &x, const mpl::wide_bool &lmask)
+{
+	e[a] = wide_t::merge(e[a], x, lmask);
+	e[b] = wide_t::merge(e[b], x, lmask);
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, int b, const wide_vec<wide_t, 1> &x, const mpl::wide_bool &lmask)
+{
+	e[a] = wide_t::merge(e[a], x.e[0], lmask);
+	e[b] = wide_t::merge(e[b], x.e[0], lmask);
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, int b, const wide_vec<wide_t, 2> &x, const mpl::wide_bool &lmask)
+{
+	e[a] = wide_t::merge(e[a], x.e[0], lmask);
+	e[b] = wide_t::merge(e[b], x.e[1], lmask);
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, int b, int c, const wide_t &x, const mpl::wide_bool &lmask)
+{
+	e[a] = wide_t::merge(e[a], x, lmask);
+	e[b] = wide_t::merge(e[b], x, lmask);
+	e[c] = wide_t::merge(e[c], x, lmask);
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, int b, int c, const wide_vec<wide_t, 1> &x, const mpl::wide_bool &lmask)
+{
+	e[a] = wide_t::merge(e[a], x.e[0], lmask);
+	e[b] = wide_t::merge(e[b], x.e[0], lmask);
+	e[c] = wide_t::merge(e[c], x.e[0], lmask);
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, int b, int c, const wide_vec<wide_t, 3> &x, const mpl::wide_bool &lmask)
+{
+	e[a] = wide_t::merge(e[a], x.e[0], lmask);
+	e[b] = wide_t::merge(e[b], x.e[1], lmask);
+	e[c] = wide_t::merge(e[c], x.e[2], lmask);
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, int b, int c, int d, const wide_t &x, const mpl::wide_bool &lmask)
+{
+	e[a] = wide_t::merge(e[a], x, lmask);
+	e[b] = wide_t::merge(e[b], x, lmask);
+	e[c] = wide_t::merge(e[c], x, lmask);
+	e[d] = wide_t::merge(e[d], x, lmask);
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, int b, int c, int d, const wide_vec<wide_t, 1> &x, const mpl::wide_bool &lmask)
+{
+	e[a] = wide_t::merge(e[a], x.e[0], lmask);
+	e[b] = wide_t::merge(e[b], x.e[0], lmask);
+	e[c] = wide_t::merge(e[c], x.e[0], lmask);
+	e[d] = wide_t::merge(e[d], x.e[0], lmask);
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, int b, int c, int d, const wide_vec<wide_t, 4> &x, const mpl::wide_bool &lmask)
+{
+	e[a] = wide_t::merge(e[a], x.e[0], lmask);
+	e[b] = wide_t::merge(e[b], x.e[1], lmask);
+	e[c] = wide_t::merge(e[c], x.e[2], lmask);
+	e[d] = wide_t::merge(e[d], x.e[3], lmask);
 }
 
 template < typename wide_t, int n >

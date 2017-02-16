@@ -21,10 +21,11 @@ private:
 	void Print(const mtlChars &ch);
 	void PrintNewline( void );
 	void PrintMask( void );
+	void PrintPrevMask( void );
 	void PrintVarName(const mtlChars &name);
-	void PrintExportName(const mtlChars &name);
 	void PrintType(const mtlChars &type);
 	void OutputBinary(swsl::Binary &bin);
+	bool IsType(const Token *token, Token::TokenType type);
 
 protected:
 	void DispatchAlias(const Token_Alias *t);

@@ -504,6 +504,9 @@ int CppCompiler2Test( void )
 		return 1;
 	}
 	std::cout << "done" << std::endl;
+	std::cout << "Discarding tree..." << std::flush;
+	delete t;
+	std::cout << "done" << std::endl;
 	std::cout << "Writing output..." << std::flush;
 	std::ofstream fout("../swsl_samples/out.h", std::ios::binary);
 	if (!fout.is_open()) {
