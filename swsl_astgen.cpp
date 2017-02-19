@@ -330,6 +330,14 @@ const swsl::Token *swsl::SyntaxTreeGenerator::FindName(const mtlChars &name, con
 		case Token::TOKEN_DECL_FN:
 			{
 				const Token_DeclFn *decl = dynamic_cast<const Token_DeclFn*>(parent);
+				if (parent->parent != NULL && parent->parent->type == Token::TOKEN_DEF_FN) {
+					const mtlItem<Token*> *iter = decl->params.GetFirst();
+					while (iter != NULL) {
+						const Token *t = FindName(name, iter->GetItem());
+						if (t != NULL) { return t; }
+						iter = iter->GetNext();
+					}
+				}
 				return (decl != NULL && name.Compare(decl->fn_name, true)) ? decl : NULL;
 			}
 			break;
@@ -362,7 +370,7 @@ const swsl::Token_DeclVar *swsl::SyntaxTreeGenerator::FindDeclVar(const mtlChars
 const swsl::Token_DeclType *swsl::SyntaxTreeGenerator::FindDeclType(const mtlChars &var_name, const swsl::Token *parent)
 {
 	const Token_DeclVar *token = FindDeclVar(var_name, parent);
-	return (token != NULL && token->decl_type != NULL && token->decl_type->type == Token::TOKEN_DECL_TYPE) ? dynamic_cast<const Token_DeclType*>(token) : NULL;
+	return (token != NULL && token->decl_type != NULL && token->decl_type->type == Token::TOKEN_DECL_TYPE) ? dynamic_cast<const Token_DeclType*>(token->decl_type) : NULL;
 }
 
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessError(const mtlChars &msg, mtlChars err, const swsl::Token *parent)

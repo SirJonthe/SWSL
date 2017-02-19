@@ -179,6 +179,11 @@ void swsl::CppCompiler::DispatchDefFn(const Token_DefFn *t)
 	Dispatch(t->head);
 	Dispatch(t->body);
 	PrintNewline();
+
+	// TODO:
+	// if (fn_name == "main") {
+	//	print wrapper
+	// }
 }
 
 void swsl::CppCompiler::DispatchDefType(const Token_DefType *t)
@@ -193,7 +198,7 @@ void swsl::CppCompiler::DispatchDefType(const Token_DefType *t)
 
 	--m_depth;
 
-	Print("}");
+	Print("};");
 }
 
 #include <iostream>
