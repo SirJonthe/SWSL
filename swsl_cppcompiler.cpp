@@ -166,11 +166,6 @@ void swsl::CppCompiler::DispatchDeclVar(const Token_DeclVar *t)
 	Dispatch(t->decl_type);
 	Print(" ");
 	PrintVarName(t->var_name);
-	if (t->arr_size != NULL) {
-		Print("[");
-		Dispatch(t->arr_size);
-		Print("]");
-	}
 	if (!is_param) {
 		Print(";");
 		PrintNewline();
@@ -186,10 +181,10 @@ void swsl::CppCompiler::DispatchDefFn(const Token_DefFn *t)
 	PrintNewline();
 }
 
-void swsl::CppCompiler::DispatchDefVar(const Token_DefVar *t)
+void swsl::CppCompiler::DispatchDefType(const Token_DefType *t)
 {
 	Print("struct ");
-	PrintType(t->var_name);
+	PrintType(t->type_name);
 	Print("{");
 
 	++m_depth;
@@ -250,6 +245,9 @@ void swsl::CppCompiler::DispatchIf(const Token_If *t)
 	++m_depth;
 
 	PrintTabs();
+	if (t->el_body == NULL) {
+		Print("const ");
+	}
 	PrintType("bool");
 	Print(" ");
 	PrintMask();
@@ -292,6 +290,17 @@ void swsl::CppCompiler::DispatchIf(const Token_If *t)
 	--m_cond_depth;
 }
 
+void swsl::CppCompiler::DispatchReadElem(const Token_ReadElem *t)
+{
+	const mtlChars xyzw = "xyzw";
+	for (int i = 0; i < t->elems.GetSize(); ++i) {
+		Print(xyzw.FindFirstChar(t->elems[i]));
+		if (i < t->elems.GetSize() - 1) {
+			Print(", ");
+		}
+	}
+}
+
 void swsl::CppCompiler::DispatchReadFn(const Token_ReadFn *t)
 {
 	PrintType(t->fn_name);
@@ -331,8 +340,15 @@ void swsl::CppCompiler::DispatchReadVar(const Token_ReadVar *t)
 		Print("]");
 	}
 	if (t->mem != NULL) {
-		Print(".");
+		if (t->mem->type == Token::TOKEN_READ_ELEM) {
+			Print("[");
+		} else {
+			Print(".");
+		}
 		Dispatch(t->mem);
+		if (t->mem->type == Token::TOKEN_READ_ELEM) {
+			Print("]");
+		}
 	}
 }
 
@@ -379,11 +395,33 @@ void swsl::CppCompiler::DispatchWhile(const Token_While *t)
 	++m_cond_depth;
 
 	PrintTabs();
-	Print("while (");
+	Print("{");
+	PrintNewline();
+	++m_depth;
+
+	PrintTabs();
+	Print("const ");
+	PrintType("bool");
+	Print(" ");
+	PrintMask();
+	Print(" = ");
 	Dispatch(t->cond);
-	Print(")");
+	Print(" & ");
+	PrintPrevMask();
+	Print(";");
+	PrintNewline();
+
+	PrintTabs();
+	Print("while ( !(");
+	PrintMask();
+	Print(".all_fail()) )");
 	PrintNewline();
 	Dispatch(t->body);
+
+	--m_depth;
+	PrintTabs();
+	Print("}");
+	PrintNewline();
 
 	--m_cond_depth;
 }

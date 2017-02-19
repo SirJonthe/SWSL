@@ -16,12 +16,13 @@ protected:
 	virtual void DispatchDeclType(const Token_DeclType*) = 0;
 	virtual void DispatchDeclVar(const Token_DeclVar*)   = 0;
 	virtual void DispatchDeclFn(const Token_DeclFn*)     = 0;
-	virtual void DispatchDefVar(const Token_DefVar*)     = 0;
+	virtual void DispatchDefType(const Token_DefType*)   = 0;
 	virtual void DispatchDefFn(const Token_DefFn*)       = 0;
 	virtual void DispatchFile(const Token_File*)         = 0;
 	virtual void DispatchBody(const Token_Body*)         = 0;
 	virtual void DispatchSet(const Token_Set*)           = 0;
 	virtual void DispatchExpr(const Token_Expr*)         = 0;
+	virtual void DispatchReadElem(const Token_ReadElem*) = 0;
 	virtual void DispatchReadFn(const Token_ReadFn*)     = 0;
 	virtual void DispatchReadVar(const Token_ReadVar*)   = 0;
 	virtual void DispatchReadLit(const Token_ReadLit*)   = 0;

@@ -1,5 +1,5 @@
-#ifndef SWSL_TYPES_H
-#define SWSL_TYPES_H
+#ifndef SWSL_TYPES_H_INCLUDED__
+#define SWSL_TYPES_H_INCLUDED__
 
 #include "MiniLib/MPL/mplWide.h"
 
@@ -14,7 +14,7 @@ private:
 
 public:
 	wide_vec( void ) {}
-	wide_vec(const wide_t &x) { for (int i; i < n; ++i) { e[i] = x; } }
+	explicit wide_vec(const wide_t &x) { for (int i; i < n; ++i) { e[i] = x; } }
 	wide_vec(const wide_t &x, const mpl::wide_bool&) : wide_vec(x) {}
 	wide_vec(const wide_t &x, const wide_t &y) { e[0] = x; e[1] = y; }
 	wide_vec(const wide_t &x, const wide_t &y, const mpl::wide_bool&) : wide_vec(x, y) {}
@@ -30,8 +30,24 @@ public:
 	wide_vec<wide_t, n> operator-(const wide_vec<wide_t, n> &r) const;
 	wide_vec<wide_t, n> operator*(const wide_vec<wide_t, n> &r) const;
 	wide_vec<wide_t, n> operator/(const wide_vec<wide_t, n> &r) const;
-	wide_vec<wide_t, n> operator&(const wide_vec<wide_t, n> &r) const;
-	wide_vec<wide_t, n> operator|(const wide_vec<wide_t, n> &r) const;
+	wide_vec<wide_t, n> operator+(const wide_vec<wide_t, 1> &r) const;
+	wide_vec<wide_t, n> operator-(const wide_vec<wide_t, 1> &r) const;
+	wide_vec<wide_t, n> operator*(const wide_vec<wide_t, 1> &r) const;
+	wide_vec<wide_t, n> operator/(const wide_vec<wide_t, 1> &r) const;
+	wide_vec<wide_t, n> operator+(const wide_t &r) const;
+	wide_vec<wide_t, n> operator-(const wide_t &r) const;
+	wide_vec<wide_t, n> operator*(const wide_t &r) const;
+	wide_vec<wide_t, n> operator/(const wide_t &r) const;
+	//wide_vec<wide_t, n> operator&(const wide_vec<wide_t, n> &r) const;
+	//wide_vec<wide_t, n> operator|(const wide_vec<wide_t, n> &r) const;
+
+	void set(const wide_t &x);
+	void set(const wide_vec<wide_t, 1> &x);
+	void set(const wide_vec<wide_t, n> &x);
+
+	void set(const wide_t &x, const mpl::wide_bool &lmask);
+	void set(const wide_vec<wide_t, 1> &x, const mpl::wide_bool &lmask);
+	void set(const wide_vec<wide_t, n> &x, const mpl::wide_bool &lmask);
 
 	void set(int a, const wide_t &x);
 	void set(int a, const wide_vec<wide_t, 1> &x);
@@ -62,6 +78,20 @@ public:
 	wide_vec<wide_t, 2>  operator[](int a, int b) const;
 	wide_vec<wide_t, 3>  operator[](int a, int b, int c) const;
 	wide_vec<wide_t, 4>  operator[](int a, int b, int c, int d) const;
+};
+
+template < typename wide_t, int n >
+class wide_array
+{
+private:
+	wide_t e[n];
+
+public:
+	wide_t &operator[](int i) { return e[i]; }
+	const wide_t &operator[](int i) const { return e[i]; }
+	// TODO
+	// wide_setter<wide_t> &operator[](const mpl::wide_int &i);
+	// const wide_t operator[](const mpl::wide_int &i) const;
 };
 
 typedef wide_vec<mpl::wide_int, 1>       wide_int1;
@@ -170,6 +200,86 @@ swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator/(const swsl::wide_
 }
 
 template < typename wide_t, int n >
+swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator+(const swsl::wide_vec<wide_t, 1> &r)
+{
+	swsl::wide_vec<wide_t, n> o;
+	for (int i = 0; i < n; ++i) {
+		o.e[i] = e[i] + r.e[0];
+	}
+	return o;
+}
+
+template < typename wide_t, int n >
+swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator-(const swsl::wide_vec<wide_t, 1> &r)
+{
+	swsl::wide_vec<wide_t, n> o;
+	for (int i = 0; i < n; ++i) {
+		o.e[i] = e[i] - r.e[0];
+	}
+	return o;
+}
+
+template < typename wide_t, int n >
+swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator*(const swsl::wide_vec<wide_t, 1> &r)
+{
+	swsl::wide_vec<wide_t, n> o;
+	for (int i = 0; i < n; ++i) {
+		o.e[i] = e[i] * r.e[0];
+	}
+	return o;
+}
+
+template < typename wide_t, int n >
+swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator/(const swsl::wide_vec<wide_t, 1> &r)
+{
+	swsl::wide_vec<wide_t, n> o;
+	for (int i = 0; i < n; ++i) {
+		o.e[i] = e[i] / r.e[0];
+	}
+	return o;
+}
+
+template < typename wide_t, int n >
+swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator+(const wide_t &r)
+{
+	swsl::wide_vec<wide_t, n> o;
+	for (int i = 0; i < n; ++i) {
+		o.e[i] = e[i] + r;
+	}
+	return o;
+}
+
+template < typename wide_t, int n >
+swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator-(const wide_t &r)
+{
+	swsl::wide_vec<wide_t, n> o;
+	for (int i = 0; i < n; ++i) {
+		o.e[i] = e[i] - r;
+	}
+	return o;
+}
+
+template < typename wide_t, int n >
+swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator*(const wide_t &r)
+{
+	swsl::wide_vec<wide_t, n> o;
+	for (int i = 0; i < n; ++i) {
+		o.e[i] = e[i] * r;
+	}
+	return o;
+}
+
+template < typename wide_t, int n >
+swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator/(const wide_t &r)
+{
+	swsl::wide_vec<wide_t, n> o;
+	for (int i = 0; i < n; ++i) {
+		o.e[i] = e[i] / r;
+	}
+	return o;
+}
+
+/*template < typename wide_t, int n >
 swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator&(const swsl::wide_vec<wide_t, n> &r)
 {
 	swsl::wide_vec<wide_t, n> o;
@@ -187,10 +297,58 @@ swsl::wide_vec<wide_t, n> swsl::wide_vec<wide_t, n>::operator|(const swsl::wide_
 		o.e[i] = e[i] | r.e[i];
 	}
 	return o;
+}*/
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(const wide_t &x)
+{
+	for (int i = 0; i < n; ++i) {
+		e[i] = x;
+	}
 }
 
 template < typename wide_t, int n >
-void swsl::wide_vec<wide_t, n>::set(int a, const wide_t &x,)
+void swsl::wide_vec<wide_t, n>::set(const wide_vec<wide_t, 1> &x)
+{
+	for (int i = 0; i < n; ++i) {
+		e[i] = x[0];
+	}
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(const wide_vec<wide_t, n> &x)
+{
+	for (int i = 0; i < n; ++i) {
+		e[i] = x[i];
+	}
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(const wide_t &x, const mpl::wide_bool &lmask)
+{
+	for (int i = 0; i < n; ++i) {
+		e[i] = wide_t::merge(e[i], x, lmask);
+	}
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(const wide_vec<wide_t, 1> &x, const mpl::wide_bool &lmask)
+{
+	for (int i = 0; i < n; ++i) {
+		e[i] = wide_t::merge(e[i], x[0], lmask);
+	}
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(const wide_vec<wide_t, n> &x, const mpl::wide_bool &lmask)
+{
+	for (int i = 0; i < n; ++i) {
+		e[i] = wide_t::merge(e[i], x[i], lmask);
+	}
+}
+
+template < typename wide_t, int n >
+void swsl::wide_vec<wide_t, n>::set(int a, const wide_t &x)
 {
 	e[a] = x;
 }
@@ -387,18 +545,4 @@ swsl::wide_vec<wide_t, 4> swsl::wide_vec<wide_t, n>::operator[](int a, int b, in
 	return swsl::wide_vec<wide_t, 4>(e[a], e[b], e[c], e[d]);
 }
 
-template < typename wide_t, int n >
-class wide_array
-{
-private:
-	wide_t e[n];
-
-public:
-	wide_t &operator[](int i) { return e[i]; }
-	const wide_t &operator[](int i) const { return e[i]; }
-	// TODO
-	// wide_setter<wide_t> &operator[](const mpl::wide_int &i);
-	// const wide_t operator[](const mpl::wide_int &i) const;
-};
-
-#endif // SWSL_TYPES_H
+#endif // SWSL_TYPES_H_INCLUDED__

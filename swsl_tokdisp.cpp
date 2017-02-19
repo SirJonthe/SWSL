@@ -28,8 +28,8 @@ void swsl::TokenDispatcher::Dispatch(const swsl::Token *t)
 			DispatchDeclFn(dynamic_cast<const Token_DeclFn*>(t));
 			break;
 
-		case swsl::Token::TOKEN_DEF_VAR:
-			DispatchDefVar(dynamic_cast<const Token_DefVar*>(t));
+		case swsl::Token::TOKEN_DEF_TYPE:
+			DispatchDefType(dynamic_cast<const Token_DefType*>(t));
 			break;
 
 		case swsl::Token::TOKEN_DEF_FN:
@@ -50,6 +50,10 @@ void swsl::TokenDispatcher::Dispatch(const swsl::Token *t)
 
 		case swsl::Token::TOKEN_EXPR:
 			DispatchExpr(dynamic_cast<const Token_Expr*>(t));
+			break;
+
+		case swsl::Token::TOKEN_READ_ELEM:
+			DispatchReadElem(dynamic_cast<const Token_ReadElem*>(t));
 			break;
 
 		case swsl::Token::TOKEN_READ_FN:

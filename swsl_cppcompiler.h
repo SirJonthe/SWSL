@@ -7,7 +7,7 @@
 namespace swsl
 {
 
-class CppCompiler : swsl::TokenDispatcher
+class CppCompiler : public swsl::TokenDispatcher
 {
 private:
 	mtlArray<char> m_buffer;
@@ -34,13 +34,14 @@ protected:
 	void DispatchDeclType(const Token_DeclType *t);
 	void DispatchDeclVar(const Token_DeclVar *t);
 	void DispatchDefFn(const Token_DefFn *t);
-	void DispatchDefVar(const Token_DefVar *t);
+	void DispatchDefType(const Token_DefType *t);
 	void DispatchErr(const Token_Err *t);
 	void DispatchExpr(const Token_Expr *t);
 	void DispatchFile(const Token_File *t);
 	void DispatchIf(const Token_If *t);
+	void DispatchReadElem(const Token_ReadElem *t);
 	void DispatchReadFn(const Token_ReadFn *t);
-	void DispatchReadLit(const Token_ReadLit *);
+	void DispatchReadLit(const Token_ReadLit *t);
 	void DispatchReadVar(const Token_ReadVar *t);
 	void DispatchRet(const Token_Ret *t);
 	void DispatchRoot(const SyntaxTree *t);
