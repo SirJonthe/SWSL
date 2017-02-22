@@ -39,7 +39,6 @@ protected:
 	void DispatchExpr(const Token_Expr *t);
 	void DispatchFile(const Token_File *t);
 	void DispatchIf(const Token_If *t);
-	void DispatchReadElem(const Token_ReadElem *t);
 	void DispatchReadFn(const Token_ReadFn *t);
 	void DispatchReadLit(const Token_ReadLit *t);
 	void DispatchReadVar(const Token_ReadVar *t);
@@ -47,6 +46,10 @@ protected:
 	void DispatchRoot(const SyntaxTree *t);
 	void DispatchSet(const Token_Set *t);
 	void DispatchWhile(const Token_While *t);
+
+private:
+	void DispatchTypeName(const Token *t);
+	void DispatchCompatMain(const Token_DefFn *t);
 
 public:
 	bool Compile(swsl::SyntaxTree *t, const mtlChars &bin_name, swsl::Binary &out_bin);

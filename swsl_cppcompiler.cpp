@@ -9,6 +9,10 @@ void swsl::CppCompiler::PrintTabs( void )
 
 void swsl::CppCompiler::Print(const mtlChars &ch)
 {
+	const int BLOCK = 2048;
+	while (m_buffer.GetSize() + ch.GetSize() > m_buffer.GetCapacity()) {
+		m_buffer.SetCapacity(m_buffer.GetCapacity() + BLOCK);
+	}
 	for (int i = 0; i < ch.GetSize(); ++i) {
 		m_buffer.Add(ch[i]);
 	}
@@ -65,21 +69,9 @@ void swsl::CppCompiler::PrintType(const mtlChars &type)
 	} else if (type.Compare("bool", true)) {
 		Print("mpl::wide_bool");
 	} else if (type.Compare("int", true)) {
-		Print("swsl::wide_int1");
-	} else if (type.Compare("int2", true)) {
-		Print("swsl::wide_int2");
-	} else if (type.Compare("int3", true)) {
-		Print("swsl::wide_int3");
-	} else if (type.Compare("int4", true)) {
-		Print("swsl::wide_int4");
+		Print("mpl::wide_int");
 	} else if (type.Compare("float", true)) {
-		Print("swsl::wide_float1");
-	} else if (type.Compare("float2", true)) {
-		Print("swsl::wide_float2");
-	} else if (type.Compare("float3", true)) {
-		Print("swsl::wide_float3");
-	} else if (type.Compare("float4", true)) {
-		Print("swsl::wide_float4");
+		Print("mpl::wide_float");
 	} else {
 		Print(m_bin_name);
 		PrintVarName(type);
@@ -123,7 +115,7 @@ void swsl::CppCompiler::DispatchDeclFn(const Token_DeclFn *t)
 	Dispatch(t->params);
 	Print("const ");
 	PrintType("bool");
-	Print(" &");
+	Print("& ");
 	PrintMask();
 	Print(")");
 	if (!IsType(t->parent, Token::TOKEN_DEF_FN)) {
@@ -158,7 +150,7 @@ void swsl::CppCompiler::DispatchDeclType(const Token_DeclType *t)
 
 void swsl::CppCompiler::DispatchDeclVar(const Token_DeclVar *t)
 {
-	const bool is_param = IsType(t->parent, Token::TOKEN_DECL_FN);
+	const bool is_param = IsType(t->parent, Token::TOKEN_DECL_FN) || IsType(t->parent, Token::TOKEN_DEF_FN);
 
 	if (!is_param) {
 		PrintTabs();
@@ -166,6 +158,12 @@ void swsl::CppCompiler::DispatchDeclVar(const Token_DeclVar *t)
 	Dispatch(t->decl_type);
 	Print(" ");
 	PrintVarName(t->var_name);
+	if (t->expr != NULL) {
+		Print(" = ( ");
+		Dispatch(t->expr);
+		Print(" ) & ");
+		PrintMask();
+	}
 	if (!is_param) {
 		Print(";");
 		PrintNewline();
@@ -176,14 +174,24 @@ void swsl::CppCompiler::DispatchDeclVar(const Token_DeclVar *t)
 
 void swsl::CppCompiler::DispatchDefFn(const Token_DefFn *t)
 {
-	Dispatch(t->head);
+	Print("inline ");
+	Dispatch(t->decl_type);
+	Print(" ");
+	PrintType(t->fn_name);
+	Print("(");
+	Dispatch(t->params);
+	Print("const ");
+	PrintType("bool");
+	Print("& ");
+	PrintMask();
+	Print(")");
+	PrintNewline();
 	Dispatch(t->body);
 	PrintNewline();
 
-	// TODO:
-	// if (fn_name == "main") {
-	//	print wrapper
-	// }
+	if (t->fn_name.Compare("main", true)) {
+		DispatchCompatMain(t);
+	}
 }
 
 void swsl::CppCompiler::DispatchDefType(const Token_DefType *t)
@@ -295,17 +303,6 @@ void swsl::CppCompiler::DispatchIf(const Token_If *t)
 	--m_cond_depth;
 }
 
-void swsl::CppCompiler::DispatchReadElem(const Token_ReadElem *t)
-{
-	const mtlChars xyzw = "xyzw";
-	for (int i = 0; i < t->elems.GetSize(); ++i) {
-		Print(xyzw.FindFirstChar(t->elems[i]));
-		if (i < t->elems.GetSize() - 1) {
-			Print(", ");
-		}
-	}
-}
-
 void swsl::CppCompiler::DispatchReadFn(const Token_ReadFn *t)
 {
 	PrintType(t->fn_name);
@@ -338,27 +335,30 @@ void swsl::CppCompiler::DispatchReadLit(const Token_ReadLit *t)
 
 void swsl::CppCompiler::DispatchReadVar(const Token_ReadVar *t)
 {
-	Print(t->var_name);
+	PrintVarName(t->var_name);
 	if (t->idx != NULL) {
 		Print("[");
 		Dispatch(t->idx);
 		Print("]");
 	}
 	if (t->mem != NULL) {
-		if (t->mem->type == Token::TOKEN_READ_ELEM) {
-			Print("[");
-		} else {
-			Print(".");
-		}
+		Print(".");
 		Dispatch(t->mem);
-		if (t->mem->type == Token::TOKEN_READ_ELEM) {
-			Print("]");
-		}
 	}
 }
 
 void swsl::CppCompiler::DispatchRet(const Token_Ret *t)
 {
+	// SUPER DUPER WRONG
+	// m0 is return mask
+	// when call to return
+		// wide_assign(ret, expr, mx);
+		// m0 = m0 & (!mx);
+		// if (m0.all_fail()) { return ret; }
+	// at scope exit
+		// my = my & m0;
+	// at function end
+		// return ret;
 	Print("return ");
 	Dispatch(t->expr);
 	Print(";");
@@ -380,14 +380,15 @@ void swsl::CppCompiler::DispatchRoot(const SyntaxTree *t)
 	PrintNewline();
 	Dispatch(t->file);
 	Print("#endif");
+	PrintNewline();
 }
 
 void swsl::CppCompiler::DispatchSet(const Token_Set *t)
 {
-	// x.set(a,b,c,d, (EXPR)[i,j,k,l], lmask);
 	PrintTabs();
+	Print("swsl::wide_assign(");
 	Dispatch(t->lhs);
-	Print(".set(");
+	Print(", ");
 	Dispatch(t->rhs);
 	Print(", ");
 	PrintMask();
@@ -429,6 +430,69 @@ void swsl::CppCompiler::DispatchWhile(const Token_While *t)
 	PrintNewline();
 
 	--m_cond_depth;
+}
+
+void swsl::CppCompiler::DispatchTypeName(const Token *t)
+{
+	const Token_DeclType *type = (t != NULL && t->type == Token::TOKEN_DECL_TYPE) ? dynamic_cast<const Token_DeclType*>(t) : NULL;
+	if (type != NULL) {
+		Print(type->type_name);
+	}
+}
+
+void swsl::CppCompiler::DispatchCompatMain(const Token_DefFn *t)
+{
+	Print("inline ");
+	Dispatch(t->decl_type);
+	Print(" ");
+	PrintType(t->fn_name);
+	Print("(void* inout, ");
+	Print("const ");
+	PrintType("bool");
+	Print("& ");
+	PrintMask();
+	Print(")");
+	PrintNewline();
+	PrintTabs();
+	Print("{");
+	PrintNewline();
+	++m_depth;
+
+	PrintTabs();
+	PrintType(t->fn_name);
+	Print("(");
+	++m_depth;
+	const mtlItem<Token*> *i = t->params.GetFirst();
+	while (i != NULL) {
+		PrintNewline();
+		PrintTabs();
+		Print("*( (");
+		DispatchTypeName(dynamic_cast<const Token_DeclVar*>(i->GetItem())->decl_type);
+		Print("*)(((char*)inout)");
+
+		const mtlItem<Token*> *j = t->params.GetFirst();
+		while (j != i) {
+			Print(" + sizeof(");
+			DispatchTypeName(dynamic_cast<const Token_DeclVar*>(j->GetItem())->decl_type);
+			Print(")");
+			j = j->GetNext();
+		}
+		Print(") ), ");
+		i = i->GetNext();
+	}
+	PrintNewline();
+	PrintTabs();
+	PrintMask();
+	--m_depth;
+	PrintNewline();
+	PrintTabs();
+	Print(");");
+
+	--m_depth;
+	PrintNewline();
+	PrintTabs();
+	Print("}");
+	PrintNewline();
 }
 
 bool swsl::CppCompiler::Compile(swsl::SyntaxTree *t, const mtlChars &bin_name, swsl::Binary &out_bin)

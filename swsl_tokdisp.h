@@ -22,7 +22,6 @@ protected:
 	virtual void DispatchBody(const Token_Body*)         = 0;
 	virtual void DispatchSet(const Token_Set*)           = 0;
 	virtual void DispatchExpr(const Token_Expr*)         = 0;
-	virtual void DispatchReadElem(const Token_ReadElem*) = 0;
 	virtual void DispatchReadFn(const Token_ReadFn*)     = 0;
 	virtual void DispatchReadVar(const Token_ReadVar*)   = 0;
 	virtual void DispatchReadLit(const Token_ReadLit*)   = 0;

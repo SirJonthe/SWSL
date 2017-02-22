@@ -25,8 +25,7 @@ struct Token
 		TOKEN_EXPR       = TOKEN_SET       << 1,
 		TOKEN_READ_FN    = TOKEN_EXPR      << 1,
 		TOKEN_READ_VAR   = TOKEN_READ_FN   << 1,
-		TOKEN_READ_ELEM  = TOKEN_READ_VAR  << 1,
-		TOKEN_READ_LIT   = TOKEN_READ_ELEM << 1,
+		TOKEN_READ_LIT   = TOKEN_READ_VAR  << 1,
 		TOKEN_IF         = TOKEN_READ_LIT  << 1,
 		TOKEN_WHILE      = TOKEN_IF        << 1,
 		TOKEN_RET        = TOKEN_WHILE     << 1
@@ -81,6 +80,7 @@ struct Token_DeclType : public Token
 struct Token_DeclVar : public Token
 {
 	Token    *decl_type;  // Token_DeclType
+	Token    *expr;       // Token_Expr
 	mtlChars  var_name;
 	bool      is_ct_const;
 
@@ -109,8 +109,10 @@ struct Token_DefType : public Token
 
 struct Token_DefFn : public Token
 {
-	Token *head; // Token_DeclFn
-	Token *body; // Token_Body
+	Token           *decl_type; // Token_DeclType
+	mtlChars         fn_name;
+	mtlList<Token*>  params;    // Token_DeclVar
+	Token           *body;      // Token_Body
 
 	Token_DefFn(const Token *p_parent);
 	~Token_DefFn( void );
@@ -172,13 +174,6 @@ struct Token_ReadVar : public Token
 
 	Token_ReadVar(const Token *p_parent);
 	~Token_ReadVar( void );
-};
-
-struct Token_ReadElem : public Token
-{
-	mtlChars elems;
-
-	Token_ReadElem(const Token *p_parent);
 };
 
 struct Token_ReadLit : public Token
@@ -248,7 +243,6 @@ private:
 private:
 	bool   IsReserved(const mtlChars &name);
 	bool   IsBuiltInType(const mtlChars &name);
-	bool   VerifyElems(const mtlChars &elems);
 	bool   VerifyName(const mtlChars &name);
 	bool   CmpVarDeclName(const mtlChars &name, const Token_DeclVar *tok);
 	bool   CmpFnDeclName(const mtlChars &name, const Token_DeclFn *tok);
@@ -264,10 +258,9 @@ private:
 private:
 	Token *ProcessError(const mtlChars &msg, mtlChars err, const Token *parent);
 	Token *ProcessDeclType(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const Token *parent);
-	Token *ProcessDeclVar(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const mtlChars &var_name, const Token *parent);
+	Token *ProcessDeclVar(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const mtlChars &var_name, const mtlChars &expr, const Token *parent);
 	Token *ProcessReadFn(const mtlChars &fn_name, const mtlChars &params, const Token *parent);
 	Token *ProcessReadLit(const mtlChars &lit, const Token *parent);
-	Token *ProcessReadElem(mtlSyntaxParser &var, const Token *parent);
 	Token *ProcessReadVar(mtlSyntaxParser &var, const Token *parent);
 	Token *ProcessOperand(const mtlChars &val, const Token *parent);
 	Token *ProcessSet(const mtlChars &lhs, const mtlChars &rhs, const Token *parent);
@@ -278,6 +271,7 @@ private:
 	Token *ProcessWhile(const mtlChars &cond, const mtlChars &body, const Token *parent);
 	Token *ProcessReturn(const mtlChars &expr, const Token *parent);
 	Token *ProcessBody(const mtlChars &body, const Token *parent);
+	void   ProcessParamDecl(const mtlChars &params, mtlList<Token*> &out_params, const Token *parent);
 	Token *ProcessFuncDef(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const mtlChars &fn_name, const mtlChars &params, const mtlChars &body, const Token *parent);
 	Token *ProcessTypeMemDecl(const mtlChars &decls);
 	Token *ProcessTypeDef(const mtlChars &struct_name, const mtlChars &decls, const Token *parent);
