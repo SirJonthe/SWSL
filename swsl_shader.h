@@ -8,17 +8,10 @@
 
 #include "swsl_instr.h"
 
-class Compiler;
-class CppCompiler;
-class ByteCodeCompiler;
-
 namespace swsl
 {
 
 	typedef mtlString Binary;
-
-	class Compiler;
-	class Disassembler;
 
 	struct CompilerMessage
 	{
@@ -28,12 +21,6 @@ namespace swsl
 
 	class Shader
 	{
-		friend class swsl::Compiler;
-		friend class swsl::Disassembler;
-		friend class ::Compiler;
-		friend class ::CppCompiler;
-		friend class ::ByteCodeCompiler;
-
 	public:
 		struct InputArray
 		{

@@ -17,7 +17,6 @@ LIBS += -fopenmp -pthread
 
 SOURCES += \
 	main.cpp \
-    swsl_compiler.cpp \
     swsl_gfx.cpp \
     swsl_buffers.cpp \
     MiniLib/MGL/mglCamera.cpp \
@@ -37,17 +36,12 @@ SOURCES += \
     MiniLib/MTL/mtlRandom.cpp \
 	MiniLib/MTL/mtlString.cpp \
     swsl_shader.cpp \
-    compiler.cpp \
     MiniLib/MTL/mtlPath.cpp \
-    swsl_parser.cpp \
-    cppcompiler.cpp \
-    bytecodecompiler.cpp \
     swsl_astgen.cpp \
     swsl_tokdisp.cpp \
     swsl_cppcompiler.cpp
 
 HEADERS += \
-    swsl_compiler.h \
     swsl_instr.h \
     swsl.h \
     swsl_gfx.h \
@@ -94,12 +88,10 @@ HEADERS += \
     MiniLib/MPL/old_mplMask4.h \
     MiniLib/MPL/mplWide.h \
     MiniLib/MPL/mplCommon.h \
-    compiler.h \
     MiniLib/MTL/mtlPath.h \
     MiniLib/MPL/mplMath.h \
     swsl_aux.h \
     MiniLib/MML/mmlInt.h \
-    swsl_parser.h \
     swsl_types.h \
     swsl_program.h \
     swsl_astgen.h \

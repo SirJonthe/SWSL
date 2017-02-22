@@ -11,8 +11,6 @@
 #include "MiniLib/MML/mmlMatrix.h"
 
 #include "swsl.h"
-#include "compiler.h"
-#include "swsl_parser.h"
 #include "swsl_gfx.h"
 #include "swsl_aux.h"
 #include "swsl_astgen.h"
@@ -128,7 +126,6 @@ void Printer::SetColor(unsigned char _r, unsigned char _g, unsigned char _b)
 	b = _b;
 }
 
-#include "swsl_compiler.h"
 #include <limits>
 #include <pthread.h>
 
@@ -148,177 +145,6 @@ void OutputSIMDInfo( void )
 				 "NEON"
 			 #endif
 				 << " @ " << MPL_WIDTH << " wide" << std::endl;
-}
-
-bool LoadShader(const mtlChars &file_name, swsl::Shader &shader)
-{
-	swsl::Compiler compiler;
-	mtlString file;
-	if (!mtlSyntaxParser::BufferFile(mtlPath(file_name), file)) {
-		std::cout << "Failed to load shader file" << std::endl;
-		return false;
-	}
-	if (!compiler.Compile(file, shader)) {
-		std::cout << "Failed to compile shader" << std::endl;
-		const mtlItem<swsl::CompilerMessage> *err = shader.GetErrors();
-		while (err != NULL) {
-			std::cout << "  ";
-			swsl::print_ch(err->GetItem().msg);
-			swsl::print_ch(": ");
-			swsl::print_line(err->GetItem().ref);
-			err = err->GetNext();
-		}
-		return false;
-	}
-	{
-		// Only a test to see if shader is valid
-		// Not necessary for function
-
-		mpl::wide_float vary[3] = {  1.0f,  2.0f,  3.0f };
-		mpl::wide_float frag[3] = { -1.0f, -2.0f, -3.0f };
-
-		swsl::Shader::InputArrays inputs = {
-			{ NULL, 0 },
-			{ vary, sizeof(vary)/sizeof(mpl::wide_float) },
-			{ frag, sizeof(frag)/sizeof(mpl::wide_float) }
-		};
-		shader.SetInputArrays(inputs);
-		if (!shader.IsValid() || !shader.Run(mpl::wide_float(0.0f) < mpl::wide_float(1.0f))) {
-			std::cout << "Failed to execute shader" << std::endl;
-			return false;
-		}
-	}
-	{
-		swsl::Disassembler disassembler;
-		mtlString disassembly;
-		disassembler.Disassemble(shader, disassembly);
-		swsl::print_line(disassembly);
-	}
-	return true;
-}
-
-int InteractiveDemo( void )
-{
-	if (SDL_Init(SDL_INIT_VIDEO) == -1) {
-		std::cout << SDL_GetError() << std::endl;
-		return 1;
-	}
-	atexit(SDL_Quit);
-	if (SDL_SetVideoMode(512, 512, 24, SDL_SWSURFACE|SDL_DOUBLEBUF) == NULL) {
-		std::cout << SDL_GetError() << std::endl;
-		return 1;
-	}
-	SDL_WM_SetCaption("SWSL test", NULL);
-
-	const float side_len = 300.0f;
-	const float base_len = side_len * sin(mmlPI / 3.0f);
-
-	mmlVector<2> a_pos  = mmlVector<2>(side_len * 0.5f,     0.0f);
-	mmlVector<2> b_pos  = mmlVector<2>(side_len,        base_len);
-	mmlVector<2> c_pos  = mmlVector<2>(    0.0f,        base_len);
-	mmlVector<2> center = (a_pos + b_pos + c_pos) / 3.0f;
-	a_pos -= center;
-	b_pos -= center;
-	c_pos -= center;
-
-	SDL_Event        event;
-	swsl::Shader     shader;
-	bool             quit = false;
-	bool             reload_shader = true;
-	bool             shader_status = false;
-	swsl::Rasterizer raster;
-	Printer          p;
-
-	p.SetColor(0, 255, 0);
-
-	raster.CreateBuffers(video->w, video->h);
-	raster.SetShader(&shader);
-
-	while (!quit) {
-
-		Uint32 frame_start = SDL_GetTicks();
-
-		if (reload_shader) {
-			reload_shader = false;
-			shader_status = LoadShader("../swsl_samples/interactive.swsl", shader);
-		}
-
-		while (SDL_PollEvent(&event)) {
-			switch (event.type) {
-			case SDL_KEYDOWN:
-				if (event.key.keysym.sym == SDLK_r) {
-					reload_shader = true;
-				}
-				break;
-			case SDL_QUIT: quit = true; break;
-			}
-		}
-
-		Vertex<3> a, b, c;
-
-		//mmlMatrix<2,2> rmat = mml2DRotationMatrix((float)SDL_GetTicks() / 1000.0f);
-		mmlMatrix<2,2> rmat = mmlMatrix<2,2>::IdentityMatrix();
-		mmlVector<2>   at   = a_pos * rmat;
-		mmlVector<2>   bt   = b_pos * rmat;
-		mmlVector<2>   ct   = c_pos * rmat;
-
-		a.coord.x = round(at[0]) + video->w / 2;
-		a.coord.y = round(at[1]) + video->h / 2;
-		b.coord.x = round(bt[0]) + video->w / 2;
-		b.coord.y = round(bt[1]) + video->h / 2;
-		c.coord.x = round(ct[0]) + video->w / 2;
-		c.coord.y = round(ct[1]) + video->h / 2;
-
-		a.attributes[0] = 1.0f;
-		a.attributes[1] = 0.0f;
-		a.attributes[2] = 0.0f;
-		b.attributes[0] = 0.0f;
-		b.attributes[1] = 1.0f;
-		b.attributes[2] = 0.0f;
-		c.attributes[0] = 0.0f;
-		c.attributes[1] = 0.0f;
-		c.attributes[2] = 1.0f;
-
-		//float rgb[] = { 1.0f, 1.0f, 1.0f };
-		//raster.ClearBuffers(rgb);
-		raster.ClearBuffers();
-
-		Uint32 render_start = SDL_GetTicks();
-		raster.FillTriangle(a.coord, b.coord, c.coord, a.attributes, b.attributes, c.attributes);
-		Uint32 render_end = SDL_GetTicks();
-		Uint32 render_time = render_end - render_start;
-
-		raster.WriteColorBuffer((mtlByte*)video->pixels, video->format->BytesPerPixel, ByteOrder());
-
-		if (!shader_status) {
-			p.SetColor(255, 0, 0);
-			p.Print("Shader execution failed");
-			p.Newline();
-		} else {
-			p.SetColor(0, 255, 0);
-		}
-		p.Print("Press \'r\' to reload shader");
-		p.Newline();
-		p.Print("Render time: ");
-
-		p.Print((int)render_time);
-		p.Print("/");
-		Uint32 frame_end = SDL_GetTicks();
-		Uint32 frame_time = frame_end - frame_start;
-		p.Print((int)frame_time);
-		p.Print(" ms");
-		p.ResetCaret();
-
-		SDL_Flip(video);
-		if ((int)(25 - render_time) > 0) {
-			SDL_Delay(25 - render_time);
-		}
-
-	}
-
-	SDL_Quit();
-
-	return 0;
 }
 
 int ParserTest( void )
@@ -437,60 +263,7 @@ int SplitTest( void )
 	return 0;
 }
 
-int NewCompilerTest( void )
-{
-	ByteCodeCompiler c;
-	swsl::Shader s;
-
-	if (!c.Compile("../swsl_samples/interactive.swsl", s)) {
-		const mtlItem<ByteCodeCompiler::Message> *err = c.GetError();
-		while (err != NULL) {
-			swsl::print_ch(err->GetItem().err);
-			swsl::print_ch(": ");
-			swsl::print_line(err->GetItem().msg);
-			err = err->GetNext();
-		}
-		return 1;
-	}
-
-	mtlString output;
-	swsl::Disassembler dasm;
-	dasm.Disassemble(s, output);
-
-	swsl::print_ch(output);
-
-	return 0;
-}
-
 int CppCompilerTest( void )
-{
-	std::ofstream fout;
-	fout.open("../swsl_samples/out.h");
-	if (!fout.is_open()) {
-		swsl::print_line("could not open/create out.h");
-		return 1;
-	}
-
-	CppCompiler c;
-	swsl::Binary bin;
-
-	if (!c.Compile(mtlPath("../swsl_samples/interactive.swsl"), bin, "wide")) {
-		const mtlItem<Compiler::Message> *err = c.GetError();
-		while (err != NULL) {
-			swsl::print_ch(err->GetItem().err);
-			swsl::print_ch(": ");
-			swsl::print_line(err->GetItem().msg);
-			err = err->GetNext();
-		}
-		return 1;
-	}
-
-	fout.write(bin.GetChars(), bin.GetSize());
-
-	return 0;
-}
-
-int CppCompiler2Test( void )
 {
 	swsl::SyntaxTreeGenerator gen;
 	std::cout << "Generating tree..." << std::flush;
@@ -521,11 +294,7 @@ int CppCompiler2Test( void )
 int main(int, char**)
 {
 	OutputSIMDInfo();
-	//return InteractiveDemo();
-	//return ParserTest();
 	//return SplitTest();
 	//return PathTest();
-	//return NewCompilerTest();
-	//return CppCompilerTest();
-	return CppCompiler2Test();
+	return CppCompilerTest();
 }
