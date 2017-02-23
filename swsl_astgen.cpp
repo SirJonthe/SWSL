@@ -509,12 +509,25 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessSet(const mtlChars &lhs, const mt
 	return token;
 }
 
+swsl::Token *swsl::SyntaxTreeGenerator::ProcessRetType(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const Token *parent)
+{
+	Token *token = NULL;
+
+	if (!type_name.Compare("void", true)) {
+		token = ProcessDeclType(rw, type_name, arr_size, ref, parent);
+	} else if (rw.GetSize() != 0 || arr_size.GetSize() != 0 || ref.GetSize() != 0) {
+		token = ProcessError("Void(" _to_str(ProcessRetType) ")", "No qualifier, array, or reference allowed", parent);
+	}
+
+	return token;
+}
+
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessFuncDecl(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const mtlChars &fn_name, const mtlChars &params, const swsl::Token *parent)
 {
 	Token_DeclFn *token = new Token_DeclFn(parent);
 
 	token->fn_name = fn_name;
-	token->decl_type = ProcessDeclType(rw, type_name, arr_size, ref, token);
+	token->decl_type = ProcessRetType(rw, type_name, arr_size, ref, token);
 	ProcessParamDecl(params, token->params, token);
 	return token;
 }
@@ -644,7 +657,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessBody(const mtlChars &body, const 
 	p.SetBuffer(body);
 	p.EnableCaseSensitivity();
 	while (!p.IsEnd()) {
-		switch (p.Match("{%s} %| if(%S){%s} %| while(%S){%s} %| return %s; %| " _decl_str "=%S; %| " _decl_str "; %| %w=%S; %| %s", m)) {
+		switch (p.Match("{%s} %| if(%S){%s} %| while(%S){%s} %| return %s; %| " _decl_str "=%S; %| " _decl_str "; %| %w=%S; %| %w(%s); %| %s", m)) {
 		case 0:
 			token->tokens.AddLast(ProcessBody(m[0], token));
 			break;
@@ -673,6 +686,10 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessBody(const mtlChars &body, const 
 			token->tokens.AddLast(ProcessSet(m[0], m[1], token));
 			break;
 
+		case 7:
+			token->tokens.AddLast(ProcessReadFn(m[0], m[1], token));
+			break;
+
 		default:
 			token->tokens.AddLast(ProcessError("Syntax(" _to_str(ProcessBody) ")", m[0], token));
 			break;
@@ -683,6 +700,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessBody(const mtlChars &body, const 
 
 void swsl::SyntaxTreeGenerator::ProcessParamDecl(const mtlChars &params, mtlList<Token*> &out_params, const Token *parent)
 {
+	if (params.Compare("void", true)) { return; }
 	mtlArray<mtlChars> m;
 	mtlSyntaxParser p;
 	p.SetBuffer(params);
@@ -703,8 +721,9 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessFuncDef(const mtlChars &rw, const
 {
 	Token_DefFn *token = new Token_DefFn(parent);
 
-	token->decl_type = ProcessDeclType(rw, type_name, arr_size, ref, token);
+
 	token->fn_name = fn_name;
+	token->decl_type = ProcessRetType(rw, type_name, arr_size, ref, token);
 	ProcessParamDecl(params, token->params, token);
 	token->body = ProcessBody(body, token);
 	return token;

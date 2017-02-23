@@ -264,6 +264,7 @@ private:
 	Token *ProcessReadVar(mtlSyntaxParser &var, const Token *parent);
 	Token *ProcessOperand(const mtlChars &val, const Token *parent);
 	Token *ProcessSet(const mtlChars &lhs, const mtlChars &rhs, const Token *parent);
+	Token *ProcessRetType(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const Token *parent);
 	Token *ProcessFuncDecl(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const mtlChars &fn_name, const mtlChars &params, const Token *parent);
 	Token *ProcessOperation(const mtlChars &lhs, const mtlChars &op, const mtlChars &rhs, const Token *parent);
 	Token *ProcessExpression(const mtlChars &expr, const Token *parent);

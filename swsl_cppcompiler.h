@@ -24,6 +24,7 @@ private:
 	void PrintPrevMask( void );
 	void PrintVarName(const mtlChars &name);
 	void PrintType(const mtlChars &type);
+	void PrintReturnMerge( void );
 	void OutputBinary(swsl::Binary &bin);
 	bool IsType(const Token *token, Token::TokenType type);
 

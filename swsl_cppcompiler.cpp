@@ -62,6 +62,18 @@ bool swsl::CppCompiler::IsType(const Token *token, Token::TokenType type)
 	return token != NULL && token->type == type;
 }
 
+void swsl::CppCompiler::PrintReturnMerge( void )
+{
+	if (m_cond_depth > 1) {
+		PrintTabs();
+		PrintPrevMask();
+		Print(" = ");
+		PrintPrevMask();
+		Print(" & m0;");
+		PrintNewline();
+	}
+}
+
 void swsl::CppCompiler::PrintType(const mtlChars &type)
 {
 	if (type.Compare("void", true)) {
@@ -95,7 +107,26 @@ void swsl::CppCompiler::DispatchBody(const Token_Body *t)
 	}
 	++m_depth;
 
+	if (IsType(t->parent, Token::TOKEN_DEF_FN)) {
+		const Token_DefFn *def_fn = dynamic_cast<const Token_DefFn*>(t->parent);
+		if (def_fn != NULL && def_fn->decl_type != NULL) {
+			PrintTabs();
+			DispatchTypeName(def_fn->decl_type);
+			Print(" ret;");
+			PrintNewline();
+		}
+	}
+
 	Dispatch(t->tokens);
+
+	if (IsType(t->parent, Token::TOKEN_DEF_FN)) {
+		const Token_DefFn *def_fn = dynamic_cast<const Token_DefFn*>(t->parent);
+		if (def_fn != NULL && def_fn->decl_type != NULL) {
+			PrintTabs();
+			Print("return ret;");
+			PrintNewline();
+		}
+	}
 
 	--m_depth;
 	if (m_depth > 0) {
@@ -108,7 +139,11 @@ void swsl::CppCompiler::DispatchBody(const Token_Body *t)
 void swsl::CppCompiler::DispatchDeclFn(const Token_DeclFn *t)
 {
 	Print("inline ");
-	Dispatch(t->decl_type);
+	if (t->decl_type != NULL) {
+		Dispatch(t->decl_type);
+	} else {
+		PrintType("void");
+	}
 	Print(" ");
 	PrintType(t->fn_name);
 	Print("(");
@@ -118,10 +153,8 @@ void swsl::CppCompiler::DispatchDeclFn(const Token_DeclFn *t)
 	Print("& ");
 	PrintMask();
 	Print(")");
-	if (!IsType(t->parent, Token::TOKEN_DEF_FN)) {
-		Print(";");
-		PrintNewline();
-	}
+	Print(";");
+	PrintNewline();
 	PrintNewline();
 }
 
@@ -175,7 +208,11 @@ void swsl::CppCompiler::DispatchDeclVar(const Token_DeclVar *t)
 void swsl::CppCompiler::DispatchDefFn(const Token_DefFn *t)
 {
 	Print("inline ");
-	Dispatch(t->decl_type);
+	if (t->decl_type != NULL) {
+		Dispatch(t->decl_type);
+	} else {
+		PrintType("void");
+	}
 	Print(" ");
 	PrintType(t->fn_name);
 	Print("(");
@@ -301,6 +338,8 @@ void swsl::CppCompiler::DispatchIf(const Token_If *t)
 	PrintNewline();
 
 	--m_cond_depth;
+
+	PrintReturnMerge();
 }
 
 void swsl::CppCompiler::DispatchReadFn(const Token_ReadFn *t)
@@ -359,9 +398,26 @@ void swsl::CppCompiler::DispatchRet(const Token_Ret *t)
 		// my = my & m0;
 	// at function end
 		// return ret;
-	Print("return ");
+
+	PrintTabs();
+	Print("swsl::wide_assign(ret, ");
 	Dispatch(t->expr);
-	Print(";");
+	Print(", ");
+	PrintMask();
+	Print(");");
+	PrintNewline();
+
+	if (m_cond_depth > 1) {
+		PrintTabs();
+		Print("m0 = m0 & (!");
+		PrintMask();
+		Print(");");
+		PrintNewline();
+	}
+
+	PrintTabs();
+	Print("if (m0.all_fail()) { return ret; }");
+	PrintNewline();
 }
 
 void swsl::CppCompiler::DispatchRoot(const SyntaxTree *t)
@@ -430,20 +486,31 @@ void swsl::CppCompiler::DispatchWhile(const Token_While *t)
 	PrintNewline();
 
 	--m_cond_depth;
+
+	PrintReturnMerge();
 }
 
 void swsl::CppCompiler::DispatchTypeName(const Token *t)
 {
 	const Token_DeclType *type = (t != NULL && t->type == Token::TOKEN_DECL_TYPE) ? dynamic_cast<const Token_DeclType*>(t) : NULL;
 	if (type != NULL) {
-		Print(type->type_name);
+		PrintType(type->type_name);
+		if (type->arr_size != NULL) {
+			Print("[");
+			Dispatch(type->arr_size);
+			Print("]");
+		}
 	}
 }
 
 void swsl::CppCompiler::DispatchCompatMain(const Token_DefFn *t)
 {
 	Print("inline ");
-	Dispatch(t->decl_type);
+	if (t->decl_type != NULL) {
+		Dispatch(t->decl_type);
+	} else {
+		PrintType("void");
+	}
 	Print(" ");
 	PrintType(t->fn_name);
 	Print("(void* inout, ");
@@ -459,6 +526,9 @@ void swsl::CppCompiler::DispatchCompatMain(const Token_DefFn *t)
 	++m_depth;
 
 	PrintTabs();
+	if (t->decl_type != NULL) {
+		Print("return ");
+	}
 	PrintType(t->fn_name);
 	Print("(");
 	++m_depth;
