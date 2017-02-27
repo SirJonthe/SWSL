@@ -96,7 +96,8 @@ HEADERS += \
     swsl_program.h \
     swsl_astgen.h \
     swsl_tokdisp.h \
-    swsl_cppcompiler.h
+    swsl_cppcompiler.h \
+    tmp_out.h
 
 macx: {
 	OBJECTIVE_SOURCES += \

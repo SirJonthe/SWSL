@@ -119,15 +119,6 @@ void swsl::CppCompiler::DispatchBody(const Token_Body *t)
 
 	Dispatch(t->tokens);
 
-	if (IsType(t->parent, Token::TOKEN_DEF_FN)) {
-		const Token_DefFn *def_fn = dynamic_cast<const Token_DefFn*>(t->parent);
-		if (def_fn != NULL && def_fn->decl_type != NULL) {
-			PrintTabs();
-			Print("return ret;");
-			PrintNewline();
-		}
-	}
-
 	--m_depth;
 	if (m_depth > 0) {
 		PrintTabs();
@@ -148,9 +139,8 @@ void swsl::CppCompiler::DispatchDeclFn(const Token_DeclFn *t)
 	PrintType(t->fn_name);
 	Print("(");
 	Dispatch(t->params);
-	Print("const ");
 	PrintType("bool");
-	Print("& ");
+	Print(" ");
 	PrintMask();
 	Print(")");
 	Print(";");
@@ -163,8 +153,6 @@ void swsl::CppCompiler::DispatchDeclType(const Token_DeclType *t)
 	if (!t->type_name.Compare("void")) {
 		if (t->is_const) {
 			Print("const ");
-		} else {
-			Print("mutable ");
 		}
 	}
 	if (t->arr_size != NULL) {
@@ -217,9 +205,8 @@ void swsl::CppCompiler::DispatchDefFn(const Token_DefFn *t)
 	PrintType(t->fn_name);
 	Print("(");
 	Dispatch(t->params);
-	Print("const ");
 	PrintType("bool");
-	Print("& ");
+	Print(" ");
 	PrintMask();
 	Print(")");
 	PrintNewline();
@@ -322,6 +309,7 @@ void swsl::CppCompiler::DispatchIf(const Token_If *t)
 		PrintMask();
 		Print(") & ");
 		PrintPrevMask();
+		Print(";");
 		PrintNewline();
 
 		PrintTabs();
@@ -364,11 +352,14 @@ void swsl::CppCompiler::DispatchReadLit(const Token_ReadLit *t)
 		} else {
 			Print("MPL_TRUE");
 		}
-	} else {
+	} else if (t->lit_type == Token_ReadLit::TYPE_FLOAT) {
+		Print("mpl::wide_float(");
 		Print(t->lit);
-		if (t->lit_type == Token_ReadLit::TYPE_FLOAT) {
-			Print("f");
-		}
+		Print("f)");
+	} else {
+		Print("mpl::wide_int(");
+		Print(t->lit);
+		Print(")");
 	}
 }
 
@@ -407,17 +398,32 @@ void swsl::CppCompiler::DispatchRet(const Token_Ret *t)
 	Print(");");
 	PrintNewline();
 
-	if (m_cond_depth > 1) {
+	if (m_cond_depth > 0) {
+		if (m_cond_depth > 1) {
+			PrintTabs();
+			Print("m0 = m0 & (!");
+			PrintMask();
+			Print(");");
+			PrintNewline();
+		}
+
 		PrintTabs();
-		Print("m0 = m0 & (!");
-		PrintMask();
-		Print(");");
+		Print("if (m0.all_fail()) { return ret; }");
+		PrintNewline();
+
+		if (m_cond_depth > 1) {
+			PrintTabs();
+			PrintPrevMask();
+			Print(" = ");
+			PrintPrevMask();
+			Print(" & m0;");
+			PrintNewline();
+		}
+	} else {
+		PrintTabs();
+		Print("return ret;");
 		PrintNewline();
 	}
-
-	PrintTabs();
-	Print("if (m0.all_fail()) { return ret; }");
-	PrintNewline();
 }
 
 void swsl::CppCompiler::DispatchRoot(const SyntaxTree *t)
@@ -514,9 +520,8 @@ void swsl::CppCompiler::DispatchCompatMain(const Token_DefFn *t)
 	Print(" ");
 	PrintType(t->fn_name);
 	Print("(void* inout, ");
-	Print("const ");
 	PrintType("bool");
-	Print("& ");
+	Print(" ");
 	PrintMask();
 	Print(")");
 	PrintNewline();

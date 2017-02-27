@@ -291,6 +291,13 @@ int CppCompilerTest( void )
 	return 0;
 }
 
+#include "tmp_out.h"
+int CppGenTest( void )
+{
+	mpl::wide_float f[10];
+	//wide_main(f, MPL_TRUE);
+}
+
 int main(int, char**)
 {
 	OutputSIMDInfo();
