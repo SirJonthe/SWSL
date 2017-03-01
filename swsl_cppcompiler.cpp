@@ -347,11 +347,9 @@ void swsl::CppCompiler::DispatchReadFn(const Token_ReadFn *t)
 void swsl::CppCompiler::DispatchReadLit(const Token_ReadLit *t)
 {
 	if (t->lit_type == Token_ReadLit::TYPE_BOOL) {
-		if (t->lit.Compare("false", true)) {
-			Print("MPL_FALSE");
-		} else {
-			Print("MPL_TRUE");
-		}
+		Print("mpl::wide_bool(");
+		Print(t->lit);
+		Print(")");
 	} else if (t->lit_type == Token_ReadLit::TYPE_FLOAT) {
 		Print("mpl::wide_float(");
 		Print(t->lit);
