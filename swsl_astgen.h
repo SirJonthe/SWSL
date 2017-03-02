@@ -34,10 +34,9 @@ struct Token
 	const Token     *const parent;
 	const TokenType        type;
 
-	Token(const Token *p_parent, TokenType p_type) :
-		parent(p_parent), type(p_type)
-	{}
-	virtual ~Token( void ) {}
+	Token(const Token *p_parent, TokenType p_type);
+	virtual ~Token( void );
+	int Count(unsigned int type_mask) const;
 };
 
 struct Token_Err : public Token
@@ -138,7 +137,7 @@ struct Token_Body : public Token
 
 struct Token_Set : public Token
 {
-	Token *lhs; // Token_Val
+	Token *lhs; // Token_ReadVar
 	Token *rhs; // Token_Expr
 
 	Token_Set(const Token *p_parent);

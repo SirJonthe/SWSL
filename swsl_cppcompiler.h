@@ -11,7 +11,7 @@ class CppCompiler : public swsl::TokenDispatcher
 {
 private:
 	mtlArray<char> m_buffer;
-	int            m_cond_depth;
+	int            m_mask_depth;
 	int            m_depth;
 	int            m_errs;
 	mtlChars       m_bin_name;
@@ -20,6 +20,7 @@ private:
 	void PrintTabs( void );
 	void Print(const mtlChars &ch);
 	void PrintNewline( void );
+	void PrintMask(int mask);
 	void PrintMask( void );
 	void PrintPrevMask( void );
 	void PrintVarName(const mtlChars &name);
@@ -27,6 +28,7 @@ private:
 	void PrintReturnMerge( void );
 	void OutputBinary(swsl::Binary &bin);
 	bool IsType(const Token *token, Token::TokenType type);
+	bool CompareMaskDepth(const Token *token) const;
 
 protected:
 	void DispatchAlias(const Token_Alias *t);

@@ -20,6 +20,16 @@ static const mtlChars _keywords[_keywords_n] = { "const", "mutable", "if", "else
 
 #define _to_str(X) #X
 
+swsl::Token::Token(const Token *p_parent, TokenType p_type) :
+	parent(p_parent), type(p_type)
+{}
+swsl::Token::~Token( void ) {}
+
+int swsl::Token::Count(unsigned int type_mask) const
+{
+	return ((type_mask & (unsigned int)type) > 0 ? 1 : 0) + (parent != NULL ? parent->Count(type_mask) : 0);
+}
+
 swsl::Token_Err::Token_Err(const swsl::Token *p_parent) :
 	Token(p_parent, TOKEN_ERR)
 {}

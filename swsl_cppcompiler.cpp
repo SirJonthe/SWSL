@@ -23,20 +23,22 @@ void swsl::CppCompiler::PrintNewline( void )
 	m_buffer.Add('\n');
 }
 
+void swsl::CppCompiler::PrintMask(int mask)
+{
+	Print("m");
+	mtlString num;
+	num.FromInt(mask);
+	Print(num);
+}
+
 void swsl::CppCompiler::PrintMask( void )
 {
-	m_buffer.Add('m');
-	mtlString num;
-	num.FromInt(m_cond_depth);
-	Print(num);
+	PrintMask(m_mask_depth);
 }
 
 void swsl::CppCompiler::PrintPrevMask( void )
 {
-	m_buffer.Add('m');
-	mtlString num;
-	num.FromInt(m_cond_depth - 1);
-	Print(num);
+	PrintMask(m_mask_depth - 1);
 }
 
 void swsl::CppCompiler::PrintVarName(const mtlChars &name)
@@ -62,9 +64,16 @@ bool swsl::CppCompiler::IsType(const Token *token, Token::TokenType type)
 	return token != NULL && token->type == type;
 }
 
+bool swsl::CppCompiler::CompareMaskDepth(const Token *token) const
+{
+	if (token == NULL || token->type != Token::TOKEN_READ_VAR) { return false; }
+	const Token *t = dynamic_cast<const Token_ReadVar*>(token)->decl_type;
+	return m_mask_depth == ((t != NULL) ? t->Count(Token::TOKEN_IF|Token::TOKEN_WHILE) : 0);
+}
+
 void swsl::CppCompiler::PrintReturnMerge( void )
 {
-	if (m_cond_depth > 1) {
+	if (m_mask_depth > 1) {
 		PrintTabs();
 		PrintPrevMask();
 		Print(" = ");
@@ -180,10 +189,8 @@ void swsl::CppCompiler::DispatchDeclVar(const Token_DeclVar *t)
 	Print(" ");
 	PrintVarName(t->var_name);
 	if (t->expr != NULL) {
-		Print(" = ( ");
+		Print(" = ");
 		Dispatch(t->expr);
-		Print(" ) & ");
-		PrintMask();
 	}
 	if (!is_param) {
 		Print(";");
@@ -274,7 +281,7 @@ void swsl::CppCompiler::DispatchFile(const Token_File *t)
 
 void swsl::CppCompiler::DispatchIf(const Token_If *t)
 {
-	++m_cond_depth;
+	++m_mask_depth;
 
 	PrintTabs();
 	Print("{");
@@ -325,7 +332,7 @@ void swsl::CppCompiler::DispatchIf(const Token_If *t)
 	Print("}");
 	PrintNewline();
 
-	--m_cond_depth;
+	--m_mask_depth;
 
 	PrintReturnMerge();
 }
@@ -396,8 +403,8 @@ void swsl::CppCompiler::DispatchRet(const Token_Ret *t)
 	Print(");");
 	PrintNewline();
 
-	if (m_cond_depth > 0) {
-		if (m_cond_depth > 1) {
+	if (m_mask_depth > 0) {
+		if (m_mask_depth > 1) {
 			PrintTabs();
 			Print("m0 = m0 & (!");
 			PrintMask();
@@ -409,7 +416,7 @@ void swsl::CppCompiler::DispatchRet(const Token_Ret *t)
 		Print("if (m0.all_fail()) { return ret; }");
 		PrintNewline();
 
-		if (m_cond_depth > 1) {
+		if (m_mask_depth > 1) {
 			PrintTabs();
 			PrintPrevMask();
 			Print(" = ");
@@ -445,20 +452,33 @@ void swsl::CppCompiler::DispatchRoot(const SyntaxTree *t)
 
 void swsl::CppCompiler::DispatchSet(const Token_Set *t)
 {
+	// if lhs was defined at the same stack depth as current one
+	// there is no need to apply a mask
+
+	bool needs_merge = !CompareMaskDepth(t->lhs);
+
 	PrintTabs();
-	Print("swsl::wide_assign(");
-	Dispatch(t->lhs);
-	Print(", ");
+	if (needs_merge) {
+		Print("swsl::wide_assign(");
+		Dispatch(t->lhs);
+		Print(", ");
+	} else {
+		Dispatch(t->lhs);
+		Print(" = ");
+	}
 	Dispatch(t->rhs);
-	Print(", ");
-	PrintMask();
-	Print(");");
+	if (needs_merge) {
+		Print(", ");
+		PrintMask();
+		Print(")");
+	}
+	Print(";");
 	PrintNewline();
 }
 
 void swsl::CppCompiler::DispatchWhile(const Token_While *t)
 {
-	++m_cond_depth;
+	++m_mask_depth;
 
 	PrintTabs();
 	Print("{");
@@ -489,7 +509,7 @@ void swsl::CppCompiler::DispatchWhile(const Token_While *t)
 	Print("}");
 	PrintNewline();
 
-	--m_cond_depth;
+	--m_mask_depth;
 
 	PrintReturnMerge();
 }
@@ -570,7 +590,7 @@ void swsl::CppCompiler::DispatchCompatMain(const Token_DefFn *t)
 
 bool swsl::CppCompiler::Compile(swsl::SyntaxTree *t, const mtlChars &bin_name, swsl::Binary &out_bin)
 {
-	m_cond_depth = 0;
+	m_mask_depth = 0;
 	m_depth = 0;
 	m_errs = 0;
 	m_buffer.Free();
