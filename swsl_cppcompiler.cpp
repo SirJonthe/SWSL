@@ -68,7 +68,7 @@ bool swsl::CppCompiler::CompareMaskDepth(const Token *token) const
 {
 	if (token == NULL || token->type != Token::TOKEN_READ_VAR) { return false; }
 	const Token *t = dynamic_cast<const Token_ReadVar*>(token)->decl_type;
-	return m_mask_depth == ((t != NULL) ? t->Count(Token::TOKEN_IF|Token::TOKEN_WHILE) : 0);
+	return m_mask_depth == ((t != NULL) ? t->CountAscend(Token::TOKEN_IF|Token::TOKEN_WHILE) : 0);
 }
 
 void swsl::CppCompiler::PrintReturnMerge( void )
@@ -404,13 +404,11 @@ void swsl::CppCompiler::DispatchRet(const Token_Ret *t)
 	PrintNewline();
 
 	if (m_mask_depth > 0) {
-		if (m_mask_depth > 1) {
-			PrintTabs();
-			Print("m0 = m0 & (!");
-			PrintMask();
-			Print(");");
-			PrintNewline();
-		}
+		PrintTabs();
+		Print("m0 = m0 & (!");
+		PrintMask();
+		Print(");");
+		PrintNewline();
 
 		PrintTabs();
 		Print("if (m0.all_fail()) { return ret; }");

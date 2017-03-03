@@ -291,11 +291,51 @@ int CppCompilerTest( void )
 	return 0;
 }
 
-#include "tmp_out.h"
-int CppGenTest( void )
+int scalar_max(int &a, int &b)
 {
-	mpl::wide_float f[10];
-	//wide_main(f, MPL_TRUE);
+	if (a < b) { return b; }
+	return a;
+}
+
+#include "tmp_out.h"
+int CodeCorrectnessTest( void )
+{
+	std::cout << "testing correctness..." << std::endl;;
+
+	srand(time(0));
+
+	const int size = MPL_WIDTH;
+	int a[size];
+	int b[size];
+	for (int i = 0; i < size; ++i) {
+		a[i] = rand() % 10;
+		b[i] = rand() % 10;
+		std::cout << "  " << a[i] << "  " << b[i] << std::endl;
+	}
+
+	int scal[size];
+	for (int i = 0; i < size; ++i) {
+		scal[i] = scalar_max(a[i], b[i]);
+	}
+	int wide[size];
+	for (int i = 0; i < size; i+=MPL_WIDTH) {
+		*(mpl::wide_int*)(wide + i) = wide_max(*(mpl::wide_int*)(a + i), *(mpl::wide_int*)(b + i), true);
+	}
+
+	std::cout << "  scal:";
+	for (int i = 0; i < size; ++i) { std::cout << "  " << scal[i]; }
+	std::cout << std::endl;
+	std::cout << "  wide:";
+	for (int i = 0; i < size; ++i) { std::cout << "  " << wide[i]; }
+	std::cout << std::endl;
+
+	std::cout << "done" << std::endl;
+	return 0;
+}
+
+int CodePerformanceTest( void )
+{
+	return 0;
 }
 
 int main(int, char**)
@@ -303,5 +343,6 @@ int main(int, char**)
 	OutputSIMDInfo();
 	//return SplitTest();
 	//return PathTest();
-	return CppCompilerTest();
+	//return CppCompilerTest();
+	return CodeCorrectnessTest();
 }

@@ -36,7 +36,7 @@ struct Token
 
 	Token(const Token *p_parent, TokenType p_type);
 	virtual ~Token( void );
-	int Count(unsigned int type_mask) const;
+	int CountAscend(unsigned int type_mask) const;
 };
 
 struct Token_Err : public Token

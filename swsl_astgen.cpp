@@ -25,9 +25,9 @@ swsl::Token::Token(const Token *p_parent, TokenType p_type) :
 {}
 swsl::Token::~Token( void ) {}
 
-int swsl::Token::Count(unsigned int type_mask) const
+int swsl::Token::CountAscend(unsigned int type_mask) const
 {
-	return ((type_mask & (unsigned int)type) > 0 ? 1 : 0) + (parent != NULL ? parent->Count(type_mask) : 0);
+	return ((type_mask & (unsigned int)type) > 0 ? 1 : 0) + (parent != NULL ? parent->CountAscend(type_mask) : 0);
 }
 
 swsl::Token_Err::Token_Err(const swsl::Token *p_parent) :
@@ -523,12 +523,13 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessRetType(const mtlChars &rw, const
 {
 	Token *token = NULL;
 
-	if (!type_name.Compare("void", true)) {
+	if (ref.GetSize() != 0) {
+		token = ProcessError("Ref(" _to_str(ProcessRetType) ")", "Return values can not be references", parent);
+	} else if (!type_name.Compare("void", true)) {
 		token = ProcessDeclType(rw, type_name, arr_size, ref, parent);
-	} else if (rw.GetSize() != 0 || arr_size.GetSize() != 0 || ref.GetSize() != 0) {
-		token = ProcessError("Void(" _to_str(ProcessRetType) ")", "No qualifier, array, or reference allowed", parent);
+	} else if (rw.GetSize() != 0 || arr_size.GetSize() != 0) {
+		token = ProcessError("Void(" _to_str(ProcessRetType) ")", "No qualifier or array allowed", parent);
 	}
-
 	return token;
 }
 
