@@ -275,6 +275,7 @@ private:
 	Token *ProcessFuncDef(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const mtlChars &fn_name, const mtlChars &params, const mtlChars &body, const Token *parent);
 	Token *ProcessTypeMemDecl(const mtlChars &decls);
 	Token *ProcessTypeDef(const mtlChars &struct_name, const mtlChars &decls, const Token *parent);
+	void   RemoveComments(mtlString &code);
 	Token *ProcessFile(const mtlChars &contents, const Token *parent);
 	Token *LoadFile(const mtlChars &file_name, const Token *parent);
 

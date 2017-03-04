@@ -387,7 +387,7 @@ void swsl::CppCompiler::DispatchRet(const Token_Ret *t)
 	// SUPER DUPER WRONG
 	// m0 is return mask
 	// when call to return
-		// wide_assign(ret, expr, mx);
+		// mov_if_true(ret, expr, mx);
 		// m0 = m0 & (!mx);
 		// if (m0.all_fail()) { return ret; }
 	// at scope exit
@@ -396,7 +396,7 @@ void swsl::CppCompiler::DispatchRet(const Token_Ret *t)
 		// return ret;
 
 	PrintTabs();
-	Print("swsl::wide_assign(ret, ");
+	Print("swsl::mov_if_true(ret, ");
 	Dispatch(t->expr);
 	Print(", ");
 	PrintMask();
@@ -442,6 +442,8 @@ void swsl::CppCompiler::DispatchRoot(const SyntaxTree *t)
 	PrintNewline();
 	Print("#include \"swsl_types.h\"");
 	PrintNewline();
+	Print("#include \"swsl_math.h\"");
+	PrintNewline();
 	PrintNewline();
 	Dispatch(t->file);
 	Print("#endif");
@@ -453,11 +455,11 @@ void swsl::CppCompiler::DispatchSet(const Token_Set *t)
 	// if lhs was defined at the same stack depth as current one
 	// there is no need to apply a mask
 
-	bool needs_merge = !CompareMaskDepth(t->lhs);
+	const bool needs_merge = !CompareMaskDepth(t->lhs);
 
 	PrintTabs();
 	if (needs_merge) {
-		Print("swsl::wide_assign(");
+		Print("swsl::mov_if_true(");
 		Dispatch(t->lhs);
 		Print(", ");
 	} else {

@@ -20,12 +20,6 @@ public:
 	// const wide_t operator[](const mpl::wide_int &i) const;
 };
 
-template < typename wide_t >
-void wide_assign(wide_t &a, const wide_t &b, const mpl::wide_bool &lmask)
-{
-	a = wide_t::cmov(a, b, lmask);
-}
-
 }
 
 #endif // SWSL_TYPES_H_INCLUDED__

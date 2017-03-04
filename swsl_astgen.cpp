@@ -774,6 +774,24 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessTypeDef(const mtlChars &struct_na
 	return ProcessError("Collision(" _to_str(ProcessTypeDef) ")", struct_name, parent);
 }
 
+void swsl::SyntaxTreeGenerator::RemoveComments(mtlString &code)
+{
+	const int size = code.GetSize();
+	int comment_token = 0;
+	for (int i = 0; i < size; ++i) {
+		if (comment_token == 2) {
+			if (!mtlChars::IsNewline(code[i])) { code[i] = ' '; }
+			else                               { comment_token = 0; }
+		} else {
+			comment_token = code[i] == '/' ? comment_token + 1 : 0;
+			if (comment_token == 2) {
+				code[i - 1] = ' ';
+				code[i]     = ' ';
+			}
+		}
+	}
+}
+
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessFile(const mtlChars &contents, const swsl::Token *parent)
 {
 	Token_Body *token = new Token_Body(parent);
@@ -816,6 +834,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::LoadFile(const mtlChars &file_name, cons
 		delete token;
 		return ProcessError("File not found(" _to_str(LoadFile) ")", file_name, parent);
 	}
+	RemoveComments(token->content);
 	token->file_name = file_name;
 	token->body = ProcessFile(token->content, token);
 	return token;

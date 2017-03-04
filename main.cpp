@@ -140,7 +140,7 @@ void OutputSIMDInfo( void )
 			 #elif MPL_SIMD == MPL_SIMD_AVX256
 				"AVX256"
 			 #elif MPL_SIMD == MPL_SIMD_AVX512
-				"AVX512
+				"AVX512"
 			 #elif MPL_SIMD == MPL_SIMD_NEON
 				 "NEON"
 			 #endif
@@ -291,7 +291,7 @@ int CppCompilerTest( void )
 	return 0;
 }
 
-int scalar_max(int &a, int &b)
+float scalar_max(const float &a, const float &b, bool)
 {
 	if (a < b) { return b; }
 	return a;
@@ -300,26 +300,26 @@ int scalar_max(int &a, int &b)
 #include "tmp_out.h"
 int CodeCorrectnessTest( void )
 {
-	std::cout << "testing correctness..." << std::endl;;
+	std::cout << "testing correctness (find max value)..." << std::endl;;
 
 	srand(time(0));
 
 	const int size = MPL_WIDTH;
-	int a[size];
-	int b[size];
+	float a[size];
+	float b[size];
 	for (int i = 0; i < size; ++i) {
-		a[i] = rand() % 10;
-		b[i] = rand() % 10;
+		a[i] = rand() % 90 + 10;
+		b[i] = rand() % 90 + 10;
 		std::cout << "  " << a[i] << "  " << b[i] << std::endl;
 	}
 
-	int scal[size];
+	float scal[size];
 	for (int i = 0; i < size; ++i) {
-		scal[i] = scalar_max(a[i], b[i]);
+		scal[i] = scalar_max(a[i], b[i], true);
 	}
-	int wide[size];
+	float wide[size];
 	for (int i = 0; i < size; i+=MPL_WIDTH) {
-		*(mpl::wide_int*)(wide + i) = wide_max(*(mpl::wide_int*)(a + i), *(mpl::wide_int*)(b + i), true);
+		*(mpl::wide_float*)(wide + i) = wide_max(*(mpl::wide_float*)(a + i), *(mpl::wide_float*)(b + i), true);
 	}
 
 	std::cout << "  scal:";
@@ -333,8 +333,84 @@ int CodeCorrectnessTest( void )
 	return 0;
 }
 
+inline void scalar_mat_mult(
+		  float &x,         float &y,         float &z,
+	const float &m00, const float &m10, const float &m20,
+	const float &m01, const float &m11, const float &m21,
+	const float &m02, const float &m12, const float &m22)
+{
+	float a = x*m00 + y*m10 + z*m20;
+	float b = x*m01 + y*m11 + z*m21;
+	float c = x*m02 + y*m12 + z*m22;
+	x = a;
+	y = b;
+	z = c;
+}
+
 int CodePerformanceTest( void )
 {
+	std::cout << "testing performance (matrix mult)..." << std::endl;;
+
+	srand(time(0));
+
+	time_t start, end;
+
+	const int size = MPL_WIDTH*1000000;
+	float *x = new float[size];
+	float *y = new float[size];
+	float *z = new float[size];
+	float *m00 = new float[size], *m10 = new float[size], *m20 = new float[size],
+		  *m01 = new float[size], *m11 = new float[size], *m21 = new float[size],
+		  *m02 = new float[size], *m12 = new float[size], *m22 = new float[size];
+	for (int i = 0; i < size; ++i) {
+		x[i]   = rand();
+		y[i]   = rand();
+		z[i]   = rand();
+		m00[i] = rand();
+		m10[i] = rand();
+		m20[i] = rand();
+		m01[i] = rand();
+		m11[i] = rand();
+		m21[i] = rand();
+		m02[i] = rand();
+		m12[i] = rand();
+		m22[i] = rand();
+	}
+
+	start = clock();
+	for (int i = 0; i < size; ++i) {
+		scalar_mat_mult(x[i], y[i], z[i],
+						m00[i], m10[i], m20[i],
+						m01[i], m11[i], m21[i],
+						m02[i], m12[i], m22[i]
+		);
+	}
+	end = clock();
+	std::cout << "  scalar finished in " << end - start << " clocks" << std::endl;
+
+	start = clock();
+	for (int i = 0; i < size; i+=MPL_WIDTH) {
+		wide_mat_mult(*((mpl::wide_float*)(x + i)), *((mpl::wide_float*)(y + i)), *((mpl::wide_float*)(z + i)),
+					  *((mpl::wide_float*)(m00 + i)), *((mpl::wide_float*)(m10 + i)), *((mpl::wide_float*)(m20 + i)),
+					  *((mpl::wide_float*)(m01 + i)), *((mpl::wide_float*)(m11 + i)), *((mpl::wide_float*)(m21 + i)),
+					  *((mpl::wide_float*)(m02 + i)), *((mpl::wide_float*)(m12 + i)), *((mpl::wide_float*)(m22 + i))
+		);
+	}
+	end = clock();
+	std::cout << "  wide1 finished in  " << end - start << " clocks" << std::endl;
+
+	start = clock();
+	for (int i = 0; i < size; i+=MPL_WIDTH) {
+		wide_mat_mult_raw(*((__m128*)(x + i)), *((__m128*)(y + i)), *((__m128*)(z + i)),
+						  *((__m128*)(m00 + i)), *((__m128*)(m10 + i)), *((__m128*)(m20 + i)),
+						  *((__m128*)(m01 + i)), *((__m128*)(m11 + i)), *((__m128*)(m21 + i)),
+						  *((__m128*)(m02 + i)), *((__m128*)(m12 + i)), *((__m128*)(m22 + i))
+		);
+	}
+	end = clock();
+	std::cout << "  wide2 finished in  " << end - start << " clocks" << std::endl;
+
+	std::cout << "done" << std::endl;
 	return 0;
 }
 
@@ -344,5 +420,6 @@ int main(int, char**)
 	//return SplitTest();
 	//return PathTest();
 	//return CppCompilerTest();
-	return CodeCorrectnessTest();
+	//return CodeCorrectnessTest();
+	return CodePerformanceTest();
 }
