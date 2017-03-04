@@ -91,7 +91,8 @@ bool swsl::Shader::Run(const mpl::wide_bool &frag_mask) const
 			// Sync up fragment data to output
 			const mpl::wide_float *fragment_data = stack + frag_offset;
 			for (int i = 0; i < m_inputs->fragments.count; ++i) {
-				m_inputs->fragments.data[i] = mpl::wide_float::merge(fragment_data[i], m_inputs->fragments.data[i], frag_mask);
+				// NOTE: changed how CMOV works, cond_mask is now inverted
+				m_inputs->fragments.data[i] = mpl::wide_float::cmov(fragment_data[i], m_inputs->fragments.data[i], frag_mask);
 			}
 			return true;
 		}

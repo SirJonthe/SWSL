@@ -23,7 +23,7 @@ public:
 template < typename wide_t >
 void wide_assign(wide_t &a, const wide_t &b, const mpl::wide_bool &lmask)
 {
-	a = wide_t::merge(a, b, lmask);
+	a = wide_t::cmov(a, b, lmask);
 }
 
 }
