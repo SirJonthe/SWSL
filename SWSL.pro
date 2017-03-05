@@ -97,7 +97,8 @@ HEADERS += \
     swsl_tokdisp.h \
     swsl_cppcompiler.h \
     tmp_out.h \
-    swsl_math.h
+    swsl_math.h \
+    MiniLib/MPL/mplAlloc.h
 
 macx: {
 	OBJECTIVE_SOURCES += \

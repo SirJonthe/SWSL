@@ -9,6 +9,7 @@
 #include "MiniLib/MTL/mtlParser.h"
 #include "MiniLib/MGL/mglText.h"
 #include "MiniLib/MML/mmlMatrix.h"
+#include "MiniLib/MPL/mplAlloc.h"
 
 #include "swsl.h"
 #include "swsl_gfx.h"
@@ -351,17 +352,22 @@ int CodePerformanceTest( void )
 {
 	std::cout << "testing performance (matrix mult)..." << std::endl;;
 
+	const size_t size = MPL_WIDTH*1000000;
+	const size_t byte_size = size * sizeof(float);
+	const size_t total_size = byte_size * 12;
+
 	srand(time(0));
 
 	time_t start, end;
+	mpl::aligned mem;
+	mem.alloc(total_size);
 
-	const int size = MPL_WIDTH*1000000;
-	float *x = new float[size];
-	float *y = new float[size];
-	float *z = new float[size];
-	float *m00 = new float[size], *m10 = new float[size], *m20 = new float[size],
-		  *m01 = new float[size], *m11 = new float[size], *m21 = new float[size],
-		  *m02 = new float[size], *m12 = new float[size], *m22 = new float[size];
+	float *x   = mem.ptr<float>() + size*0;
+	float *y   = mem.ptr<float>() + size*1;
+	float *z   = mem.ptr<float>() + size*2;
+	float *m00 = mem.ptr<float>() + size*3, *m10 = mem.ptr<float>() + size* 4, *m20 = mem.ptr<float>() + size* 5,
+		  *m01 = mem.ptr<float>() + size*6, *m11 = mem.ptr<float>() + size* 7, *m21 = mem.ptr<float>() + size* 8,
+		  *m02 = mem.ptr<float>() + size*9, *m12 = mem.ptr<float>() + size*10, *m22 = mem.ptr<float>() + size*11;
 	for (int i = 0; i < size; ++i) {
 		x[i]   = rand();
 		y[i]   = rand();
@@ -409,6 +415,8 @@ int CodePerformanceTest( void )
 	}
 	end = clock();
 	std::cout << "  wide2 finished in  " << end - start << " clocks" << std::endl;
+
+	mem.free();
 
 	std::cout << "done" << std::endl;
 	return 0;
