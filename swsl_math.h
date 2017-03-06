@@ -1,6 +1,8 @@
 #ifndef SWSL_MATH_H_INCLUDED__
 #define SWSL_MATH_H_INCLUDED__
 
+#include "MiniLib/MPL/mplWide.h"
+
 namespace swsl
 {
 
