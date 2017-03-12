@@ -34,6 +34,7 @@ inline void wide_mat_mult(
 	z = c;
 }
 
+#if MPL_SIMD == MPL_SIMD_SSE
 inline void wide_mat_mult_raw(
 		  __m128 &x,         __m128 &y,         __m128 &z,
 	const __m128 &m00, const __m128 &m10, const __m128 &m20,
@@ -47,6 +48,7 @@ inline void wide_mat_mult_raw(
 	y = b;
 	z = c;
 }
+#endif
 
 #endif
 

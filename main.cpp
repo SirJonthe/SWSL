@@ -350,7 +350,7 @@ inline void scalar_mat_mult(
 
 int CodePerformanceTest( void )
 {
-	std::cout << "testing performance (matrix mult)..." << std::endl;;
+	std::cout << "testing performance (matrix mult)..." << std::endl;
 
 	const size_t size = MPL_WIDTH*1000000;
 	const size_t byte_size = size * sizeof(float);
@@ -405,6 +405,7 @@ int CodePerformanceTest( void )
 	end = clock();
 	std::cout << "  wide1 finished in  " << end - start << " clocks" << std::endl;
 
+#if MPL_SIMD == MPL_SIMD_SSE
 	start = clock();
 	for (int i = 0; i < size; i+=MPL_WIDTH) {
 		wide_mat_mult_raw(*((__m128*)(x + i)), *((__m128*)(y + i)), *((__m128*)(z + i)),
@@ -415,6 +416,7 @@ int CodePerformanceTest( void )
 	}
 	end = clock();
 	std::cout << "  wide2 finished in  " << end - start << " clocks" << std::endl;
+#endif
 
 	mem.free();
 
