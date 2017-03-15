@@ -668,6 +668,9 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessBody(const mtlChars &body, const 
 	p.SetBuffer(body);
 	p.EnableCaseSensitivity();
 	while (!p.IsEnd()) {
+
+		while (p.Match(";") == 0) {}
+
 		switch (p.Match("{%s} %| if(%S){%s} %| while(%S){%s} %| return %s; %| " _decl_str "=%S; %| " _decl_str "; %| %w=%S; %| %w(%s); %| %s", m)) {
 		case 0:
 			token->tokens.AddLast(ProcessBody(m[0], token));
@@ -801,7 +804,10 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessFile(const mtlChars &contents, co
 	p.SetBuffer(contents);
 	p.EnableCaseSensitivity();
 	while (!p.IsEnd()) {
-		switch (p.Match(_decl_str "(%s); %| " _decl_str "(%s){%s} %| struct %w{%s}; %| import\"%S\" %| %s", m)) {
+
+		while (p.Match(";") == 0) {}
+
+		switch (p.Match(_decl_str "(%s); %| " _decl_str "(%s){%s} %| struct %w{%s} %| import\"%S\" %| %s", m)) {
 		case 0:
 			token->tokens.AddLast(ProcessFuncDecl(m[_decl_qlf], m[_decl_typ], "", m[_decl_ref], m[_decl_nam], m[4], token)); // TODO: read and pass arr_size
 			break;
