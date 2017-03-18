@@ -99,7 +99,7 @@ swsl::Token_DefType::~Token_DefType( void )
 }
 
 swsl::Token_File::Token_File(const swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_FILE)
+	Token(p_parent, TOKEN_FILE), body(NULL)
 {}
 swsl::Token_File::~Token_File( void )
 {
@@ -377,7 +377,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessError(const mtlChars &msg, mtlCha
 	p.EnableCaseSensitivity();
 	mtlArray<mtlChars> m;
 	while (!p.IsEnd()) {
-		if (p.Match("%s{%s} %| %s; %| %s") > -1) {
+		if (p.Match("%s %| %s{%s} %| %s;", m) > 0) {
 			err = m[0];
 			p.SetBuffer(err);
 		}
@@ -655,7 +655,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessReturn(const mtlChars &expr, cons
 {
 	Token_Ret *token = new Token_Ret(parent);
 
-	token->expr = ProcessExpression(expr, token);
+	token->expr = expr.GetSize() > 0 ? ProcessExpression(expr, token) : NULL;
 	return token;
 }
 

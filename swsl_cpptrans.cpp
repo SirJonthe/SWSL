@@ -1,13 +1,13 @@
-#include "swsl_cppcompiler.h"
+#include "swsl_cpptrans.h"
 
-void swsl::CppCompiler::PrintTabs( void )
+void swsl::CppTranslator::PrintTabs( void )
 {
 	for (int i = 0; i < m_depth - 1; ++i) {
 		m_buffer.Add('\t');
 	}
 }
 
-void swsl::CppCompiler::Print(const mtlChars &ch)
+void swsl::CppTranslator::Print(const mtlChars &ch)
 {
 	const int BLOCK = 2048;
 	while (m_buffer.GetSize() + ch.GetSize() > m_buffer.GetCapacity()) {
@@ -18,12 +18,12 @@ void swsl::CppCompiler::Print(const mtlChars &ch)
 	}
 }
 
-void swsl::CppCompiler::PrintNewline( void )
+void swsl::CppTranslator::PrintNewline( void )
 {
 	m_buffer.Add('\n');
 }
 
-void swsl::CppCompiler::PrintMask(int mask)
+void swsl::CppTranslator::PrintMask(int mask)
 {
 	Print("m");
 	mtlString num;
@@ -31,23 +31,23 @@ void swsl::CppCompiler::PrintMask(int mask)
 	Print(num);
 }
 
-void swsl::CppCompiler::PrintMask( void )
+void swsl::CppTranslator::PrintMask( void )
 {
 	PrintMask(m_mask_depth);
 }
 
-void swsl::CppCompiler::PrintPrevMask( void )
+void swsl::CppTranslator::PrintPrevMask( void )
 {
 	PrintMask(m_mask_depth - 1);
 }
 
-void swsl::CppCompiler::PrintVarName(const mtlChars &name)
+void swsl::CppTranslator::PrintVarName(const mtlChars &name)
 {
 	Print("_");
 	Print(name);
 }
 
-void swsl::CppCompiler::OutputBinary(swsl::Binary &bin)
+void swsl::CppTranslator::OutputBinary(swsl::Binary &bin)
 {
 	if (m_errs == 0) {
 		bin.SetSize(m_buffer.GetSize());
@@ -59,19 +59,19 @@ void swsl::CppCompiler::OutputBinary(swsl::Binary &bin)
 	}
 }
 
-bool swsl::CppCompiler::IsType(const Token *token, Token::TokenType type)
+bool swsl::CppTranslator::IsType(const Token *token, Token::TokenType type)
 {
 	return token != NULL && token->type == type;
 }
 
-bool swsl::CppCompiler::CompareMaskDepth(const Token *token) const
+bool swsl::CppTranslator::CompareMaskDepth(const Token *token) const
 {
 	if (token == NULL || token->type != Token::TOKEN_READ_VAR) { return false; }
 	const Token *t = dynamic_cast<const Token_ReadVar*>(token)->decl_type;
 	return m_mask_depth == ((t != NULL) ? t->CountAscend(Token::TOKEN_IF|Token::TOKEN_WHILE) : 0);
 }
 
-void swsl::CppCompiler::PrintReturnMerge( void )
+void swsl::CppTranslator::PrintReturnMerge( void )
 {
 	if (m_mask_depth > 1) {
 		PrintTabs();
@@ -83,7 +83,7 @@ void swsl::CppCompiler::PrintReturnMerge( void )
 	}
 }
 
-void swsl::CppCompiler::PrintType(const mtlChars &type)
+void swsl::CppTranslator::PrintType(const mtlChars &type)
 {
 	if (type.Compare("void", true)) {
 		Print("void");
@@ -99,7 +99,7 @@ void swsl::CppCompiler::PrintType(const mtlChars &type)
 	}
 }
 
-void swsl::CppCompiler::DispatchAlias(const Token_Alias *t)
+void swsl::CppTranslator::DispatchAlias(const Token_Alias *t)
 {
 	if (t->scope == 0) {
 		Print(m_bin_name);
@@ -107,7 +107,7 @@ void swsl::CppCompiler::DispatchAlias(const Token_Alias *t)
 	PrintVarName(t->alias);
 }
 
-void swsl::CppCompiler::DispatchBody(const Token_Body *t)
+void swsl::CppTranslator::DispatchBody(const Token_Body *t)
 {
 	if (m_depth > 0) {
 		PrintTabs();
@@ -136,7 +136,7 @@ void swsl::CppCompiler::DispatchBody(const Token_Body *t)
 	PrintNewline();
 }
 
-void swsl::CppCompiler::DispatchDeclFn(const Token_DeclFn *t)
+void swsl::CppTranslator::DispatchDeclFn(const Token_DeclFn *t)
 {
 	Print("inline ");
 	if (t->decl_type != NULL) {
@@ -157,7 +157,7 @@ void swsl::CppCompiler::DispatchDeclFn(const Token_DeclFn *t)
 	PrintNewline();
 }
 
-void swsl::CppCompiler::DispatchDeclType(const Token_DeclType *t)
+void swsl::CppTranslator::DispatchDeclType(const Token_DeclType *t)
 {
 	if (!t->type_name.Compare("void")) {
 		if (t->is_const) {
@@ -178,7 +178,7 @@ void swsl::CppCompiler::DispatchDeclType(const Token_DeclType *t)
 	}
 }
 
-void swsl::CppCompiler::DispatchDeclVar(const Token_DeclVar *t)
+void swsl::CppTranslator::DispatchDeclVar(const Token_DeclVar *t)
 {
 	const bool is_param = IsType(t->parent, Token::TOKEN_DECL_FN) || IsType(t->parent, Token::TOKEN_DEF_FN);
 
@@ -200,7 +200,7 @@ void swsl::CppCompiler::DispatchDeclVar(const Token_DeclVar *t)
 	}
 }
 
-void swsl::CppCompiler::DispatchDefFn(const Token_DefFn *t)
+void swsl::CppTranslator::DispatchDefFn(const Token_DefFn *t)
 {
 	Print("inline ");
 	if (t->decl_type != NULL) {
@@ -225,7 +225,7 @@ void swsl::CppCompiler::DispatchDefFn(const Token_DefFn *t)
 	}
 }
 
-void swsl::CppCompiler::DispatchDefType(const Token_DefType *t)
+void swsl::CppTranslator::DispatchDefType(const Token_DefType *t)
 {
 	Print("struct ");
 	PrintType(t->type_name);
@@ -241,7 +241,7 @@ void swsl::CppCompiler::DispatchDefType(const Token_DefType *t)
 }
 
 #include <iostream>
-void swsl::CppCompiler::DispatchErr(const Token_Err *t)
+void swsl::CppTranslator::DispatchErr(const Token_Err *t)
 {
 	++m_errs;
 	std::cout << " > ";
@@ -263,7 +263,7 @@ void swsl::CppCompiler::DispatchErr(const Token_Err *t)
 	std::cout << std::endl;
 }
 
-void swsl::CppCompiler::DispatchExpr(const Token_Expr *t)
+void swsl::CppTranslator::DispatchExpr(const Token_Expr *t)
 {
 	Print("(");
 	Dispatch(t->lhs);
@@ -274,12 +274,12 @@ void swsl::CppCompiler::DispatchExpr(const Token_Expr *t)
 	Print(")");
 }
 
-void swsl::CppCompiler::DispatchFile(const Token_File *t)
+void swsl::CppTranslator::DispatchFile(const Token_File *t)
 {
 	Dispatch(t->body);
 }
 
-void swsl::CppCompiler::DispatchIf(const Token_If *t)
+void swsl::CppTranslator::DispatchIf(const Token_If *t)
 {
 	++m_mask_depth;
 
@@ -337,7 +337,7 @@ void swsl::CppCompiler::DispatchIf(const Token_If *t)
 	PrintReturnMerge();
 }
 
-void swsl::CppCompiler::DispatchReadFn(const Token_ReadFn *t)
+void swsl::CppTranslator::DispatchReadFn(const Token_ReadFn *t)
 {
 	PrintType(t->fn_name);
 	Print("(");
@@ -351,7 +351,7 @@ void swsl::CppCompiler::DispatchReadFn(const Token_ReadFn *t)
 	Print(")");
 }
 
-void swsl::CppCompiler::DispatchReadLit(const Token_ReadLit *t)
+void swsl::CppTranslator::DispatchReadLit(const Token_ReadLit *t)
 {
 	if (t->lit_type == Token_ReadLit::TYPE_BOOL) {
 		Print("mpl::wide_bool(");
@@ -368,7 +368,7 @@ void swsl::CppCompiler::DispatchReadLit(const Token_ReadLit *t)
 	}
 }
 
-void swsl::CppCompiler::DispatchReadVar(const Token_ReadVar *t)
+void swsl::CppTranslator::DispatchReadVar(const Token_ReadVar *t)
 {
 	PrintVarName(t->var_name);
 	if (t->idx != NULL) {
@@ -382,7 +382,7 @@ void swsl::CppCompiler::DispatchReadVar(const Token_ReadVar *t)
 	}
 }
 
-void swsl::CppCompiler::DispatchRet(const Token_Ret *t)
+void swsl::CppTranslator::DispatchRet(const Token_Ret *t)
 {
 	// SUPER DUPER WRONG
 	// m0 is return mask
@@ -395,13 +395,22 @@ void swsl::CppCompiler::DispatchRet(const Token_Ret *t)
 	// at function end
 		// return ret;
 
-	PrintTabs();
-	Print("swsl::mov_if_true(ret, ");
-	Dispatch(t->expr);
-	Print(", ");
-	PrintMask();
-	Print(");");
-	PrintNewline();
+	const Token *p = t->parent;
+	while (p != NULL && p->type != Token::TOKEN_DEF_FN) {
+		p = p->parent;
+	}
+
+	const bool is_void = (p == NULL) || (dynamic_cast<const Token_DefFn*>(p)->decl_type == NULL);
+
+	if (!is_void) {
+		PrintTabs();
+		Print("swsl::mov_if_true(ret, ");
+		Dispatch(t->expr);
+		Print(", ");
+		PrintMask();
+		Print(");");
+		PrintNewline();
+	}
 
 	if (m_mask_depth > 0) {
 		PrintTabs();
@@ -411,7 +420,8 @@ void swsl::CppCompiler::DispatchRet(const Token_Ret *t)
 		PrintNewline();
 
 		PrintTabs();
-		Print("if (m0.all_fail()) { return ret; }");
+		if (!is_void) { Print("if (m0.all_fail()) { return ret; }"); }
+		else          { Print("if (m0.add_fail()) { return; }"); }
 		PrintNewline();
 
 		if (m_mask_depth > 1) {
@@ -424,12 +434,13 @@ void swsl::CppCompiler::DispatchRet(const Token_Ret *t)
 		}
 	} else {
 		PrintTabs();
-		Print("return ret;");
+		if (!is_void) { Print("return ret;"); }
+		else          { Print("return;"); }
 		PrintNewline();
 	}
 }
 
-void swsl::CppCompiler::DispatchRoot(const SyntaxTree *t)
+void swsl::CppTranslator::DispatchRoot(const SyntaxTree *t)
 {
 	Print("#ifndef ");
 	Print(m_bin_name);
@@ -450,7 +461,7 @@ void swsl::CppCompiler::DispatchRoot(const SyntaxTree *t)
 	PrintNewline();
 }
 
-void swsl::CppCompiler::DispatchSet(const Token_Set *t)
+void swsl::CppTranslator::DispatchSet(const Token_Set *t)
 {
 	// if lhs was defined at the same stack depth as current one
 	// there is no need to apply a mask
@@ -476,7 +487,7 @@ void swsl::CppCompiler::DispatchSet(const Token_Set *t)
 	PrintNewline();
 }
 
-void swsl::CppCompiler::DispatchWhile(const Token_While *t)
+void swsl::CppTranslator::DispatchWhile(const Token_While *t)
 {
 	++m_mask_depth;
 
@@ -514,7 +525,7 @@ void swsl::CppCompiler::DispatchWhile(const Token_While *t)
 	PrintReturnMerge();
 }
 
-void swsl::CppCompiler::DispatchTypeName(const Token *t)
+void swsl::CppTranslator::DispatchTypeName(const Token *t)
 {
 	const Token_DeclType *type = (t != NULL && t->type == Token::TOKEN_DECL_TYPE) ? dynamic_cast<const Token_DeclType*>(t) : NULL;
 	if (type != NULL) {
@@ -527,7 +538,7 @@ void swsl::CppCompiler::DispatchTypeName(const Token *t)
 	}
 }
 
-void swsl::CppCompiler::DispatchCompatMain(const Token_DefFn *t)
+void swsl::CppTranslator::DispatchCompatMain(const Token_DefFn *t)
 {
 	Print("inline ");
 	if (t->decl_type != NULL) {
@@ -588,7 +599,7 @@ void swsl::CppCompiler::DispatchCompatMain(const Token_DefFn *t)
 	PrintNewline();
 }
 
-bool swsl::CppCompiler::Compile(swsl::SyntaxTree *t, const mtlChars &bin_name, swsl::Binary &out_bin)
+bool swsl::CppTranslator::Compile(swsl::SyntaxTree *t, const mtlChars &bin_name, swsl::Binary &out_bin)
 {
 	m_mask_depth = 0;
 	m_depth = 0;

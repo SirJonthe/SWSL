@@ -7,7 +7,7 @@
 namespace swsl
 {
 
-class CppCompiler : public swsl::TokenDispatcher
+class CppTranslator : public swsl::TokenDispatcher
 {
 private:
 	mtlArray<char> m_buffer;
