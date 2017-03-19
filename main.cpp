@@ -447,8 +447,8 @@ int main(int, char**)
 	OutputSIMDInfo();
 	//return SplitTest();
 	//return PathTest();
-	//return CppTranslatorTest();
+	return CppTranslatorTest();
 	//return CodeCorrectnessTest();
-	return CodeLoopTest();
+	//return CodeLoopTest();
 	//return CodePerformanceTest();
 }

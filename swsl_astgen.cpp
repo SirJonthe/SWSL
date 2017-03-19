@@ -831,6 +831,9 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessFile(const mtlChars &contents, co
 
 		while (p.Match(";") == 0) {}
 
+		// BUG IN THE PARSER; struct %w can't detect the space between struct and %w
+			// Maybe alter parser like there is a WHITESPACE between all characters that are not ALPHA, NUM, or CUSTOM in both SRC and DST
+			// If there is an actual WHITESPACE, just count it once
 		switch (p.Match(_decl_str "(%s); %| " _decl_str "(%s){%s} %| struct %w{%s} %| import\"%S\" %| %s", m)) {
 		case 0:
 			token->tokens.AddLast(ProcessFuncDecl(m[_decl_qlf], m[_decl_typ], "", m[_decl_ref], m[_decl_nam], m[4], token)); // TODO: read and pass arr_size
