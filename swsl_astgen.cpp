@@ -6,6 +6,7 @@
 // Type[5] var_name := { a, b, c, d, e };
 
 #define _decl_str "%?(const %| mutable) %w%?(&)%w"
+//#define _decl_str "%?(const %| mutable) %w%?([%S])%?(&)%w"
 #define _decl_qlf 0
 #define _decl_typ 1
 #define _decl_ref 2
@@ -14,11 +15,15 @@
 #define _built_in_n 4
 #define _reserved_n 16
 #define _keywords_n 9
+enum {
+	Typename_Void,
+	Typename_Bool,
+	Typename_Int,
+	Typename_Float
+};
 static const mtlChars _built_in_types[_built_in_n] = { "void", "bool", "int", "float" };
 static const mtlChars _reserved[_reserved_n] = { "min", "max", "abs", "round", "trunc", "floor", "ceil", "sin", "cos", "tan", "asin", "acos", "atan", "sqrt", "pow", "fixed" };
 static const mtlChars _keywords[_keywords_n] = { "const", "mutable", "if", "else", "while", "return", "true", "false", "import" };
-
-#define _to_str(X) #X
 
 swsl::Token::Token(const Token *p_parent, TokenType p_type) :
 	parent(p_parent), type(p_type)
@@ -377,7 +382,8 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessError(const mtlChars &msg, mtlCha
 	p.EnableCaseSensitivity();
 	mtlArray<mtlChars> m;
 	while (!p.IsEnd()) {
-		if (p.Match("%s %| %s{%s} %| %s;", m) > 0) {
+		const int match_num = p.Match("%s{%s} %| %s; %| %s", m);
+		if (match_num > -1 && match_num < 2) {
 			err = m[0];
 			p.SetBuffer(err);
 		}
@@ -390,6 +396,8 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessError(const mtlChars &msg, mtlCha
 
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessDeclType(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const swsl::Token *parent)
 {
+	// TODO; Emit error if type has not been defined/declared
+
 	Token_DeclType *token = new Token_DeclType(parent);
 
 	token->is_const = rw.Compare("mutable", true) ? false : true;
@@ -464,7 +472,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessReadVar(mtlSyntaxParser &var, con
 		if (token->decl_type != NULL && !token->decl_type->is_user_def) {
 			token->mem = ProcessReadVar(var, token);
 		} else {
-			token->mem = ProcessError("Member(" _to_str(ProcessReadVar) ")", var.GetBufferRemaining(), token);
+			token->mem = ProcessError("Member(ProcessReadVar)", var.GetBufferRemaining(), token);
 		}
 		break;
 
@@ -480,13 +488,13 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessReadVar(mtlSyntaxParser &var, con
 		if (token->decl_type != NULL && !token->decl_type->is_user_def) {
 			token->mem = ProcessReadVar(var, token);
 		} else {
-			token->mem = ProcessError("Member(" _to_str(ProcessReadVar) ")", var.GetBufferRemaining(), token);
+			token->mem = ProcessError("Member(ProcessReadVar)", var.GetBufferRemaining(), token);
 		}
 		break;
 
 	default:
 		delete token;
-		return ProcessError("Operand(" _to_str(ProcessReadVar) ")", m[0], parent);
+		return ProcessError("Operand(ProcessReadVar)", m[0], parent);
 	}
 	return token;
 }
@@ -524,11 +532,11 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessRetType(const mtlChars &rw, const
 	Token *token = NULL;
 
 	if (ref.GetSize() != 0) {
-		token = ProcessError("Ref(" _to_str(ProcessRetType) ")", "Return values can not be references", parent);
-	} else if (!type_name.Compare("void", true)) {
+		token = ProcessError("Ref(ProcessRetType)", "Return values can not be references", parent);
+	} else if (!type_name.Compare(_built_in_types[Typename_Void], true)) {
 		token = ProcessDeclType(rw, type_name, arr_size, ref, parent);
 	} else if (rw.GetSize() != 0 || arr_size.GetSize() != 0) {
-		token = ProcessError("Void(" _to_str(ProcessRetType) ")", "No qualifier or array allowed", parent);
+		token = ProcessError("Void(ProcessRetType)", "No qualifier or array allowed", parent);
 	}
 	return token;
 }
@@ -615,7 +623,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessExpression(const mtlChars &expr, 
 		break;
 
 	default:
-		token = ProcessError("Syntax(" _to_str(ProcessExpression) ")", p.GetBuffer(), token);
+		token = ProcessError("Syntax(ProcessExpression)", p.GetBuffer(), token);
 		break;
 	}
 	return token;
@@ -655,7 +663,23 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessReturn(const mtlChars &expr, cons
 {
 	Token_Ret *token = new Token_Ret(parent);
 
-	token->expr = expr.GetSize() > 0 ? ProcessExpression(expr, token) : NULL;
+	const Token *p = parent;
+	while (p != NULL && p->type != Token::TOKEN_DEF_FN) {
+		p = p->parent;
+	}
+
+	if (p != NULL && p->type == Token::TOKEN_DEF_FN && dynamic_cast<const Token_DefFn*>(p) != NULL) {
+		token->is_void = dynamic_cast<const Token_DefFn*>(p)->decl_type == NULL;
+		if (token->is_void && expr.GetSize() > 0) {
+			delete token;
+			return ProcessError("Return from void(ProcessReturn)", expr, parent);
+		} else {
+			token->expr = expr.GetSize() > 0 ? ProcessExpression(expr, token) : NULL;
+		}
+	} else {
+		delete token;
+		return ProcessError("Unknown(ProcessReturn)", "Return in global scope?", parent);
+	}
 	return token;
 }
 
@@ -705,7 +729,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessBody(const mtlChars &body, const 
 			break;
 
 		default:
-			token->tokens.AddLast(ProcessError("Syntax(" _to_str(ProcessBody) ")", m[0], token));
+			token->tokens.AddLast(ProcessError("Syntax(ProcessBody)", m[0], token));
 			break;
 		}
 	}
@@ -714,7 +738,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessBody(const mtlChars &body, const 
 
 void swsl::SyntaxTreeGenerator::ProcessParamDecl(const mtlChars &params, mtlList<Token*> &out_params, const Token *parent)
 {
-	if (params.Compare("void", true)) { return; }
+	if (params.Compare(_built_in_types[Typename_Void], true)) { return; }
 	mtlArray<mtlChars> m;
 	mtlSyntaxParser p;
 	p.SetBuffer(params);
@@ -725,7 +749,7 @@ void swsl::SyntaxTreeGenerator::ProcessParamDecl(const mtlChars &params, mtlList
 			out_params.AddLast(ProcessDeclVar(m[_decl_qlf], m[_decl_typ], "", m[_decl_ref], m[_decl_nam], "", parent)); // TODO: read and pass arr_size
 			break;
 		default:
-			out_params.AddLast(ProcessError("Syntax(" _to_str(ProcessFuncDecl) ")", m[0], parent));
+			out_params.AddLast(ProcessError("Syntax(ProcessFuncDecl)", m[0], parent));
 		}
 		p.Match(",");
 	}
@@ -758,7 +782,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessTypeMemDecl(const mtlChars &decls
 			break;
 
 		default:
-			token->tokens.AddLast(ProcessError("Syntax(" _to_str(ProcessTypeMemDecl) ")", m[0], token));
+			token->tokens.AddLast(ProcessError("Syntax(ProcessTypeMemDecl)", m[0], token));
 			break;
 		}
 	}
@@ -774,7 +798,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessTypeDef(const mtlChars &struct_na
 		token->body = ProcessTypeMemDecl(decls);
 		return token;
 	}
-	return ProcessError("Collision(" _to_str(ProcessTypeDef) ")", struct_name, parent);
+	return ProcessError("Collision(ProcessTypeDef)", struct_name, parent);
 }
 
 void swsl::SyntaxTreeGenerator::RemoveComments(mtlString &code)
@@ -825,7 +849,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessFile(const mtlChars &contents, co
 			break;
 
 		default:
-			token->tokens.AddLast(ProcessError("Syntax(" _to_str(ProcessFile) ")", m[0], token));
+			token->tokens.AddLast(ProcessError("Syntax(ProcessFile)", m[0], token));
 			break;
 		}
 	}
@@ -838,7 +862,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::LoadFile(const mtlChars &file_name, cons
 
 	if (!mtlSyntaxParser::BufferFile(file_name, token->content)) {
 		delete token;
-		return ProcessError("File not found(" _to_str(LoadFile) ")", file_name, parent);
+		return ProcessError("File not found(LoadFile)", file_name, parent);
 	}
 	RemoveComments(token->content);
 	token->file_name = file_name;

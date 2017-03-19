@@ -497,20 +497,25 @@ void swsl::CppTranslator::DispatchWhile(const Token_While *t)
 	++m_depth;
 
 	PrintTabs();
-	Print("const ");
 	PrintType("bool");
 	Print(" ");
 	PrintMask();
 	Print(" = ");
-	Dispatch(t->cond);
-	Print(" & ");
 	PrintPrevMask();
 	Print(";");
 	PrintNewline();
 
 	PrintTabs();
 	Print("while ( !(");
+
+	Print("(");
 	PrintMask();
+	Print(" = ");
+	Dispatch(t->cond);
+	Print(" & ");
+	PrintMask();
+	Print(")");
+
 	Print(".all_fail()) )");
 	PrintNewline();
 	Dispatch(t->body);

@@ -50,5 +50,16 @@ inline void wide_mat_mult_raw(
 }
 #endif
 
+inline void wide_iterate_to(mpl::wide_int& _x, const mpl::wide_int _lim, mpl::wide_bool m0)
+{
+	{
+		mpl::wide_bool m1 = m0;
+		while ( !((m1 = (_x < _lim) & m1).all_fail()) )
+		{
+			swsl::mov_if_true(_x, (_x + mpl::wide_int(1)), m1);
+		}
+	}
+}
+
 #endif
 

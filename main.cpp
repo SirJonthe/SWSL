@@ -301,7 +301,7 @@ float scalar_max(const float &a, const float &b, bool)
 #include "tmp_out.h"
 int CodeCorrectnessTest( void )
 {
-	std::cout << "testing correctness (find max value)..." << std::endl;;
+	std::cout << "testing correctness (find max value)..." << std::endl;
 
 	srand(time(0));
 
@@ -328,6 +328,24 @@ int CodeCorrectnessTest( void )
 	std::cout << std::endl;
 	std::cout << "  wide:";
 	for (int i = 0; i < size; ++i) { std::cout << "  " << wide[i]; }
+	std::cout << std::endl;
+
+	std::cout << "done" << std::endl;
+	return 0;
+}
+
+int CodeLoopTest( void )
+{
+	std::cout << "testing iteration in loops..." << std::endl;
+	int xs[] = { 0, 1, 2, 3 };
+	mpl::wide_int x = mpl::wide_int(xs);
+	int lims[] = { 2, 5, 2, 10 };
+	mpl::wide_int lim = mpl::wide_int(lims);
+	wide_iterate_to(x, lim, mpl::wide_bool(true));
+	std::cout << "  ";
+	for (int i = 0; i < MPL_WIDTH; ++i) {
+		std::cout << ((int*)&x)[i] << " ";
+	}
 	std::cout << std::endl;
 
 	std::cout << "done" << std::endl;
@@ -429,7 +447,8 @@ int main(int, char**)
 	OutputSIMDInfo();
 	//return SplitTest();
 	//return PathTest();
-	return CppTranslatorTest();
+	//return CppTranslatorTest();
 	//return CodeCorrectnessTest();
+	return CodeLoopTest();
 	//return CodePerformanceTest();
 }

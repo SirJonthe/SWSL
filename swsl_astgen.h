@@ -210,6 +210,7 @@ struct Token_While : public Token
 struct Token_Ret : public Token
 {
 	Token *expr; // Token_Expr
+	bool   is_void;
 
 	Token_Ret(const Token *p_parent);
 	~Token_Ret( void );
