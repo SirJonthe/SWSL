@@ -148,73 +148,6 @@ void OutputSIMDInfo( void )
 				 << " @ " << MPL_WIDTH << " wide" << std::endl;
 }
 
-int ParserTest( void )
-{
-	mtlString file_buffer;
-	mtlPath file_path("../swsl_samples/test_file.txt");
-	swsl::print_ch("path=");
-	swsl::print_line(file_path.GetPath());
-	if (!mtlSyntaxParser::BufferFile(file_path, file_buffer)) {
-		std::cout << "failed to open specified file" << std::endl;
-		return 1;
-	}
-	mtlSyntaxParser parser;
-	parser.SetBuffer(file_buffer);
-	mtlArray<mtlChars> m;
-	while (!parser.IsEnd()) {
-		switch (parser.Match("%w:=%i;%|%w:=%r;%|%w:=\"%s\";%|%w[%i]:={%i,%i,%i};%|end;%0%|%s+%s;", m)) {
-		case 0:
-			swsl::print_ch("\"");
-			swsl::print_ch(m[0]);
-			swsl::print_ch("\" set to int \"");
-			swsl::print_ch(m[1]);
-			swsl::print_line("\"");
-			break;
-		case 1:
-			swsl::print_ch("\"");
-			swsl::print_ch(m[0]);
-			swsl::print_ch("\" set to real \"");
-			swsl::print_ch(m[1]);
-			swsl::print_line("\"");
-			break;
-		case 2:
-			swsl::print_ch("\"");
-			swsl::print_ch(m[0]);
-			swsl::print_ch("\" set to str \"");
-			swsl::print_ch(m[1]);
-			swsl::print_line("\"");
-			break;
-		case 3:
-			swsl::print_ch("\"");
-			swsl::print_ch(m[0]);
-			swsl::print_ch("[");
-			swsl::print_ch(m[1]);
-			swsl::print_ch("]\" set to arr (");
-			swsl::print_ch(m[2]);
-			swsl::print_ch(";");
-			swsl::print_ch(m[3]);
-			swsl::print_ch(";");
-			swsl::print_ch(m[4]);
-			swsl::print_line(")");
-			break;
-		case 4:
-			swsl::print_line("Goodbye");
-			break;
-		case 5:
-			swsl::print_ch("term \"");
-			swsl::print_ch(m[0]);
-			swsl::print_ch("\" plus term \"");
-			swsl::print_ch(m[1]);
-			swsl::print_line("\"");
-			break;
-		default:
-			swsl::print_line("Error");
-			return 1;
-		}
-	}
-	return 0;
-}
-
 int PathTest( void )
 {
 	//mtlPath p1("darp/parp/karp.larp", mtlPath::File);
@@ -442,13 +375,103 @@ int CodePerformanceTest( void )
 	return 0;
 }
 
+void print_cmpct_ch(const mtlChars &ch)
+{
+	int spaces = 0;
+	for (int i = 0; i < ch.GetSize(); ++i) {
+		if (ch[i] == ' ' || ch[i] == '\t') {
+			if (spaces == 0) {
+				std::cout << " ";
+				++spaces;
+			} else {
+				continue;
+			}
+		} else {
+			spaces = 0;
+			if (ch[i] == '\n' || ch[i] == '\r') {
+				std::cout << "|";
+			} else {
+				std::cout << ch[i];
+			}
+		}
+	}
+}
+
+void print_ch(const mtlChars &ch)
+{
+	for (int i = 0; i < ch.GetSize(); ++i) {
+		std::cout << ch[i];
+	}
+}
+
+int ParserTest( void )
+{
+	std::cout << "testing parser..." << std::flush;
+
+	mtlString file;
+	const mtlChars test_buffer = "../test_buffer.txt";
+	if (!mtlSyntaxParser::BufferFile(test_buffer, file)) {
+		std::cout << "failed to read input file" << std::endl;
+		return 1;
+	}
+
+	std::cout << std::endl;
+
+	mtlSyntaxParser2 p;
+	p.SetBuffer(file);
+	p.EnableDiagnostics();
+	mtlArray<mtlChars> m;
+	while (!p.IsEnd()) {
+		switch (p.Match("#include \"%S\" %| struct%w{%s} %| %w%w(%s){%s} %| %s", m)) {
+
+		case 0:
+			std::cout << "  include: \"";
+			print_ch(m[0]);
+			std::cout << "\"" << std::endl;
+			break;
+
+		case 1:
+			std::cout << "  struct: \"";
+			print_ch(m[0]);
+			std::cout << "\", \"";
+			print_cmpct_ch(m[1]);
+			std::cout << "\"" << std::endl;
+			break;
+
+		case 2:
+			std::cout << " func: \"";
+			print_ch(m[0]);
+			std::cout << "\", \"";
+			print_ch(m[1]);
+			std::cout << "\", \"";
+			print_cmpct_ch(m[2]);
+			std::cout << "\", \"";
+			print_cmpct_ch(m[3]);
+			std::cout << "\"" << std::endl;
+			break;
+
+		default:
+			std::cout << "  unknown: \"";
+			print_cmpct_ch(m[0]);
+			std::cout << "\"" << std::endl << "failed" << std::endl;
+			print_ch(p.GetDiagnostics());
+			return 1;
+		}
+		p.Match(";");
+	}
+
+	std::cout << "done" << std::endl;
+	return 0;
+}
+
 int main(int, char**)
 {
 	OutputSIMDInfo();
 	//return SplitTest();
 	//return PathTest();
-	return CppTranslatorTest();
+	//return CppTranslatorTest();
 	//return CodeCorrectnessTest();
 	//return CodeLoopTest();
 	//return CodePerformanceTest();
+	return ParserTest();
 }
