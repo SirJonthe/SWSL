@@ -439,7 +439,7 @@ int ParserTest( void )
 			break;
 
 		case 2:
-			std::cout << " func: \"";
+			std::cout << "  func: \"";
 			print_ch(m[0]);
 			std::cout << "\", \"";
 			print_ch(m[1]);
