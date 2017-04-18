@@ -7,9 +7,9 @@ namespace swsl
 {
 
 template < typename wide_t >
-void mov_if_true(wide_t &a, const wide_t &b, const mpl::wide_bool &cond_mask)
+void mov_if_true(wide_t &dst, const wide_t &src, const mpl::wide_bool &cond_mask)
 {
-	a = wide_t::mov_if_true(a, b, cond_mask);
+	dst = wide_t::mov_if_true(dst, src, cond_mask);
 }
 
 template < typename wide_t >

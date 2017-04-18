@@ -460,6 +460,14 @@ int ParserTest( void )
 		p.Match(";");
 	}
 
+	p.SetBuffer("_1234_");
+	if (p.Match("_%i_") < 0) {
+		std::cout << "  this is a bug" << std::endl;
+		print_ch(p.GetDiagnostics());
+	} else {
+		std::cout << "  bug averted" << std::endl;
+	}
+
 	std::cout << "done" << std::endl;
 	return 0;
 }
