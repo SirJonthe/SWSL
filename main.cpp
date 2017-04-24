@@ -417,8 +417,8 @@ int ParserTest( void )
 
 	std::cout << std::endl;
 
-	mtlSyntaxParser2 p;
-	p.SetBuffer(file);
+	mtlSyntaxParser p;
+	/*p.SetBuffer(file);
 	p.EnableDiagnostics();
 	mtlArray<mtlChars> m;
 	while (!p.IsEnd()) {
@@ -458,14 +458,19 @@ int ParserTest( void )
 			return 1;
 		}
 		p.Match(";");
-	}
+	}*/
 
-	p.SetBuffer("_1234_");
-	if (p.Match("_%i_") < 0) {
+	mtlArray<mtlChars> m;
+	p.SetBuffer("+1.0");
+	p.EnableDiagnostics();
+	p.SetHyphenators("");
+	if (p.Match("%r", m) < 0) {
 		std::cout << "  this is a bug" << std::endl;
 		print_ch(p.GetDiagnostics());
 	} else {
-		std::cout << "  bug averted" << std::endl;
+		std::cout << "  bug averted" << std::endl << "  ";
+		print_ch(m[0]);
+		std::cout << std::endl;
 	}
 
 	std::cout << "done" << std::endl;
