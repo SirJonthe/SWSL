@@ -1,5 +1,3 @@
-#include <omp.h>
-
 #include "swsl_gfx.h"
 
 bool swsl::Rasterizer::IsTopLeft(const swsl::Point2D &a, const swsl::Point2D &b) const

@@ -2,7 +2,6 @@
 
 #include <iostream>
 #include <fstream>
-#include <omp.h>
 
 #include <SDL/SDL.h>
 
@@ -319,7 +318,7 @@ int CodePerformanceTest( void )
 	float *m00 = mem.ptr<float>() + size*3, *m10 = mem.ptr<float>() + size* 4, *m20 = mem.ptr<float>() + size* 5,
 		  *m01 = mem.ptr<float>() + size*6, *m11 = mem.ptr<float>() + size* 7, *m21 = mem.ptr<float>() + size* 8,
 		  *m02 = mem.ptr<float>() + size*9, *m12 = mem.ptr<float>() + size*10, *m22 = mem.ptr<float>() + size*11;
-	for (int i = 0; i < size; ++i) {
+	for (size_t i = 0; i < size; ++i) {
 		x[i]   = rand();
 		y[i]   = rand();
 		z[i]   = rand();
@@ -335,7 +334,7 @@ int CodePerformanceTest( void )
 	}
 
 	start = clock();
-	for (int i = 0; i < size; ++i) {
+	for (size_t i = 0; i < size; ++i) {
 		scalar_mat_mult(x[i], y[i], z[i],
 						m00[i], m10[i], m20[i],
 						m01[i], m11[i], m21[i],
@@ -346,7 +345,7 @@ int CodePerformanceTest( void )
 	std::cout << "  scalar finished in " << end - start << " clocks" << std::endl;
 
 	start = clock();
-	for (int i = 0; i < size; i+=MPL_WIDTH) {
+	for (size_t i = 0; i < size; i+=MPL_WIDTH) {
 		wide_mat_mult(*((mpl::wide_float*)(x + i)), *((mpl::wide_float*)(y + i)), *((mpl::wide_float*)(z + i)),
 					  *((mpl::wide_float*)(m00 + i)), *((mpl::wide_float*)(m10 + i)), *((mpl::wide_float*)(m20 + i)),
 					  *((mpl::wide_float*)(m01 + i)), *((mpl::wide_float*)(m11 + i)), *((mpl::wide_float*)(m21 + i)),
@@ -358,7 +357,7 @@ int CodePerformanceTest( void )
 
 #if MPL_SIMD == MPL_SIMD_SSE
 	start = clock();
-	for (int i = 0; i < size; i+=MPL_WIDTH) {
+	for (size_t i = 0; i < size; i+=MPL_WIDTH) {
 		wide_mat_mult_raw(*((__m128*)(x + i)), *((__m128*)(y + i)), *((__m128*)(z + i)),
 						  *((__m128*)(m00 + i)), *((__m128*)(m10 + i)), *((__m128*)(m20 + i)),
 						  *((__m128*)(m01 + i)), *((__m128*)(m11 + i)), *((__m128*)(m21 + i)),
@@ -418,11 +417,11 @@ int ParserTest( void )
 	std::cout << std::endl;
 
 	mtlSyntaxParser p;
-	/*p.SetBuffer(file);
+	p.SetBuffer(file);
 	p.EnableDiagnostics();
 	mtlArray<mtlChars> m;
 	while (!p.IsEnd()) {
-		switch (p.Match("#include \"%S\" %| struct%w{%s} %| %w%w(%s){%s} %| %s", m)) {
+		switch (p.Match("#include \"%S\" %| struct%w{%s} %| %w%?(&)%w(%s){%s} %| %s", m)) {
 
 		case 0:
 			std::cout << "  include: \"";
@@ -458,9 +457,8 @@ int ParserTest( void )
 			return 1;
 		}
 		p.Match(";");
-	}*/
+	}
 
-	mtlArray<mtlChars> m;
 	p.SetBuffer("+1.0");
 	p.EnableDiagnostics();
 	p.SetHyphenators("");
@@ -482,9 +480,9 @@ int main(int, char**)
 	OutputSIMDInfo();
 	//return SplitTest();
 	//return PathTest();
-	//return CppTranslatorTest();
+	return CppTranslatorTest();
 	//return CodeCorrectnessTest();
 	//return CodeLoopTest();
 	//return CodePerformanceTest();
-	return ParserTest();
+	//return ParserTest();
 }

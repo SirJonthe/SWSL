@@ -3,16 +3,20 @@ CONFIG += console
 CONFIG -= app_bundle
 CONFIG -= qt
 
-QMAKE_CXXFLAGS += \
+#QMAKE_CXXFLAGS += \
 #	-mcpu=cortex-a7 \
 #	-mfloat-abi=hard \
 #	-mfpu=neon-vfpv4 \
-	-fopenmp \
-	-pthread
+#	-fopenmp \
+#	-pthread
 
-QMAKE_LFLAGS += -fopenmp -pthread
+#QMAKE_LFLAGS += \
+#	-fopenmp \
+#	-pthread
 
-LIBS += -fopenmp -pthread
+#LIBS += \
+#	-fopenmp \
+#	-pthread
 
 SOURCES += \
 	main.cpp \
@@ -101,11 +105,11 @@ HEADERS += \
     swsl_cpptrans.h
 
 macx: {
-	OBJECTIVE_SOURCES += \
-		SDLmain.m
+    OBJECTIVE_SOURCES += \
+        SDLmain.m
 
-	HEADERS += \
-		SDLmain.h
+    HEADERS += \
+        SDLmain.h
 }
 
 win32: {
@@ -116,15 +120,13 @@ win32: {
 }
 
 macx: {
-	LIBS += \
-		-framework Cocoa \
-		-framework SDL
+    LIBS += \
+        -framework Cocoa \
+        -framework SDL
 }
 
 unix:!macx: { # unix-like, e.g. linux, freeBSD
-	LIBS += \
-		-lSDL \
-		-lSDLmain
+    LIBS += \
+        -lSDL \
+        -lSDLmain
 }
-
-OTHER_FILES +=
