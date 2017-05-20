@@ -421,6 +421,7 @@ int ParserTest( void )
 	p.EnableDiagnostics();
 	mtlArray<mtlChars> m;
 	while (!p.IsEnd()) {
+
 		switch (p.Match("#include \"%S\" %| struct%w{%s} %| %w%?(&)%w(%s){%s} %| %s", m)) {
 
 		case 0:
@@ -443,9 +444,11 @@ int ParserTest( void )
 			std::cout << "\", \"";
 			print_ch(m[1]);
 			std::cout << "\", \"";
-			print_cmpct_ch(m[2]);
+			print_ch(m[2]);
 			std::cout << "\", \"";
 			print_cmpct_ch(m[3]);
+			std::cout << "\", \"";
+			print_cmpct_ch(m[4]);
 			std::cout << "\"" << std::endl;
 			break;
 
@@ -462,13 +465,25 @@ int ParserTest( void )
 	p.SetBuffer("+1.0");
 	p.EnableDiagnostics();
 	p.SetHyphenators("");
-	if (p.Match("%r", m) < 0) {
+	if (p.Match("%r%0", m) < 0) {
 		std::cout << "  this is a bug" << std::endl;
 		print_ch(p.GetDiagnostics());
 	} else {
 		std::cout << "  bug averted" << std::endl << "  ";
 		print_ch(m[0]);
 		std::cout << std::endl;
+	}
+
+	p.SetBuffer("abc =   123");
+	if (p.Match("%S=%S", m) < 0) {
+		std::cout << "  this is a bug" << std::endl;
+		print_ch(p.GetDiagnostics());
+	} else {
+		std::cout << "  bug averted: \"";
+		print_ch(m[0]);
+		std::cout << "\" \"";
+		print_ch(m[1]);
+		std::cout << "\"" << std::endl;
 	}
 
 	std::cout << "done" << std::endl;

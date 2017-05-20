@@ -229,15 +229,13 @@ void swsl::CppTranslator::DispatchDefType(const Token_DefType *t)
 {
 	Print("struct ");
 	PrintType(t->type_name);
-	Print("{");
-
-	++m_depth;
+	PrintNewline();
 
 	Dispatch(t->body);
 
-	--m_depth;
-
-	Print("};");
+	Print(";");
+	PrintNewline();
+	PrintNewline();
 }
 
 #include <iostream>
@@ -458,6 +456,7 @@ void swsl::CppTranslator::DispatchRoot(const SyntaxTree *t)
 	PrintNewline();
 	Dispatch(t->file);
 	Print("#endif");
+	PrintNewline();
 	PrintNewline();
 }
 
