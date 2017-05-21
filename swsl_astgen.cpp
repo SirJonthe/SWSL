@@ -683,13 +683,6 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessReturn(const mtlChars &expr, cons
 	return token;
 }
 
-#include <iostream>
-void Print(const mtlChars &s)
-{
-	for (int i = 0; i < s.GetSize(); ++i) {
-		std::cout << s[i];
-	}
-}
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessBody(const mtlChars &body, const swsl::Token *parent)
 {
 	Token_Body *token = new Token_Body(parent);
@@ -702,7 +695,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessBody(const mtlChars &body, const 
 
 		while (p.Match(";") == 0) {}
 
-		switch (p.Match("{%s} %| if(%S){%s} %| while(%S){%s} %| return %s; %| " _decl_str "=%S; %| " _decl_str "; %| %w(%s); %S=%S; %| %s", m)) {
+		switch (p.Match("{%s} %| if(%S){%s} %| while(%S){%s} %| return %s; %| " _decl_str "=%S; %| " _decl_str "; %| %w(%s); %| %S=%S; %| %s", m)) {
 		case 0:
 			token->tokens.AddLast(ProcessBody(m[0], token));
 			break;
@@ -732,9 +725,6 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessBody(const mtlChars &body, const 
 			break;
 
 		case 7:
-			std::cout << "num_matches=" << m.GetSize() << std::endl;
-			std::cout << "[0]="; Print(m[0]); std::cout << std::endl;
-			std::cout << "[1]="; Print(m[1]); std::cout << std::endl;
 			token->tokens.AddLast(ProcessSet(m[0], m[1], token));
 			break;
 

@@ -14,7 +14,7 @@ private:
 	int            m_mask_depth;
 	int            m_depth;
 	int            m_errs;
-	mtlChars       m_bin_name;
+	mtlString      m_bin_name;
 
 private:
 	void PrintTabs( void );
@@ -53,6 +53,7 @@ protected:
 private:
 	void DispatchTypeName(const Token *t);
 	void DispatchCompatMain(const Token_DefFn *t);
+	void SetBinaryName(const mtlChars &name);
 
 public:
 	bool Compile(swsl::SyntaxTree *t, const mtlChars &bin_name, swsl::Binary &out_bin);

@@ -603,6 +603,22 @@ void swsl::CppTranslator::DispatchCompatMain(const Token_DefFn *t)
 	PrintNewline();
 }
 
+void swsl::CppTranslator::SetBinaryName(const mtlChars &name)
+{
+	m_bin_name.Free();
+	m_bin_name.Reserve(name.GetSize() + 1);
+	if (name.GetSize() > 0 && mtlChars::IsNumeric(name[0])) {
+		m_bin_name.Append('_');
+	}
+	for (int i = 0; i < name.GetSize(); ++i) {
+		if (mtlChars::IsAlphanumeric(name[i])) {
+			m_bin_name.Append(name[i]);
+		} else if (m_bin_name.GetSize() > 1 && m_bin_name[m_bin_name.GetSize() - 1] != '_') {
+			m_bin_name.Append('_');
+		}
+	}
+}
+
 bool swsl::CppTranslator::Compile(swsl::SyntaxTree *t, const mtlChars &bin_name, swsl::Binary &out_bin)
 {
 	m_mask_depth = 0;
@@ -611,7 +627,7 @@ bool swsl::CppTranslator::Compile(swsl::SyntaxTree *t, const mtlChars &bin_name,
 	m_buffer.Free();
 	m_buffer.SetCapacity(4096);
 	m_buffer.poolMemory = true;
-	m_bin_name = bin_name;
+	SetBinaryName(bin_name);
 	Dispatch(t);
 	OutputBinary(out_bin);
 	return m_errs == 0;
