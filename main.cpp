@@ -127,7 +127,6 @@ void Printer::SetColor(unsigned char _r, unsigned char _g, unsigned char _b)
 }
 
 #include <limits>
-#include <pthread.h>
 
 void OutputSIMDInfo( void )
 {

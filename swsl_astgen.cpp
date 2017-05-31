@@ -456,6 +456,8 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessReadLit(const mtlChars &lit, cons
 
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessReadVar(mtlSyntaxParser &var, const swsl::Token *parent)
 {
+	// TODO: Add an error-check for accessing non-members
+
 	Token_ReadVar *token = new Token_ReadVar(parent);
 
 	mtlArray<mtlChars> m;
@@ -469,27 +471,20 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessReadVar(mtlSyntaxParser &var, con
 	case 1:
 		token->var_name = m[0];
 		token->decl_type = FindDeclType(token->var_name, token);
-		if (token->decl_type != NULL && !token->decl_type->is_user_def) {
-			token->mem = ProcessReadVar(var, token);
-		} else {
-			token->mem = ProcessError("Member(ProcessReadVar)", var.GetBufferRemaining(), token);
-		}
+		token->mem = ProcessReadVar(var, token);
 		break;
 
 	case 2:
 		token->var_name = m[0];
 		token->decl_type = FindDeclType(token->var_name, token);
-		token->idx = ProcessExpression(m[0], token);
+		token->idx = ProcessExpression(m[1], token);
 		break;
 
 	case 3:
 		token->var_name = m[0];
 		token->decl_type = FindDeclType(token->var_name, token);
-		if (token->decl_type != NULL && !token->decl_type->is_user_def) {
-			token->mem = ProcessReadVar(var, token);
-		} else {
-			token->mem = ProcessError("Member(ProcessReadVar)", var.GetBufferRemaining(), token);
-		}
+		token->mem = ProcessReadVar(var, token);
+		token->idx = ProcessExpression(m[1], token);
 		break;
 
 	default:
