@@ -52,10 +52,11 @@ swsl::Token_Alias::Token_Alias(const Token *p_parent) :
 {}
 
 swsl::Token_DeclType::Token_DeclType(const Token *p_parent) :
-	Token(p_parent, TOKEN_DECL_TYPE), arr_size(NULL)
+	Token(p_parent, TOKEN_DECL_TYPE), arr_size(NULL), def_type(NULL)
 {}
 swsl::Token_DeclType::~Token_DeclType( void )
 {
+	// delete def_type;
 	delete arr_size;
 }
 
@@ -405,6 +406,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessDeclType(const mtlChars &rw, cons
 	token->is_ref = (ref.GetSize() == 1 && ref[0] == '&');
 	token->is_user_def = !IsBuiltInType(token->type_name);
 	// token->arr_size = ProcessArrSize(arr_size, token); // needs to convert this to compile-time constant
+	token->def_type = FindDefType(token->type_name, token);
 	return token;
 }
 

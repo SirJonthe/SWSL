@@ -66,11 +66,12 @@ struct Token_Alias : public Token
 
 struct Token_DeclType : public Token
 {
-	mtlChars  type_name;
-	Token    *arr_size; // NOTE: This must be evaluated to a constant at compile time, else error
-	bool      is_ref;
-	bool      is_const;
-	bool      is_user_def;
+	mtlChars       type_name;
+	Token         *arr_size; // NOTE: This must be evaluated to a constant at compile time, else error
+	Token_DefType *def_type;
+	bool           is_ref;
+	bool           is_const;
+	bool           is_user_def;
 
 	Token_DeclType(const Token *p_parent);
 	~Token_DeclType( void );
