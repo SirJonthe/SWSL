@@ -160,7 +160,7 @@ void swsl::CppTranslator::DispatchDeclFn(const Token_DeclFn *t)
 void swsl::CppTranslator::DispatchDeclType(const Token_DeclType *t)
 {
 	if (!t->type_name.Compare("void")) {
-		if (t->is_const) {
+		if (t->permissions == Token_DeclType::ReadOnly || t->permissions == Token_DeclType::Constant) {
 			Print("const ");
 		}
 	}

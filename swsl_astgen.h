@@ -64,14 +64,22 @@ struct Token_Alias : public Token
 	Token_Alias(const Token *p_parent);
 };
 
+struct Token_DefType;
+
 struct Token_DeclType : public Token
 {
-	mtlChars       type_name;
-	Token         *arr_size; // NOTE: This must be evaluated to a constant at compile time, else error
-	Token_DefType *def_type;
-	bool           is_ref;
-	bool           is_const;
-	bool           is_user_def;
+	enum Permissions
+	{
+		ReadWrite,
+		ReadOnly,
+		Constant
+	};
+	mtlChars             type_name;
+	Token               *arr_size; // NOTE: This must be evaluated to a constant at compile time, else error
+	const Token_DefType *def_type;
+	Permissions          permissions;
+	bool                 is_ref;
+	bool                 is_std_type;
 
 	Token_DeclType(const Token *p_parent);
 	~Token_DeclType( void );
@@ -82,7 +90,6 @@ struct Token_DeclVar : public Token
 	Token    *decl_type;  // Token_DeclType
 	Token    *expr;       // Token_Expr
 	mtlChars  var_name;
-	bool      is_ct_const;
 
 	Token_DeclVar(const Token *p_parent);
 	~Token_DeclVar( void );
@@ -250,6 +257,7 @@ private:
 	bool   CmpFnDefName(const mtlChars &name, const Token_DefFn *tok);
 	bool   CmpVarDefName(const mtlChars &name, const Token_DefType *tok);
 	bool   NewName(const mtlChars &name, const Token *parent);
+	bool   IsCTConst(const Token *expr, bool &result) const;
 	const Token *FindName(const mtlChars &name, const Token *parent);
 	const Token_DefType *FindDefType(const mtlChars &name, const Token *parent);
 	const Token_DeclFn *FindDeclFn(const mtlChars &name, const Token *parent);

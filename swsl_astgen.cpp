@@ -5,7 +5,7 @@
 // Arrays should always be declared
 // Type[5] var_name := { a, b, c, d, e };
 
-#define _decl_str "%?(const %| mutable) %w%?(&)%w"
+#define _decl_str "%?(const %| mutable %| readonly) %w%?(&)%w"
 //#define _decl_str "%?(const %| mutable) %w%?([%S])%?(&)%w"
 #define _decl_qlf 0
 #define _decl_typ 1
@@ -14,7 +14,7 @@
 
 #define _built_in_n 4
 #define _reserved_n 16
-#define _keywords_n 9
+#define _keywords_n 10
 enum {
 	Typename_Void,
 	Typename_Bool,
@@ -23,7 +23,11 @@ enum {
 };
 static const mtlChars _built_in_types[_built_in_n] = { "void", "bool", "int", "float" };
 static const mtlChars _reserved[_reserved_n] = { "min", "max", "abs", "round", "trunc", "floor", "ceil", "sin", "cos", "tan", "asin", "acos", "atan", "sqrt", "pow", "fixed" };
-static const mtlChars _keywords[_keywords_n] = { "const", "mutable", "if", "else", "while", "return", "true", "false", "import" };
+static const mtlChars _keywords[_keywords_n] = { "const", "readonly", "mutable", "if", "else", "while", "return", "true", "false", "import" };
+
+#define _const_idx    0
+#define _readonly_idx 1
+#define _mutable_idx  2
 
 swsl::Token::Token(const Token *p_parent, TokenType p_type) :
 	parent(p_parent), type(p_type)
@@ -280,6 +284,34 @@ bool swsl::SyntaxTreeGenerator::NewName(const mtlChars &name, const swsl::Token 
 	return true;
 }
 
+bool swsl::SyntaxTreeGenerator::IsCTConst(const Token *expr, bool &result) const
+{
+	if (!result)      { return false; }
+	if (expr == NULL) { return true; }
+	switch (expr->type) {
+	case Token::TOKEN_EXPR:
+		{
+			const Token_Expr *e = dynamic_cast<const Token_Expr*>(expr);
+			result = result && IsCTConst(e->lhs, result) && IsCTConst(e->rhs, result);
+			break;
+		}
+	case Token::TOKEN_READ_VAR:
+		{
+			const Token_ReadVar *v = dynamic_cast<const Token_ReadVar*>(expr);
+			result = result && (v != NULL && v->decl_type != NULL && v->decl_type->permissions == Token_DeclType::Constant);
+			break;
+		}
+		result = result && dynamic_cast<const Token_ReadVar*>(expr)->decl_type->permissions == Token_DeclType::Constant;
+		break;
+	case Token::TOKEN_READ_FN:
+	case Token::TOKEN_ERR:
+		result = false;
+		break;
+	default: break;
+	}
+	return result;
+}
+
 const swsl::Token *swsl::SyntaxTreeGenerator::FindName(const mtlChars &name, const swsl::Token *parent)
 {
 	if (parent != NULL) {
@@ -397,16 +429,22 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessError(const mtlChars &msg, mtlCha
 
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessDeclType(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const swsl::Token *parent)
 {
-	// TODO; Emit error if type has not been defined/declared
+	// TODO; Process array size
 
 	Token_DeclType *token = new Token_DeclType(parent);
 
-	token->is_const = rw.Compare("mutable", true) ? false : true;
+	if (rw.Compare(_keywords[_const_idx]))        { token->permissions = Token_DeclType::Constant; }
+	else if (rw.Compare(_keywords[_mutable_idx])) { token->permissions = Token_DeclType::ReadWrite; }
+	else                                          { token->permissions = Token_DeclType::ReadOnly; }
 	token->type_name = type_name;
 	token->is_ref = (ref.GetSize() == 1 && ref[0] == '&');
-	token->is_user_def = !IsBuiltInType(token->type_name);
+	token->is_std_type = IsBuiltInType(token->type_name);
 	// token->arr_size = ProcessArrSize(arr_size, token); // needs to convert this to compile-time constant
 	token->def_type = FindDefType(token->type_name, token);
+	//if (!token->is_std_type && token->def_type == NULL) {
+	//	delete token;
+	//	return ProcessError("Declaration(ProcessDeclType)", "Type not defined", token);
+	//}
 	return token;
 }
 
@@ -417,7 +455,16 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessDeclVar(const mtlChars &rw, const
 	token->decl_type = ProcessDeclType(rw, type_name, arr_size, ref, token);
 	token->var_name  = var_name;
 	token->expr = expr.GetSize() > 0 ? ProcessExpression(expr, token) : NULL;
-	token->is_ct_const = false; // TODO: determine this later. How?
+	if (token->decl_type->type == Token::TOKEN_DECL_TYPE) {
+		Token_DeclType *t = dynamic_cast<Token_DeclType*>(token->decl_type);
+		bool result = true;
+		if (t->permissions == Token_DeclType::Constant && token->expr != NULL && !IsCTConst(token->expr, result)) {
+			delete token;
+			return ProcessError("Constant(ProcessDeclVar)", "Value not const, try readonly", parent);
+		} else { // debugging
+			return token;
+		}
+	}
 	return token;
 }
 
@@ -459,6 +506,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessReadLit(const mtlChars &lit, cons
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessReadVar(mtlSyntaxParser &var, const swsl::Token *parent)
 {
 	// TODO: Add an error-check for accessing non-members
+	// TODO: FindDeclType probably takes type name, not variable name
 
 	Token_ReadVar *token = new Token_ReadVar(parent);
 
@@ -530,6 +578,8 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessRetType(const mtlChars &rw, const
 
 	if (ref.GetSize() != 0) {
 		token = ProcessError("Ref(ProcessRetType)", "Return values can not be references", parent);
+	} else if (rw.Compare(_keywords[_const_idx], true)) {
+		token = ProcessError("Const(ProcessRetType)", "Return types can not be const", parent);
 	} else if (!type_name.Compare(_built_in_types[Typename_Void], true)) {
 		token = ProcessDeclType(rw, type_name, arr_size, ref, parent);
 	} else if (rw.GetSize() != 0 || arr_size.GetSize() != 0) {
@@ -743,7 +793,11 @@ void swsl::SyntaxTreeGenerator::ProcessParamDecl(const mtlChars &params, mtlList
 	while (!p.IsEnd()) {
 		switch (p.Match(_decl_str " %| %s", m)) {
 		case 0:
-			out_params.AddLast(ProcessDeclVar(m[_decl_qlf], m[_decl_typ], "", m[_decl_ref], m[_decl_nam], "", parent)); // TODO: read and pass arr_size
+			if (m[_decl_qlf].Compare(_keywords[_const_idx], true)) {
+				out_params.AddLast(ProcessError("Constant(ProcessFuncDecl)", "Parameters cannot be const, try readonly", parent));
+			} else {
+				out_params.AddLast(ProcessDeclVar(m[_decl_qlf], m[_decl_typ], "", m[_decl_ref], m[_decl_nam], "", parent)); // TODO: read and pass arr_size
+			}
 			break;
 		default:
 			out_params.AddLast(ProcessError("Syntax(ProcessFuncDecl)", m[0], parent));
