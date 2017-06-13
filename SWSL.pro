@@ -135,3 +135,6 @@ unix:!macx: { # unix-like, e.g. linux, freeBSD
         -lSDL \
         -lSDLmain
 }
+
+DISTFILES += \
+    TODO.txt
