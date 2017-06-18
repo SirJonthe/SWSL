@@ -1,18 +1,22 @@
 Bugs
 * Full struct assignment must be handled differently by individually assigning all variables using the masked move
-* A const assigned by an aliased const generates error
-    - This is solved by finding the decl_type token for Token_ReadVar
+    - Must be recursive to initialize nested structs
+* Accessing struct members
 
 Features
 * Explicit struct initialization, allowing for out-of-order init
     - vec3 a = { x = 0, y = var, z =  };
 	- vec3 b = { z = 5, x = z };
-* Allow const struct? Comes with some philosophical problems
-    - Should all members be const as well, or do we only need the values that initialize the struct to be const?
-* Const struct members are treated as static, accessable via . operator using struct name and variable name
+* Member initialization
+    - mutable CAN be initialized at delcaration or in-place (inside struct definition, is automatically emitted when struct is declared unless overridden by explicit init)
+	- immutable MUST be initialized at declaration OR in-place
+* Const struct is allowed if all initializers are const
+* Implement intrinsic functions
 
 Error emissions
 * Emit error if float is assigned to an int or vice versa
 * Verify naming of members and members of members
+* Emit error if const/readonly is not assigned at init
 * Emit error if const/readonly is assigned after init
 * Emit error if float value is appended with "f"
+    - This must be done, as the literal is otherwise interpreted as an alias

@@ -14,7 +14,8 @@
 
 #define _built_in_n 4
 #define _reserved_n 16
-#define _keywords_n 10
+#define _intrin_n 15
+#define _keywords_n 11
 enum {
 	Typename_Void,
 	Typename_Bool,
@@ -23,7 +24,8 @@ enum {
 };
 static const mtlChars _built_in_types[_built_in_n] = { "void", "bool", "int", "float" };
 static const mtlChars _reserved[_reserved_n] = { "min", "max", "abs", "round", "trunc", "floor", "ceil", "sin", "cos", "tan", "asin", "acos", "atan", "sqrt", "pow", "fixed" };
-static const mtlChars _keywords[_keywords_n] = { "const", "readonly", "mutable", "if", "else", "while", "return", "true", "false", "import" };
+static const mtlChars _intrin[] = { "min", "max", "abs", "round", "trunc", "floor", "ceil", "sin", "cos", "tan", "asin", "acos", "atan", "sqrt", "pow" };
+static const mtlChars _keywords[_keywords_n] = { "const", "readonly", "mutable", "if", "else", "while", "return", "true", "false", "import", "struct" };
 
 #define _const_idx    0
 #define _readonly_idx 1
@@ -40,7 +42,7 @@ int swsl::Token::CountAscend(unsigned int type_mask) const
 }
 
 swsl::Token_Err::Token_Err(const swsl::Token *p_parent) :
-	Token(p_parent, TOKEN_ERR)
+	Token(p_parent, TOKEN_ERR), line(0)
 {}
 
 swsl::SyntaxTree::SyntaxTree( void ) :
@@ -314,68 +316,53 @@ bool swsl::SyntaxTreeGenerator::IsCTConst(const Token *expr, bool &result) const
 
 const swsl::Token *swsl::SyntaxTreeGenerator::FindName(const mtlChars &name, const swsl::Token *parent)
 {
-	if (parent != NULL) {
-		switch (parent->type) {
-		case Token::TOKEN_BODY:
-			{
-				const Token_Body *body = dynamic_cast<const Token_Body*>(parent);
-				const mtlItem<Token*> *iter = body->tokens.GetFirst();
-				while (iter != NULL) {
-					switch (iter->GetItem()->type) {
-					case Token::TOKEN_DECL_VAR:
-					case Token::TOKEN_DEF_TYPE:
-					case Token::TOKEN_DECL_FN:
-					case Token::TOKEN_DEF_FN:
-						{
-							const Token *t = FindName(name, iter->GetItem());
-							if (t != NULL) { return t; }
+	if (parent != NULL && parent->type == Token::TOKEN_DEF_TYPE) {
+		if (parent->type == Token::TOKEN_BODY) {
+			const Token_Body *body = dynamic_cast<const Token_Body*>(parent);
+			const mtlItem<Token*> *iter = body->tokens.GetFirst();
+			while (iter != NULL) {
+				switch (iter->GetItem()->type) {
+
+				case Token::TOKEN_DECL_VAR:
+					{
+						const Token_DeclVar *decl = dynamic_cast<const Token_DeclVar*>(iter->GetItem());
+						if (decl != NULL && name.Compare(decl->var_name, true)) { return decl; }
+					}
+					break;
+
+				case Token::TOKEN_DEF_TYPE:
+					{
+						const Token_DefType *def = dynamic_cast<const Token_DefType*>(iter->GetItem());
+						if (def != NULL && name.Compare(def->type_name, true)) { return def; }
+					}
+					break;
+
+				case Token::TOKEN_DEF_FN:
+					{
+						const Token_DefFn *def = dynamic_cast<const Token_DefFn*>(iter->GetItem());
+						if (def != NULL && name.Compare(def->fn_name, true)) { return def; }
+					}
+					break;
+
+				case Token::TOKEN_DECL_FN:
+					{
+						const Token_DeclFn *decl = dynamic_cast<const Token_DeclFn*>(iter->GetItem());
+						if (parent->parent != NULL && parent->parent->type == Token::TOKEN_DEF_FN) {
+							const mtlItem<Token*> *iter = decl->params.GetFirst();
+							while (iter != NULL) {
+								const Token *t = FindName(name, iter->GetItem());
+								if (t != NULL) { return t; }
+								iter = iter->GetNext();
+							}
 						}
-						break;
-
-					default: break;
+						if (decl != NULL && name.Compare(decl->fn_name, true)) { return decl; }
 					}
-					iter = iter->GetNext();
+					break;
+
+				default: break;
 				}
+				iter = iter->GetNext();
 			}
-			break;
-
-		case Token::TOKEN_DECL_VAR:
-			{
-				const Token_DeclVar *decl = dynamic_cast<const Token_DeclVar*>(parent);
-				return (decl != NULL && name.Compare(decl->var_name, true)) ? decl : NULL;
-			}
-			break;
-
-		case Token::TOKEN_DEF_TYPE:
-			{
-				const Token_DefType *def = dynamic_cast<const Token_DefType*>(parent);
-				return (def != NULL && name.Compare(def->type_name, true)) ? def : NULL;
-			}
-			break;
-
-		case Token::TOKEN_DEF_FN:
-			{
-				const Token_DefFn *def = dynamic_cast<const Token_DefFn*>(parent);
-				return (def != NULL && name.Compare(def->fn_name, true)) ? def : NULL;
-			}
-			break;
-
-		case Token::TOKEN_DECL_FN:
-			{
-				const Token_DeclFn *decl = dynamic_cast<const Token_DeclFn*>(parent);
-				if (parent->parent != NULL && parent->parent->type == Token::TOKEN_DEF_FN) {
-					const mtlItem<Token*> *iter = decl->params.GetFirst();
-					while (iter != NULL) {
-						const Token *t = FindName(name, iter->GetItem());
-						if (t != NULL) { return t; }
-						iter = iter->GetNext();
-					}
-				}
-				return (decl != NULL && name.Compare(decl->fn_name, true)) ? decl : NULL;
-			}
-			break;
-
-		default: break;
 		}
 		return FindName(name, parent->parent);
 	}
@@ -458,11 +445,19 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessDeclVar(const mtlChars &rw, const
 	if (token->decl_type->type == Token::TOKEN_DECL_TYPE) {
 		Token_DeclType *t = dynamic_cast<Token_DeclType*>(token->decl_type);
 		bool result = true;
-		if (t->permissions == Token_DeclType::Constant && token->expr != NULL && !IsCTConst(token->expr, result)) {
+		if (parent->type != Token::TOKEN_DEF_FN && parent->type != Token::TOKEN_DECL_FN && token->expr == NULL) {
+			if (t->permissions != Token_DeclType::ReadWrite && parent->type != Token::TOKEN_DEF_TYPE) {
+				// how to initialize struct members inside struct
+					// in-place initialization is used in lieu of explicit initialization at declaration
+					// mutables can be initialized in-place or at declaration
+					// readonly MUST be initialized in-place OR at declaration
+					// const MUST be initialized in-place
+				delete token;
+				return ProcessError("[ProcessDeclVar] Immutable must be initialized at declaration", var_name, parent);
+			}
+		} else if (t->permissions == Token_DeclType::Constant && (!IsCTConst(token->expr, result) || !t->is_std_type)) { // const, must be compile-time constant / can't declare a struct const (yet)
 			delete token;
-			return ProcessError("Constant(ProcessDeclVar)", "Value not const, try readonly", parent);
-		} else { // debugging
-			return token;
+			return ProcessError("[ProcessDeclVar] Expression not compile-time constant, try \'readonly\'", expr, parent);
 		}
 	}
 	return token;
@@ -539,7 +534,11 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessReadVar(mtlSyntaxParser &var, con
 
 	default:
 		delete token;
-		return ProcessError("Operand(ProcessReadVar)", m[0], parent);
+		return ProcessError("[ProcessReadVar] Syntax error", m[0], parent);
+	}
+	if (token->decl_type == NULL) {
+		delete token;
+		return ProcessError("[ProcessReadVar] Undeclared alias", m[0], parent);
 	}
 	return token;
 }
@@ -568,6 +567,16 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessSet(const mtlChars &lhs, const mt
 	Token_Set *token = new Token_Set(parent);
 
 	token->lhs = ProcessOperand(lhs, token);
+	if (token->lhs->type != Token::TOKEN_READ_VAR) {
+		delete token->lhs;
+		token->lhs = ProcessError("[ProcessSet] Assigning an immutable", lhs, parent);
+	} else {
+		Token_ReadVar *t = dynamic_cast<Token_ReadVar*>(token->lhs);
+		if (t->decl_type != NULL && t->decl_type->permissions != Token_DeclType::ReadWrite) {
+			delete token->lhs;
+			token->lhs = ProcessError("[ProcessSet] Assigning an immutable", lhs, parent);
+		}
+	}
 	token->rhs = ProcessExpression(rhs, token);
 	return token;
 }
@@ -577,13 +586,13 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessRetType(const mtlChars &rw, const
 	Token *token = NULL;
 
 	if (ref.GetSize() != 0) {
-		token = ProcessError("Ref(ProcessRetType)", "Return values can not be references", parent);
+		token = ProcessError("[ProcessRetType] Return values can not be references", ref, parent);
 	} else if (rw.Compare(_keywords[_const_idx], true)) {
-		token = ProcessError("Const(ProcessRetType)", "Return types can not be const", parent);
+		token = ProcessError("[ProcessRetType] Return types can not be compile time constants, try \'readonly\'", rw, parent);
 	} else if (!type_name.Compare(_built_in_types[Typename_Void], true)) {
 		token = ProcessDeclType(rw, type_name, arr_size, ref, parent);
 	} else if (rw.GetSize() != 0 || arr_size.GetSize() != 0) {
-		token = ProcessError("Void(ProcessRetType)", "No qualifier or array allowed", parent);
+		token = ProcessError("[ProcessRetType] No qualifier or array allowed on void return type", "", parent);
 	}
 	return token;
 }
@@ -670,7 +679,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessExpression(const mtlChars &expr, 
 		break;
 
 	default:
-		token = ProcessError("Syntax(ProcessExpression)", p.GetBuffer(), token);
+		token = ProcessError("[ProcessExpression] Syntax error", p.GetBuffer(), token);
 		break;
 	}
 	return token;
@@ -719,13 +728,13 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessReturn(const mtlChars &expr, cons
 		token->is_void = dynamic_cast<const Token_DefFn*>(p)->decl_type == NULL;
 		if (token->is_void && expr.GetSize() > 0) {
 			delete token;
-			return ProcessError("Return from void(ProcessReturn)", expr, parent);
+			return ProcessError("[ProcessReturn] Return from void", expr, parent);
 		} else {
 			token->expr = expr.GetSize() > 0 ? ProcessExpression(expr, token) : NULL;
 		}
 	} else {
 		delete token;
-		return ProcessError("Unknown(ProcessReturn)", "Return in global scope?", parent);
+		return ProcessError("[ProcessReturn] Unknown", "Return in global scope?", parent);
 	}
 	return token;
 }
@@ -776,7 +785,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessBody(const mtlChars &body, const 
 			break;
 
 		default:
-			token->tokens.AddLast(ProcessError("Syntax(ProcessBody)", m[0], token));
+			token->tokens.AddLast(ProcessError("[ProcessBody] Syntax error", m[0], token));
 			break;
 		}
 	}
@@ -794,13 +803,13 @@ void swsl::SyntaxTreeGenerator::ProcessParamDecl(const mtlChars &params, mtlList
 		switch (p.Match(_decl_str " %| %s", m)) {
 		case 0:
 			if (m[_decl_qlf].Compare(_keywords[_const_idx], true)) {
-				out_params.AddLast(ProcessError("Constant(ProcessFuncDecl)", "Parameters cannot be const, try readonly", parent));
+				out_params.AddLast(ProcessError("[ProcessFuncDecl] Parameters cannot be compile time constants, try \'readonly\'", m[_decl_nam], parent));
 			} else {
 				out_params.AddLast(ProcessDeclVar(m[_decl_qlf], m[_decl_typ], "", m[_decl_ref], m[_decl_nam], "", parent)); // TODO: read and pass arr_size
 			}
 			break;
 		default:
-			out_params.AddLast(ProcessError("Syntax(ProcessFuncDecl)", m[0], parent));
+			out_params.AddLast(ProcessError("[ProcessFuncDecl] Syntax error", m[0], parent));
 		}
 		p.Match(",");
 	}
@@ -833,7 +842,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessTypeMemDecl(const mtlChars &decls
 			break;
 
 		default:
-			token->tokens.AddLast(ProcessError("Syntax(ProcessTypeMemDecl)", m[0], token));
+			token->tokens.AddLast(ProcessError("[ProcessTypeMemDecl] Syntax error", m[0], token));
 			break;
 		}
 	}
@@ -849,7 +858,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessTypeDef(const mtlChars &struct_na
 		token->body = ProcessTypeMemDecl(decls);
 		return token;
 	}
-	return ProcessError("Collision(ProcessTypeDef)", struct_name, parent);
+	return ProcessError("[ProcessTypeDef] Illegal/colliding naming", struct_name, parent);
 }
 
 void swsl::SyntaxTreeGenerator::RemoveComments(mtlString &code)
@@ -903,7 +912,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessFile(const mtlChars &contents, co
 			break;
 
 		default:
-			token->tokens.AddLast(ProcessError("Syntax(ProcessFile)", m[0], token));
+			token->tokens.AddLast(ProcessError("[ProcessFile] Syntax error", m[0], token));
 			break;
 		}
 	}
@@ -916,7 +925,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::LoadFile(const mtlChars &file_name, cons
 
 	if (!mtlSyntaxParser::BufferFile(file_name, token->content)) {
 		delete token;
-		return ProcessError("File not found(LoadFile)", file_name, parent);
+		return ProcessError("[LoadFile] File not found", file_name, parent);
 	}
 	RemoveComments(token->content);
 	token->file_name = file_name;

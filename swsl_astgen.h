@@ -43,6 +43,7 @@ struct Token_Err : public Token
 {
 	mtlChars err;
 	mtlChars msg;
+	int      line;
 
 	Token_Err(const Token *p_parent);
 };

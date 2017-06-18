@@ -159,10 +159,8 @@ void swsl::CppTranslator::DispatchDeclFn(const Token_DeclFn *t)
 
 void swsl::CppTranslator::DispatchDeclType(const Token_DeclType *t)
 {
-	if (!t->type_name.Compare("void")) {
-		if (t->permissions == Token_DeclType::ReadOnly || t->permissions == Token_DeclType::Constant) {
-			Print("const ");
-		}
+	if (!t->type_name.Compare("void") && (t->permissions == Token_DeclType::ReadOnly || t->permissions == Token_DeclType::Constant) && t->parent != NULL && t->parent->parent != NULL && (t->parent->parent->type == Token::TOKEN_DECL_FN || t->parent->parent->type == Token::TOKEN_DEF_FN)) {
+		Print("const ");
 	}
 	if (t->arr_size != NULL) {
 		Print("swsl::wide_array<");
@@ -287,9 +285,9 @@ void swsl::CppTranslator::DispatchIf(const Token_If *t)
 	++m_depth;
 
 	PrintTabs();
-	if (t->el_body == NULL) {
-		Print("const ");
-	}
+	//if (t->el_body == NULL) {
+	//	Print("const ");
+	//}
 	PrintType("bool");
 	Print(" ");
 	PrintMask();
@@ -382,17 +380,6 @@ void swsl::CppTranslator::DispatchReadVar(const Token_ReadVar *t)
 
 void swsl::CppTranslator::DispatchRet(const Token_Ret *t)
 {
-	// SUPER DUPER WRONG
-	// m0 is return mask
-	// when call to return
-		// mov_if_true(ret, expr, mx);
-		// m0 = m0 & (!mx);
-		// if (m0.all_fail()) { return ret; }
-	// at scope exit
-		// my = my & m0;
-	// at function end
-		// return ret;
-
 	const Token *p = t->parent;
 	while (p != NULL && p->type != Token::TOKEN_DEF_FN) {
 		p = p->parent;
@@ -571,21 +558,21 @@ void swsl::CppTranslator::DispatchCompatMain(const Token_DefFn *t)
 	Print("(");
 	++m_depth;
 	const mtlItem<Token*> *i = t->params.GetFirst();
-	while (i != NULL) {
+	const mtlItem<Token*> *j = NULL;
+	while (i != NULL && i->GetItem()->type == Token::TOKEN_DECL_VAR) {
 		PrintNewline();
 		PrintTabs();
 		Print("*( (");
 		DispatchTypeName(dynamic_cast<const Token_DeclVar*>(i->GetItem())->decl_type);
 		Print("*)(((char*)inout)");
 
-		const mtlItem<Token*> *j = t->params.GetFirst();
-		while (j != i) {
-			Print(" + sizeof(");
+		if (j != NULL) {
+			Print(" += sizeof(");
 			DispatchTypeName(dynamic_cast<const Token_DeclVar*>(j->GetItem())->decl_type);
 			Print(")");
-			j = j->GetNext();
 		}
 		Print(") ), ");
+		j = i;
 		i = i->GetNext();
 	}
 	PrintNewline();
