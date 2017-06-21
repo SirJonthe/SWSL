@@ -567,14 +567,16 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessSet(const mtlChars &lhs, const mt
 	Token_Set *token = new Token_Set(parent);
 
 	token->lhs = ProcessOperand(lhs, token);
-	if (token->lhs->type != Token::TOKEN_READ_VAR) {
-		delete token->lhs;
-		token->lhs = ProcessError("[ProcessSet] Assigning an immutable", lhs, parent);
-	} else {
-		Token_ReadVar *t = dynamic_cast<Token_ReadVar*>(token->lhs);
-		if (t->decl_type != NULL && t->decl_type->permissions != Token_DeclType::ReadWrite) {
+	if (token->lhs->type != Token::TOKEN_ERR) {
+		if (token->lhs->type != Token::TOKEN_READ_VAR) {
 			delete token->lhs;
 			token->lhs = ProcessError("[ProcessSet] Assigning an immutable", lhs, parent);
+		} else {
+			Token_ReadVar *t = dynamic_cast<Token_ReadVar*>(token->lhs);
+			if (t->decl_type != NULL && t->decl_type->permissions != Token_DeclType::ReadWrite) {
+				delete token->lhs;
+				token->lhs = ProcessError("[ProcessSet] Assigning an immutable", lhs, parent);
+			}
 		}
 	}
 	token->rhs = ProcessExpression(rhs, token);
