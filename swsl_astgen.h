@@ -11,24 +11,24 @@ struct Token
 {
 	enum TokenType
 	{
-		TOKEN_ERR        = 1,
-		TOKEN_ROOT       = TOKEN_ERR       << 1,
-		TOKEN_ALIAS      = TOKEN_ROOT      << 1,
-		TOKEN_DECL_TYPE  = TOKEN_ALIAS     << 1,
-		TOKEN_DECL_VAR   = TOKEN_DECL_TYPE << 1,
-		TOKEN_DECL_FN    = TOKEN_DECL_VAR  << 1,
-		TOKEN_DEF_TYPE   = TOKEN_DECL_FN   << 1,
-		TOKEN_DEF_FN     = TOKEN_DEF_TYPE  << 1,
-		TOKEN_FILE       = TOKEN_DEF_FN    << 1,
-		TOKEN_BODY       = TOKEN_FILE      << 1,
-		TOKEN_SET        = TOKEN_BODY      << 1,
-		TOKEN_EXPR       = TOKEN_SET       << 1,
-		TOKEN_READ_FN    = TOKEN_EXPR      << 1,
-		TOKEN_READ_VAR   = TOKEN_READ_FN   << 1,
-		TOKEN_READ_LIT   = TOKEN_READ_VAR  << 1,
-		TOKEN_IF         = TOKEN_READ_LIT  << 1,
-		TOKEN_WHILE      = TOKEN_IF        << 1,
-		TOKEN_RET        = TOKEN_WHILE     << 1
+		TOKEN_ERR           = 1,
+		TOKEN_ROOT          = TOKEN_ERR           << 1,
+		TOKEN_ALIAS         = TOKEN_ROOT          << 1,
+		TOKEN_DECL_VAR_TYPE = TOKEN_ALIAS         << 1,
+		TOKEN_DECL_VAR      = TOKEN_DECL_VAR_TYPE << 1,
+		TOKEN_DECL_FN       = TOKEN_DECL_VAR      << 1,
+		TOKEN_DEF_TYPE      = TOKEN_DECL_FN       << 1,
+		TOKEN_DEF_FN        = TOKEN_DEF_TYPE      << 1,
+		TOKEN_FILE          = TOKEN_DEF_FN        << 1,
+		TOKEN_BODY          = TOKEN_FILE          << 1,
+		TOKEN_SET           = TOKEN_BODY          << 1,
+		TOKEN_EXPR          = TOKEN_SET           << 1,
+		TOKEN_READ_FN       = TOKEN_EXPR          << 1,
+		TOKEN_READ_VAR      = TOKEN_READ_FN       << 1,
+		TOKEN_READ_LIT      = TOKEN_READ_VAR      << 1,
+		TOKEN_IF            = TOKEN_READ_LIT      << 1,
+		TOKEN_WHILE         = TOKEN_IF            << 1,
+		TOKEN_RET           = TOKEN_WHILE         << 1
 	};
 
 	const Token     *const parent;
@@ -67,7 +67,7 @@ struct Token_Alias : public Token
 
 struct Token_DefType;
 
-struct Token_DeclType : public Token
+struct Token_DeclVarType : public Token
 {
 	enum Permissions
 	{
@@ -82,13 +82,13 @@ struct Token_DeclType : public Token
 	bool                 is_ref;
 	bool                 is_std_type;
 
-	Token_DeclType(const Token *p_parent);
-	~Token_DeclType( void );
+	Token_DeclVarType(const Token *p_parent);
+	~Token_DeclVarType( void );
 };
 
 struct Token_DeclVar : public Token
 {
-	Token    *decl_type;  // Token_DeclType
+	Token    *decl_type;  // Token_DeclVarType
 	Token    *expr;       // Token_Expr
 	mtlChars  var_name;
 
@@ -98,7 +98,7 @@ struct Token_DeclVar : public Token
 
 struct Token_DeclFn : public Token
 {
-	Token           *decl_type; // Token_DeclType
+	Token           *decl_type; // Token_DeclVarType
 	mtlChars         fn_name;
 	mtlList<Token*>  params;    // Token_DeclVar
 
@@ -117,7 +117,7 @@ struct Token_DefType : public Token
 
 struct Token_DefFn : public Token
 {
-	Token           *decl_type; // Token_DeclType
+	Token           *decl_type; // Token_DeclVarType
 	mtlChars         fn_name;
 	mtlList<Token*>  params;    // Token_DeclVar
 	Token           *body;      // Token_Body
@@ -165,7 +165,7 @@ struct Token_Expr : public Token
 
 struct Token_ReadFn : public Token
 {
-	const Token_DeclType *decl_type;
+	const Token_DeclVarType *decl_type;
 	mtlChars              fn_name;
 	mtlList<Token*>       input;   // Token_Expr
 
@@ -175,10 +175,10 @@ struct Token_ReadFn : public Token
 
 struct Token_ReadVar : public Token
 {
-	const Token_DeclType *decl_type; // Token_DeclType
-	Token                *idx;       // Token_Expr
-	Token                *mem;       // Token_Var
-	mtlChars              var_name;
+	const Token_DeclVarType *decl_type; // Token_DeclVarType
+	Token                   *idx;       // Token_Expr
+	Token                   *mem;       // Token_Var
+	mtlChars                 var_name;
 
 	Token_ReadVar(const Token *p_parent);
 	~Token_ReadVar( void );
@@ -263,7 +263,7 @@ private:
 	const Token_DefType *FindDefType(const mtlChars &name, const Token *parent);
 	const Token_DeclFn *FindDeclFn(const mtlChars &name, const Token *parent);
 	const Token_DeclVar *FindDeclVar(const mtlChars &name, const Token *parent);
-	const Token_DeclType *FindDeclType(const mtlChars &var_name, const Token *parent);
+	const Token_DeclVarType *FindDeclVarType(const mtlChars &var_name, const Token *parent);
 
 private:
 	Token *ProcessError(const mtlChars &msg, mtlChars err, const Token *parent);
