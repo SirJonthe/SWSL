@@ -2,6 +2,8 @@ Bugs
 * Full struct assignment must be handled differently by individually assigning all variables using the masked move
     - Must be recursive to initialize nested structs
 * Accessing struct members
+* -10.0 is translated to ( - wide_float(10.0f))
+    - not technically wrong, but wide_float(-10.0f) and -wide_float(10.0f) might not mean the same thing
 
 Features
 * Explicit struct initialization, allowing for out-of-order init

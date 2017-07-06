@@ -453,10 +453,10 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessDeclType(const mtlChars &rw, cons
 	token->is_std_type = IsBuiltInType(token->type_name);
 	// token->arr_size = ProcessArrSize(arr_size, token); // needs to convert this to compile-time constant
 	token->def_type = FindDefType(token->type_name, token);
-	//if (!token->is_std_type && token->def_type == NULL) {
-	//	delete token;
-	//	return ProcessError("Declaration(ProcessDeclType)", "Type not defined", token);
-	//}
+	if (!token->is_std_type && token->def_type == NULL) {
+		delete token;
+		return ProcessError("[ProcessDeclType] Undefined type", type_name, line, parent);
+	}
 	return token;
 }
 
