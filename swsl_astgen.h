@@ -43,6 +43,7 @@ struct Token_Err : public Token
 {
 	mtlChars err;
 	mtlChars msg;
+	mtlChars file;
 	int      line;
 
 	Token_Err(const Token *p_parent);
@@ -177,7 +178,7 @@ struct Token_ReadVar : public Token
 {
 	const Token_DeclVarType *decl_type; // Token_DeclVarType
 	Token                   *idx;       // Token_Expr
-	Token                   *mem;       // Token_Var
+	Token                   *member;    // Token_ReadVar
 	mtlChars                 var_name;
 
 	Token_ReadVar(const Token *p_parent);
@@ -266,29 +267,31 @@ private:
 	const Token_DeclVarType *FindDeclVarType(const mtlChars &var_name, const Token *parent);
 
 private:
-	Token *ProcessError(const mtlChars &msg, mtlChars err, const Token *parent);
-	Token *ProcessDeclType(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const Token *parent);
-	Token *ProcessDeclVar(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const mtlChars &var_name, const mtlChars &expr, const Token *parent);
-	Token *ProcessReadFn(const mtlChars &fn_name, const mtlChars &params, const Token *parent);
+	Token *ProcessError(const mtlChars &msg, mtlChars err, int line, const Token *parent);
+	Token *ProcessDeclType(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, int line, const Token *parent);
+	Token *ProcessDeclVar(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const mtlChars &var_name, const mtlChars &expr, int line, const Token *parent);
+	Token *ProcessReadFn(const mtlChars &fn_name, const mtlChars &params, int line, const Token *parent);
 	Token *ProcessReadLit(const mtlChars &lit, const Token *parent);
 	Token *ProcessReadVar(mtlSyntaxParser &var, const Token *parent);
-	Token *ProcessOperand(const mtlChars &val, const Token *parent);
-	Token *ProcessSet(const mtlChars &lhs, const mtlChars &rhs, const Token *parent);
-	Token *ProcessRetType(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const Token *parent);
-	Token *ProcessFuncDecl(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const mtlChars &fn_name, const mtlChars &params, const Token *parent);
-	Token *ProcessOperation(const mtlChars &lhs, const mtlChars &op, const mtlChars &rhs, const Token *parent);
-	Token *ProcessExpression(const mtlChars &expr, const Token *parent);
+	const Token_DeclVarType *FindDeclVarMemType(const mtlChars &name, const Token_ReadVar *parent);
+	Token *ProcessReadVarMem(mtlSyntaxParser &var, const Token_ReadVar *parent);
+	Token *ProcessOperand(const mtlChars &val, int line, const Token *parent);
+	Token *ProcessSet(const mtlChars &lhs, const mtlChars &rhs, int line, const Token *parent);
+	Token *ProcessRetType(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, int line, const Token *parent);
+	Token *ProcessFuncDecl(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const mtlChars &fn_name, const mtlChars &params, int line, const Token *parent);
+	Token *ProcessOperation(const mtlChars &lhs, const mtlChars &op, const mtlChars &rhs, int line, const Token *parent);
+	Token *ProcessExpression(const mtlChars &expr, int line, const Token *parent);
 	Token *ProcessIf(const mtlChars &cond, const mtlChars &body, const Token *parent, mtlSyntaxParser &p);
-	Token *ProcessWhile(const mtlChars &cond, const mtlChars &body, const Token *parent);
-	Token *ProcessReturn(const mtlChars &expr, const Token *parent);
-	Token *ProcessBody(const mtlChars &body, const Token *parent);
-	void   ProcessParamDecl(const mtlChars &params, mtlList<Token*> &out_params, const Token *parent);
-	Token *ProcessFuncDef(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const mtlChars &fn_name, const mtlChars &params, const mtlChars &body, const Token *parent);
-	Token *ProcessTypeMemDecl(const mtlChars &decls);
-	Token *ProcessTypeDef(const mtlChars &struct_name, const mtlChars &decls, const Token *parent);
+	Token *ProcessWhile(const mtlChars &cond, const mtlChars &body, int line, const Token *parent);
+	Token *ProcessReturn(const mtlChars &expr, int line, const Token *parent);
+	Token *ProcessBody(const mtlChars &body, int line, const Token *parent);
+	void   ProcessParamDecl(const mtlChars &params, mtlList<Token*> &out_params, int line, const Token *parent);
+	Token *ProcessFuncDef(const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const mtlChars &fn_name, const mtlChars &params, const mtlChars &body, int line, const Token *parent);
+	Token *ProcessTypeMemDecl(const mtlChars &decls, int line, const Token *parent);
+	Token *ProcessTypeDef(const mtlChars &struct_name, const mtlChars &decls, int line, const Token *parent);
 	void   RemoveComments(mtlString &code);
 	Token *ProcessFile(const mtlChars &contents, const Token *parent);
-	Token *LoadFile(const mtlChars &file_name, const Token *parent);
+	Token *LoadFile(const mtlChars &file_name, int line, const Token *parent);
 
 public:
 	SyntaxTree *Generate(const mtlChars &entry_file);

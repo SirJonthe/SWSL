@@ -157,9 +157,9 @@ void swsl::CppTranslator::DispatchDeclFn(const Token_DeclFn *t)
 	PrintNewline();
 }
 
-void swsl::CppTranslator::DispatchDeclType(const Token_DeclType *t)
+void swsl::CppTranslator::DispatchDeclVarType(const Token_DeclVarType *t)
 {
-	if (!t->type_name.Compare("void") && (t->permissions == Token_DeclType::ReadOnly || t->permissions == Token_DeclType::Constant) && t->parent != NULL && t->parent->parent != NULL && (t->parent->parent->type == Token::TOKEN_DECL_FN || t->parent->parent->type == Token::TOKEN_DEF_FN)) {
+	if (!t->type_name.Compare("void") && (t->permissions == Token_DeclVarType::ReadOnly || t->permissions == Token_DeclVarType::Constant) && t->parent != NULL && t->parent->parent != NULL && (t->parent->parent->type == Token::TOKEN_DECL_FN || t->parent->parent->type == Token::TOKEN_DEF_FN)) {
 		Print("const ");
 	}
 	if (t->arr_size != NULL) {
@@ -256,6 +256,11 @@ void swsl::CppTranslator::DispatchErr(const Token_Err *t)
 			std::cout << t->err[i];
 		}
 	}
+	std::cout << " (";
+	for (int i = 0; i < t->file.GetSize(); ++i) {
+		std::cout << t->file[i];
+	}
+	std::cout << ":" << t->line << ")";
 	std::cout << std::endl;
 }
 
@@ -372,9 +377,9 @@ void swsl::CppTranslator::DispatchReadVar(const Token_ReadVar *t)
 		Dispatch(t->idx);
 		Print("]");
 	}
-	if (t->mem != NULL) {
+	if (t->member != NULL) {
 		Print(".");
-		Dispatch(t->mem);
+		Dispatch(t->member);
 	}
 }
 
@@ -518,7 +523,7 @@ void swsl::CppTranslator::DispatchWhile(const Token_While *t)
 
 void swsl::CppTranslator::DispatchTypeName(const Token *t)
 {
-	const Token_DeclType *type = (t != NULL && t->type == Token::TOKEN_DECL_TYPE) ? dynamic_cast<const Token_DeclType*>(t) : NULL;
+	const Token_DeclVarType *type = (t != NULL && t->type == Token::TOKEN_DECL_VAR_TYPE) ? dynamic_cast<const Token_DeclVarType*>(t) : NULL;
 	if (type != NULL) {
 		PrintType(type->type_name);
 		if (type->arr_size != NULL) {

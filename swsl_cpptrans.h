@@ -34,7 +34,7 @@ protected:
 	void DispatchAlias(const Token_Alias *t);
 	void DispatchBody(const Token_Body *t);
 	void DispatchDeclFn(const Token_DeclFn *t);
-	void DispatchDeclType(const Token_DeclType *t);
+	void DispatchDeclVarType(const Token_DeclVarType *t);
 	void DispatchDeclVar(const Token_DeclVar *t);
 	void DispatchDefFn(const Token_DefFn *t);
 	void DispatchDefType(const Token_DefType *t);
