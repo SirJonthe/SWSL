@@ -1,24 +1,29 @@
 Bugs
-* Full struct assignment must be handled differently by individually assigning all variables using the masked move
-    - Must be recursive to initialize nested structs
-* Accessing struct members
 * -10.0 is translated to ( - wide_float(10.0f))
     - not technically wrong, but wide_float(-10.0f) and -wide_float(10.0f) might not mean the same thing
+* Accessing const/readonly member of member generates error
+    - [ProcessReadVarMem] Undeclared member alias
+	- if (t->permissions != Token_DeclVarType::ReadWrite && parent->type != Token::TOKEN_DEF_TYPE && parent->type != Token::TOKEN_DEF_FN && parent->type != Token::TOKEN_DECL_FN)
+* Translating a function call is fucked
 
 Features
+* Expression lists for initializing structs
+    - vec2 a = vec2(1.0, 2.0); // like a constructor
+	- vec2 a = (1.0, 2.0); // implicit vec2(...)
+	- Also supports recursive behavior for struct members
+	- Same syntax can be used for built-in types. Casts still require the full construction syntax, e.g. float(1) or int(1.0)
 * Explicit struct initialization, allowing for out-of-order init
-    - vec3 a = { x = 0, y = var, z = a + b - 10 };
-	- vec3 b = { z = 5, x = z };
+    - vec3 a = ( x = 0, y = var, z = a + b - 10 );
+	- vec3 b = ( z = 5, x = z );
 * Member initialization
     - mutable CAN be initialized at delcaration or in-place (inside struct definition, is automatically emitted when struct is declared unless overridden by explicit init)
 	- immutable MUST be initialized at declaration OR in-place
 * Const struct is allowed if all initializers are const
 * Implement intrinsic functions
+* Full struct assignment must be handled differently by individually assigning all variables using the masked move
+    - Must be recursive to initialize nested structs
 
 Error emissions
 * Emit error if float is assigned to an int or vice versa
-* Verify naming of members and members of members
-* Emit error if const/readonly is not assigned at init
-* Emit error if const/readonly is assigned after init
 * Emit error if float value is appended with "f"
     - This must be done, as the literal is otherwise interpreted as an alias

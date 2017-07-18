@@ -321,6 +321,7 @@ const swsl::Token *swsl::SyntaxTreeGenerator::FindName(const mtlChars &name, con
 			const Token_Body *body = dynamic_cast<const Token_Body*>(parent);
 			const mtlItem<Token*> *iter = body->tokens.GetFirst();
 			while (iter != NULL) {
+				const Token *token = iter->GetItem();
 				switch (iter->GetItem()->type) {
 
 				case Token::TOKEN_DECL_VAR:
@@ -382,25 +383,37 @@ const swsl::Token *swsl::SyntaxTreeGenerator::FindName(const mtlChars &name, con
 const swsl::Token_DefType *swsl::SyntaxTreeGenerator::FindDefType(const mtlChars &name, const swsl::Token *parent)
 {
 	const Token *token = FindName(name, parent);
-	return (token != NULL && token->type == Token::TOKEN_DEF_TYPE) ? dynamic_cast<const Token_DefType*>(token) : NULL;
+	return
+		(token != NULL && token->type == Token::TOKEN_DEF_TYPE) ?
+		dynamic_cast<const Token_DefType*>(token) :
+		NULL;
 }
 
 const swsl::Token_DeclFn *swsl::SyntaxTreeGenerator::FindDeclFn(const mtlChars &name, const swsl::Token *parent)
 {
 	const Token *token = FindName(name, parent);
-	return (token != NULL && token->type == Token::TOKEN_DECL_FN) ? dynamic_cast<const Token_DeclFn*>(token) : NULL;
+	return
+		(token != NULL && token->type == Token::TOKEN_DECL_FN) ?
+		dynamic_cast<const Token_DeclFn*>(token) :
+		NULL;
 }
 
 const swsl::Token_DeclVar *swsl::SyntaxTreeGenerator::FindDeclVar(const mtlChars &name, const swsl::Token *parent)
 {
 	const Token *token = FindName(name, parent);
-	return (token != NULL && token->type == Token::TOKEN_DECL_VAR) ? dynamic_cast<const Token_DeclVar*>(token) : NULL;
+	return
+		(token != NULL && token->type == Token::TOKEN_DECL_VAR) ?
+		dynamic_cast<const Token_DeclVar*>(token) :
+		NULL;
 }
 
 const swsl::Token_DeclVarType *swsl::SyntaxTreeGenerator::FindDeclVarType(const mtlChars &var_name, const swsl::Token *parent)
 {
 	const Token_DeclVar *token = FindDeclVar(var_name, parent);
-	return (token != NULL && token->decl_type != NULL && token->decl_type->type == Token::TOKEN_DECL_VAR_TYPE) ? dynamic_cast<const Token_DeclVarType*>(token->decl_type) : NULL;
+	return
+		(token != NULL && token->decl_type != NULL && token->decl_type->type == Token::TOKEN_DECL_VAR_TYPE) ?
+		dynamic_cast<const Token_DeclVarType*>(token->decl_type) :
+		NULL;
 }
 
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessError(const mtlChars &msg, mtlChars err, int line, const swsl::Token *parent)
@@ -535,8 +548,6 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessReadLit(const mtlChars &lit, cons
 
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessReadVar(mtlSyntaxParser &var, const swsl::Token *parent)
 {
-	// TODO: FindDeclVarType probably takes type name, not variable name
-
 	Token_ReadVar *token = new Token_ReadVar(parent);
 
 	mtlArray<mtlChars> m;
@@ -587,8 +598,6 @@ const swsl::Token_DeclVarType *swsl::SyntaxTreeGenerator::FindDeclVarMemType(con
 
 swsl::Token *swsl::SyntaxTreeGenerator::ProcessReadVarMem(mtlSyntaxParser &var, const swsl::Token_ReadVar *parent)
 {
-	// TODO: FindDeclVarType probably takes type name, not variable name
-
 	Token_ReadVar *token = new Token_ReadVar(parent);
 
 	mtlArray<mtlChars> m;

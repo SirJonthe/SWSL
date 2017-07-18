@@ -42,7 +42,8 @@ SOURCES += \
     MiniLib/MTL/mtlPath.cpp \
     swsl_astgen.cpp \
     swsl_tokdisp.cpp \
-    swsl_cpptrans.cpp
+    swsl_cpptrans.cpp \
+    swsl_astgen_new.cpp
 
 HEADERS += \
     swsl_instr.h \
@@ -100,7 +101,8 @@ HEADERS += \
     tmp_out.h \
     swsl_math.h \
     MiniLib/MPL/mplAlloc.h \
-    swsl_cpptrans.h
+    swsl_cpptrans.h \
+    swsl_astgen_new.h
 
 macx: {
     OBJECTIVE_SOURCES += \

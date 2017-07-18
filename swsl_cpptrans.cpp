@@ -340,6 +340,10 @@ void swsl::CppTranslator::DispatchIf(const Token_If *t)
 
 void swsl::CppTranslator::DispatchReadFn(const Token_ReadFn *t)
 {
+	//if (t->parent->type != Token::TOKEN_EXPR) {
+	//	PrintTabs();
+	//}
+
 	PrintType(t->fn_name);
 	Print("(");
 	const mtlItem<swsl::Token*> *i = t->input.GetFirst();
@@ -350,6 +354,11 @@ void swsl::CppTranslator::DispatchReadFn(const Token_ReadFn *t)
 	}
 	PrintMask();
 	Print(")");
+
+	//if (t->parent->type != Token::TOKEN_EXPR) {
+	//	Print(";");
+	//	PrintNewline();
+	//}
 }
 
 void swsl::CppTranslator::DispatchReadLit(const Token_ReadLit *t)
