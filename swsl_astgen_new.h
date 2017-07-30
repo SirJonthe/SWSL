@@ -17,8 +17,8 @@ struct new_Token
 		TYPE_TRAIT = VAR_DECL   << 1,
 		FN_DEF     = TYPE_TRAIT << 1,
 		TYPE_DEF   = FN_DEF     << 1,
-		BODY       = TYPE_DEF   << 1,
-		SET        = BODY       << 1,
+		SCOPE      = TYPE_DEF   << 1,
+		SET        = SCOPE      << 1,
 		EXPR       = SET        << 1,
 		MATH_OP    = EXPR       << 1,
 		FN_OP      = MATH_OP    << 1,
@@ -28,32 +28,30 @@ struct new_Token
 		ELSE       = IF         << 1,
 		WHILE      = ELSE       << 1,
 		RET        = WHILE      << 1,
-		BODY       = RET        << 1
+		LIST       = RET        << 1
 	};
 
 	mtlString  contents;
 	mtlChars   str;
 	Type       type;
 	new_Token *parent;
-	new_Token *sub; // composite new_Tokens are split into subnew_Tokens
+	new_Token *sub; // composite tokens are split into sub tokens
 	new_Token *next;
 	new_Token *ref; // references back to something, do not delete
 
 	new_Token(const mtlChars &str_, Type type_, const new_Token *parent_);
 	~new_Token( void );
+	int CountAscend(unsigned int type_mask);
 };
 
 class new_SyntaxTreeGenerator
 {
 private:
-	bool IsReserved(const mtlChars &name);
-	bool IsBuiltInType(const mtlChars &name);
-	bool VerifyName(const mtlChars &name);
-	bool CmpVarDeclName(const mtlChars &name, const new_Token *tok);
-	bool CmpFnDeclName(const mtlChars &name, const new_Token *tok);
-	bool CmpFnDefName(const mtlChars &name, const new_Token *tok);
-	bool CmpVarDefName(const mtlChars &name, const new_Token *tok);
-	bool NewName(const mtlChars &name, const new_Token *parent);
+	bool IsReserved(const mtlChars &name) const;
+	bool IsBuiltInType(const mtlChars &name) const;
+	bool IsValidNameConcention(const mtlChars &name) const;
+	bool IsNewName(const mtlChars &name, const new_Token *parent) const;
+	bool IsValidName(const mtlChars &name, const new_Token *parent) const;
 	bool IsCTConst(const new_Token *expr, bool &result) const;
 
 private:
@@ -88,43 +86,46 @@ Examples of an AST
 
 	Output:
 		FILE "file.swsl"
-			BODY "void main() {}" <-- Just an example of contents of file
+			SCOPE "void main() {}" <-- Just an example of contents of "file.swsl"
 				FN_DEF "void main() {}"
 					VAR_DECL "void main"
 						TYPE_NAME "void"
 						USR_NAME "main"
-					BODY ""
+						LIST ""
+					SCOPE ""
 
 	Input:
-		mutable float[3] x = { a, 1 - 3 * 4, b[a + 1] };
+		mutable float[3] x = ( a, 1 - 3 * 4, b[a + 1] );
 
 	Output:
-		VAR_DECL "float[3] x = { a, 1 - 3 * 4, b[a + 1] }"
+		VAR_DECL "mutable float[3] x = ( a, 1 - 3 * 4, b[a + 1] )"
 			TYPE_TRAIT "mutable"
 			TYPE_NAME "float"
 			EXPR "3"
 				LIT_OP "3"
+			TYPE_TRAIT ""
 			USR_NAME "x"
-			SET "{ a, 1 - 3 * 4, b[a + 1] }"
-				EXPR "a"
-					VAR_OP "a"
-						USR_NAME "a"
-				EXPR "1 - 3 * 4"
-					EXPR "3 * 4"
-						LIT_OP "3"
-						MATH_OP "*"
-						LIT_OP "4"
-					EXPR "1 - "
-						MATH_OP "-"
-						LIT_OP "1"
-				EXPR
-					VAR_OP "b[a + 1]"
-						USR_NAME "b"
-						EXPR "a + 1"
-							VAR_OP "a"
-								USR_NAME "a"
-							MATH_OP "+"
+			SET "( a, 1 - 3 * 4, b[a + 1] )"
+				LIST "a, 1 - 3 * 4, b[a + 1]"
+					EXPR "a"
+						VAR_OP "a"
+							USR_NAME "a"
+					EXPR "1 - 3 * 4"
+						EXPR "3 * 4"
+							LIT_OP "3"
+							MATH_OP "*"
+							LIT_OP "4"
+						EXPR "1 - "
+							MATH_OP "-"
 							LIT_OP "1"
+					EXPR
+						VAR_OP "b[a + 1]"
+							USR_NAME "b"
+							EXPR "a + 1"
+								VAR_OP "a"
+									USR_NAME "a"
+								MATH_OP "+"
+								LIT_OP "1"
 
 	Input:
 		readonly float func(float &a);
@@ -134,11 +135,35 @@ Examples of an AST
 			VAR_DECL "readonly float func"
 				TYPE_TRAIT "readonly"
 				TYPE_NAME "float"
+				TYPE_TRAIT ""
 				USR_NAME "func"
-			VAR_DECL "float &a"
-				TYPE_NAME "float"
-				TYPE_TRAIT "&"
-				USR_NAME "a"
+			LIST "float &a"
+				VAR_DECL "float &a"
+					TYPE_TRAIT "readonly" // implicit type trait MUST be emitted
+					TYPE_NAME "float"
+					TYPE_TRAIT "&"
+					USR_NAME "a"
+
+		Input: struct Foo { float a; mutable float b; readonly int c; }
+
+		Output:
+			TYPE_DEF "struct Foo { float a; mutable float b; readonly int c; }"
+				USR_NAME "Foo"
+				VAR_DECL "float a"
+					TYPE_TRAIT "readonly"
+					TYPE_NAME "float"
+					TYPE_TRAIT ""
+					USR_NAME "a"
+				VAR_DECL "mutable float b"
+					TYPE_TRAIT "mutable"
+					TYPE_NAME "float"
+					TYPE_TRAIT ""
+					USR_NAME "b"
+				VAR_DECL "readonly int c"
+					TYPE_TRAIT "readonly"
+					TYPE_NAME "int"
+					TYPE_TRAIT ""
+					USR_NAME "c"
 
 */
 

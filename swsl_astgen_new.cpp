@@ -70,6 +70,7 @@ int Parser::Match(const mtlChars &expr)
 
 const mtlChars &Parser::Match(int i) const
 {
+	if (i >= m.GetSize() || i < 0) { return p.GetBufferRemaining(); }
 	return m[i];
 }
 
@@ -83,7 +84,12 @@ new_Token::~new_Token( void )
 	// don't delete ref
 }
 
-bool new_SyntaxTreeGenerator::IsReserved(const mtlChars &name)
+int new_Token::CountAscend(unsigned int type_mask) const
+{
+	return ((type_mask & (unsigned int)type) > 0 ? 1 : 0) + (parent != NULL ? parent->CountAscend(type_mask) : 0);
+}
+
+bool new_SyntaxTreeGenerator::IsReserved(const mtlChars &name) const
 {
 	for (int i = 0; i < _built_in_n; ++i) {
 		if (name.Compare(_built_in_types[i], true)) { return true; }
@@ -97,7 +103,7 @@ bool new_SyntaxTreeGenerator::IsReserved(const mtlChars &name)
 	return false;
 }
 
-bool new_SyntaxTreeGenerator::IsBuiltInType(const mtlChars &name)
+bool new_SyntaxTreeGenerator::IsBuiltInType(const mtlChars &name) const
 {
 	for (int i = 0; i < _built_in_n; ++i) {
 		if (name.Compare(_built_in_types[i], true)) { return true; }
@@ -105,7 +111,7 @@ bool new_SyntaxTreeGenerator::IsBuiltInType(const mtlChars &name)
 	return false;
 }
 
-bool new_SyntaxTreeGenerator::VerifyName(const mtlChars &name)
+bool new_SyntaxTreeGenerator::IsValidNameConvention(const mtlChars &name) const
 {
 	if (name.GetSize() > 0 && !IsReserved(name)) {
 		for (int i = 1; i < name.GetSize(); ++i) {
@@ -116,55 +122,41 @@ bool new_SyntaxTreeGenerator::VerifyName(const mtlChars &name)
 	return false;
 }
 
-bool new_SyntaxTreeGenerator::CmpVarDeclName(const mtlChars &name, const new_Token *tok)
+bool new_SyntaxTreeGenerator::IsNewName(const mtlChars &name, const new_Token *parent) const
 {
-	return tok != NULL && name.Compare(tok->str, true);
-}
-
-bool new_SyntaxTreeGenerator::CmpFnDeclName(const mtlChars &name, const new_Token *tok)
-{
-	return tok != NULL && name.Compare(tok->str, true);
-}
-
-bool new_SyntaxTreeGenerator::CmpFnDefName(const mtlChars &name, const new_Token *tok)
-{
-	return tok != NULL && name.Compare(tok->str, true);
-}
-
-bool new_SyntaxTreeGenerator::CmpVarDefName(const mtlChars &name, const new_Token *tok)
-{
-	return tok != NULL && name.Compare(tok->str, true);
-}
-
-bool new_SyntaxTreeGenerator::NewName(const mtlChars &name, const new_Token *parent)
-{
-	while (parent != NULL && parent->type != new_Token::BODY) {
+	while (parent != NULL && parent->type != new_Token::SCOPE) {
 		parent = parent->parent;
 	}
 
-	if (parent != NULL && parent->type == new_Token::BODY) {
-		const mtlItem<new_Token*> *i = dynamic_cast<const new_Token_Body*>(parent)->new_Tokens.GetFirst();
-		while (i != NULL) {
-			const new_Token *t = i->GetItem();
-			switch (t->type) {
+	if (parent != NULL && parent->type == new_Token::SCOPE) {
+		const new_Token *statement = parent->sub;
+		while (statement != NULL) {
+			switch (statement->type) {
 			case new_Token::FN_DECL:
-				if (CmpFnDeclName(name, dynamic_cast<const new_Token_DeclFn*>(t))) { return false; }
-				break;
-			case new_Token::VAR_DECL:
-				if (CmpVarDeclName(name, dynamic_cast<const new_Token_DeclVar*>(t))) { return false; }
-				break;
 			case new_Token::FN_DEF:
-				if (CmpFnDefName(name, dynamic_cast<const new_Token_DefFn*>(t))) { return false; }
-				break;
+			case new_Token::VAR_DECL:
 			case new_Token::TYPE_DEF:
-				if (CmpVarDefName(name, dynamic_cast<const new_Token_DefType*>(t))) { return false; }
+				{
+					new_Token *t = statement->sub;
+					while (t != NULL && t->type != new_Token::USR_NAME) {
+						t = t->next;
+					}
+					if (t != NULL) {
+						return t->str.Compare(name, true);
+					}
+				}
 				break;
 			default: break;
 			}
-			i = i->GetNext();
+			statement = statement->next;
 		}
 	}
 	return true;
+}
+
+bool new_SyntaxTreeGenerator::IsValidName(const mtlChars &name, const new_Token *parent) const
+{
+	return IsValidNameConvention(name) && !IsReserved(name) && IsNewName(name, parent);
 }
 
 bool new_SyntaxTreeGenerator::IsCTConst(const new_Token *expr, bool &result) const
@@ -174,17 +166,14 @@ bool new_SyntaxTreeGenerator::IsCTConst(const new_Token *expr, bool &result) con
 	switch (expr->type) {
 	case new_Token::EXPR:
 		{
-			const new_Token_Expr *e = dynamic_cast<const new_Token_Expr*>(expr);
-			result = result && IsCTConst(e->lhs, result) && IsCTConst(e->rhs, result);
+			result = result && IsCTConst(expr->sub, result) && IsCTConst(expr->sub->next->next, result);
 			break;
 		}
 	case new_Token::VAR_OP:
 		{
-			const new_Token_ReadVar *v = dynamic_cast<const new_Token_ReadVar*>(expr);
-			result = result && (v != NULL && v->decl_type != NULL && v->decl_type->permissions == new_Token_DeclVarType::Constant);
+			result = result && (expr->ref != NULL && expr->ref->type == new_Token::VAR_DECL && expr->ref->sub != NULL && expr->ref->sub->type == new_Token::TYPE_TRAIT && expr->ref->sub->str.Compare("const", true));
 			break;
 		}
-		result = result && expr->ref->str.Compare("const", true);
 		break;
 	case new_Token::FN_OP:
 	case new_Token::ERR:
@@ -195,9 +184,23 @@ bool new_SyntaxTreeGenerator::IsCTConst(const new_Token *expr, bool &result) con
 	return result;
 }
 
+new_Token *new_SyntaxTreeGenerator::ProcessDeclFn(const mtlChars &full, const mtlChars &rw, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &ref, const mtlChars &fn_name, const mtlChars &params, const new_Token *parent)
+{
+	new_Token *token = new new_Token(full, new_Token::FN_DECL, parent);
+
+	new_Token **t = &token->sub;
+	t = ProcessName(fn_name, token);
+	t = &(*t)->next;
+	t = ProcessDeclVar(rw, type_name, arr_size, ref, token);
+	t = &(*t)->next;
+	t = ProcessParamDecl(params, token);
+
+	return token;
+}
+
 new_Token *new_SyntaxTreeGenerator::ProcessFile(const mtlChars &file_contents, const new_Token *parent)
 {
-	new_Token *token = new new_Token(file_contents, new_Token::BODY, parent);
+	new_Token *token = new new_Token(file_contents, new_Token::SCOPE, parent);
 
 	Parser p(file_contents);
 	new_Token **t = &token->sub;
@@ -205,19 +208,24 @@ new_Token *new_SyntaxTreeGenerator::ProcessFile(const mtlChars &file_contents, c
 		while (p.Match(";")) {}
 		switch (p.Match(_fn_decl_str "; %| " _fn_decl_str "{%s} %| struct %w{%s} %| import\"%S\" %| %s")) {
 		case 0:
+			token->sub = ProcessDeclFn(p.Match(_fn_decl_qlf), p.Match(_fn_decl_typ), p.Match(_fn_decl_nam), p.Match(_fn_decl_par), token);
 			break;
 
 		case 1:
+			token->sub = ProcessDeclFn(p.Match(_fn_decl_qlf), p.Match(_fn_decl_typ), p.Match(_fn_decl_nam), p.Match(_fn_decl_par), p.Match(_fn_decl_par + 1), token);
 			break;
 
 		case 2:
+			token->sub = ProcessTypeDef(p.Match(0), p.Match(1), token);
 			break;
 
 		case 3:
+			token->sub = LoadFile(p.Match(0), token);
 			break;
 
 		default:
-			break;
+			token->sub = ProcessError("[ProcessFile] Syntax error", p.Match(0), token);
+			return token;
 		}
 		t = &(*t)->next;
 	}
