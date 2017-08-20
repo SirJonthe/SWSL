@@ -801,7 +801,7 @@ swsl::Token *swsl::SyntaxTreeGenerator::ProcessExpression(const mtlChars &expr, 
 		break;
 
 	default:
-		token = ProcessError("[ProcessExpression] Syntax error", p.GetBufferRemaining(), p.GetLineIndex(), token);
+		token = ProcessError("[ProcessExpression] Syntax error", p.GetBufferRemaining(), p.GetLineIndex(), parent);
 		return token;
 	}
 	return token;

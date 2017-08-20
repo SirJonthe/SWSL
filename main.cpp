@@ -381,14 +381,36 @@ int ParserTest( void )
 	return 0;
 }
 
+#include "swsl_astgen_new.h"
+#include "swsl_json.h"
+
+int NewTokenizerTest( void )
+{
+	std::cout << "generating tree..." << std::flush;
+	new_SyntaxTreeGenerator gen;
+	const new_Token *t = gen.Generate("../swsl_samples/test.swsl");
+	std::cout << "done" << std::endl;
+
+	std::cout << "serializing tree..." << std::flush;
+	SerializeToJSON(t, "../swsl_samples/test.json");
+	std::cout << "done" << std::endl;
+
+	std::cout << "discarding tree..." << std::flush;
+	delete t;
+	std::cout << "done" << std::endl;
+
+	return 0;
+}
+
 int main(int, char**)
 {
 	OutputSIMDInfo();
 	//return SplitTest();
 	//return PathTest();
-	return CppTranslatorTest();
+	//return CppTranslatorTest();
 	//return CodeCorrectnessTest();
 	//return CodeLoopTest();
 	//return CodePerformanceTest();
 	//return ParserTest();
+	return NewTokenizerTest();
 }
