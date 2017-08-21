@@ -69,6 +69,8 @@ private:
 		mtlChars GetMatch(int i) const;
 		mtlChars Seq( void ) const;
 		mtlChars Rem( void ) const;
+		bool     Consume(const mtlChars &str);
+		void     ConsumeAll(const mtlChars &str);
 	};
 
 private:
@@ -95,12 +97,13 @@ private:
 	new_Token       *ProcessType(const mtlChars &type_name, const new_Token *parent) const;
 	new_Token       *ProcessTrait(const mtlChars &trait, const new_Token *parent) const;
 	new_Token       *ProcessDeclVar(const mtlChars &trait, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &var_name, const mtlChars &expr, const new_Token *parent) const;
+	new_Token       *ProcessDeclParamVar(const mtlChars &trait, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &var_name, const new_Token *parent) const;
 	new_Token       *ProcessScope(const mtlChars &scope, const new_Token *parent) const;
 	new_Token       *ProcessNewName(const mtlChars &name, const new_Token *parent) const;
 	new_Token       *ProcessRefName(const mtlChars &name, const new_Token *parent) const;
 	new_Token       *ProcessRefMemName(const mtlChars &name, const new_Token *parent) const;
 	const new_Token *FindName(const mtlChars &name, const new_Token *token) const;
-	void             ProcessDeclParam(new_Token **token, const mtlChars &param, const new_Token *parent) const;
+	void             ProcessDeclParam(new_Token **&token, const mtlChars &param, const new_Token *parent) const;
 	new_Token       *ProcessExpr(const mtlChars &expr, const new_Token *parent) const;
 	new_Token       *ProcessDeclFn(const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &fn_name, const mtlChars &params, const new_Token *parent) const;
 	new_Token       *ProcessDefFn(const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &fn_name, const mtlChars &params, const mtlChars &body, const new_Token *parent) const;
