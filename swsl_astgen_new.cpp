@@ -322,7 +322,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessWhile(const mtlChars &cond, const mtl
 
 new_Token *new_SyntaxTreeGenerator::ProcessRet(const mtlChars &expr, const new_Token *parent) const
 {
-	new_Token *token = new new_Token("", new_Token::WHILE, parent);
+	new_Token *token = new new_Token(expr, new_Token::WHILE, parent);
 
 	const new_Token *p = parent;
 	while (p != NULL && p->type != new_Token::FN_DEF) {
@@ -400,7 +400,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessScope(const mtlChars &scope, const ne
 		//	ProcessError("[ProcessScope] Syntax error", p.Rem(), token);
 		//t = &(*t)->next;
 
-		switch (p.Match("{%s} %| if(%S){%s} %| while(%S){%s} %| return %s; %| %?(var %| imm %| lit)%w[%S]%w=%S; %| %?(var %| imm %| lit)%w%w=%S; %| %?(var %| imm %| lit)%w[%S]%w; %| %?(var %| imm %| lit)%w%w; %| %S; %| %s")) {
+		switch (p.Match("{%s} %| if(%S){%s} %| while(%S){%s} %| return %s; %| %?(var %| imm %| lit)%w[%S]%w=%S; %| %?(var %| imm %| lit)%w%w=%S; %| %?(var %| imm %| lit)%w[%S]%w; %| %?(var %| imm %| lit)%w%w; %| %S=%S; %| %S; %| %s")) {
 		case 0:
 			*t = ProcessScope(p.GetMatch(0), token);
 			break;
@@ -434,6 +434,10 @@ new_Token *new_SyntaxTreeGenerator::ProcessScope(const mtlChars &scope, const ne
 			break;
 
 		case 8:
+			*t = ProcessSet(p.GetMatch(0), p.GetMatch(1), token);
+			break;
+
+		case 9:
 			*t = ProcessExpr(p.GetMatch(0), token);
 			break;
 
@@ -701,10 +705,11 @@ new_Token *new_SyntaxTreeGenerator::ProcessArraySize(const mtlChars &arr_size, c
 	return ProcessConstExpr(arr_size.GetTrimmed().GetSize() > 0 ? arr_size : "1", parent);
 }
 
-void new_SyntaxTreeGenerator::ProcessDeclParam(new_Token **&token, const mtlChars &params, const new_Token *parent) const
+new_Token *new_SyntaxTreeGenerator::ProcessDeclParam(new_Token **&token, const mtlChars &params, const new_Token *parent) const
 {
 	Parser p(params);
 	*token = new new_Token(params, new_Token::SCOPE, parent);
+	new_Token *parent_scope = *token;
 	token = &(*token)->sub;
 	if (p.Match("void%0") < 0) {
 		while (!p.IsEnd()) {
@@ -712,20 +717,21 @@ void new_SyntaxTreeGenerator::ProcessDeclParam(new_Token **&token, const mtlChar
 			if (match >= 0 && (p.Consume(",") || p.IsEnd())) {
 				switch (match) {
 				case 0:
-					*token = ProcessDeclParamVar(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), parent);
+					*token = ProcessDeclParamVar(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), parent_scope);
 					break;
 				case 1:
-					*token = ProcessDeclParamVar(p.GetMatch(0), p.GetMatch(1), "", p.GetMatch(2), parent);
+					*token = ProcessDeclParamVar(p.GetMatch(0), p.GetMatch(1), "", p.GetMatch(2), parent_scope);
 					break;
 				}
 				token = &(*token)->next;
 			} else {
-				*token = ProcessError("[ProcessDeclParam] Syntax error", p.Rem(), parent);
+				*token = ProcessError("[ProcessDeclParam] Syntax error", p.Rem(), parent_scope);
 				token = &(*token)->next;
 				break;
 			}
 		}
 	}
+	return parent_scope;
 }
 
 new_Token *new_SyntaxTreeGenerator::ProcessDeclFn(const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &fn_name, const mtlChars &params, const new_Token *parent) const
@@ -758,9 +764,9 @@ new_Token *new_SyntaxTreeGenerator::ProcessDefFn(const mtlChars &type_name, cons
 	t = &(*t)->next;
 	*t = ProcessNewName(fn_name, token); // This may cause a conflict if there is already an FN_DECL and should be allowed
 	t = &(*t)->next;
-	ProcessDeclParam(t, params, token);
+	new_Token *parent_scope = ProcessDeclParam(t, params, token);
 	// ProcessDeclParam already increments t, no need to do it again
-	*t = ProcessScope(body, token);
+	*t = ProcessScope(body, parent_scope);
 
 	return token;
 }
@@ -778,7 +784,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessSet(const mtlChars &lhs, const mtlCha
 			delete *t;
 			*t = ProcessError("[ProcessSet] Assigning an immutable", lhs, parent);
 		} else {
-			if ((*t)->ref != NULL && !(*t)->ref->sub->str.Compare("mutable", true)) {
+			if ((*t)->ref != NULL && !(*t)->ref->sub->str.Compare("var", true)) {
 				delete *t;
 				*t = ProcessError("[ProcessSet] Assigning an immutable", lhs, parent);
 			}

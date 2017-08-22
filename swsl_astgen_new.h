@@ -103,7 +103,7 @@ private:
 	new_Token       *ProcessRefName(const mtlChars &name, const new_Token *parent) const;
 	new_Token       *ProcessRefMemName(const mtlChars &name, const new_Token *parent) const;
 	const new_Token *FindName(const mtlChars &name, const new_Token *token) const;
-	void             ProcessDeclParam(new_Token **&token, const mtlChars &param, const new_Token *parent) const;
+	new_Token       *ProcessDeclParam(new_Token **&token, const mtlChars &param, const new_Token *parent) const;
 	new_Token       *ProcessExpr(const mtlChars &expr, const new_Token *parent) const;
 	new_Token       *ProcessDeclFn(const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &fn_name, const mtlChars &params, const new_Token *parent) const;
 	new_Token       *ProcessDefFn(const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &fn_name, const mtlChars &params, const mtlChars &body, const new_Token *parent) const;

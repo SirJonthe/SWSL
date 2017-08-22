@@ -18,7 +18,7 @@ void PrintStr(mtlChars str, std::ofstream &fout)
 void PrintTabs(int tabs, std::ofstream &fout)
 {
 	for (int i = 0; i < tabs; ++i) {
-		fout << "  ";
+		fout << "\t";
 	}
 }
 
