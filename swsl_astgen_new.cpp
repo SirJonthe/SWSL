@@ -229,9 +229,9 @@ bool new_SyntaxTreeGenerator::IsCTConst(const new_Token *expr) const
 	return IsCTConst(expr, result);
 }
 
-new_Token *new_SyntaxTreeGenerator::ProcessDefType(const mtlChars &type_name, const mtlChars &decls, const new_Token *parent) const
+new_Token *new_SyntaxTreeGenerator::ProcessDefType(const mtlChars &type_name, const mtlChars &decls, const mtlChars &seq, const new_Token *parent) const
 {
-	new_Token *token = new new_Token("", new_Token::TYPE_DEF, parent);
+	new_Token *token = new new_Token(seq, new_Token::TYPE_DEF, parent);
 
 	new_Token **t = &token->sub;
 	*t = ProcessNewName(type_name, token);
@@ -242,9 +242,9 @@ new_Token *new_SyntaxTreeGenerator::ProcessDefType(const mtlChars &type_name, co
 	while (!p.IsEnd()) {
 		p.ConsumeAll(";");
 		if (p.Match("%?(var %| imm)%w[%S]%w;") == 0) {
-			*t = ProcessDeclVar(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), "", token);
+			*t = ProcessDeclVar(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), "", p.Seq(), token);
 		} else if (p.Match("%?(var %| imm)%w%w;") == 0) {
-			*t = ProcessDeclVar(p.GetMatch(0), "", p.GetMatch(1), p.GetMatch(2), "", token);
+			*t = ProcessDeclVar(p.GetMatch(0), "", p.GetMatch(1), p.GetMatch(2), "", p.Seq(), token);
 		} else {
 			*t = ProcessError("[ProcessDefType] Syntax error", p.Rem(), token);
 		}
@@ -288,7 +288,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessType(const mtlChars &type_name, const
 
 new_Token *new_SyntaxTreeGenerator::ProcessIf(const mtlChars &cond, const mtlChars &body, const new_Token *parent, Parser &p) const
 {
-	new_Token *token = new new_Token("", new_Token::IF, parent);
+	new_Token *token = new new_Token(p.Seq(), new_Token::IF, parent);
 
 	new_Token **t = &token->sub;
 	*t = ProcessExpr(cond, token);
@@ -309,9 +309,9 @@ new_Token *new_SyntaxTreeGenerator::ProcessIf(const mtlChars &cond, const mtlCha
 	return token;
 }
 
-new_Token *new_SyntaxTreeGenerator::ProcessWhile(const mtlChars &cond, const mtlChars &body, const new_Token *parent) const
+new_Token *new_SyntaxTreeGenerator::ProcessWhile(const mtlChars &cond, const mtlChars &body, const mtlChars &seq, const new_Token *parent) const
 {
-	new_Token *token = new new_Token("", new_Token::WHILE, parent);
+	new_Token *token = new new_Token(seq, new_Token::WHILE, parent);
 
 	new_Token **t = &token->sub;
 	*t = ProcessExpr(cond, token);
@@ -344,9 +344,9 @@ new_Token *new_SyntaxTreeGenerator::ProcessRet(const mtlChars &expr, const new_T
 	return token;
 }
 
-new_Token *new_SyntaxTreeGenerator::ProcessDeclVar(const mtlChars &trait, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &var_name, const mtlChars &expr, const new_Token *parent) const
+new_Token *new_SyntaxTreeGenerator::ProcessDeclVar(const mtlChars &trait, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &var_name, const mtlChars &expr, const mtlChars &seq, const new_Token *parent) const
 {
-	new_Token *token = new new_Token("", new_Token::VAR_DECL, parent);
+	new_Token *token = new new_Token(seq, new_Token::VAR_DECL, parent);
 
 	new_Token **t = &token->sub;
 	new_Token *trait_token = *t = ProcessTrait(trait, token);
@@ -366,9 +366,9 @@ new_Token *new_SyntaxTreeGenerator::ProcessDeclVar(const mtlChars &trait, const 
 	return token;
 }
 
-new_Token *new_SyntaxTreeGenerator::ProcessDeclParamVar(const mtlChars &trait, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &var_name, const new_Token *parent) const
+new_Token *new_SyntaxTreeGenerator::ProcessDeclParamVar(const mtlChars &trait, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &var_name, const mtlChars &seq, const new_Token *parent) const
 {
-	new_Token *token = new new_Token("", new_Token::VAR_DECL, parent);
+	new_Token *token = new new_Token(seq, new_Token::VAR_DECL, parent);
 
 	new_Token **t = &token->sub;
 	*t = ProcessTrait(trait, token);
@@ -410,7 +410,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessScope(const mtlChars &scope, const ne
 			break;
 
 		case 2:
-			*t = ProcessWhile(p.GetMatch(0), p.GetMatch(1), token);
+			*t = ProcessWhile(p.GetMatch(0), p.GetMatch(1), p.Seq(), token);
 			break;
 
 		case 3:
@@ -418,23 +418,23 @@ new_Token *new_SyntaxTreeGenerator::ProcessScope(const mtlChars &scope, const ne
 			break;
 
 		case 4:
-			*t = ProcessDeclVar(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), p.GetMatch(4), token);
+			*t = ProcessDeclVar(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), p.GetMatch(4), p.Seq(), token);
 			break;
 
 		case 5:
-			*t = ProcessDeclVar(p.GetMatch(0), p.GetMatch(1), "", p.GetMatch(2), p.GetMatch(3), token);
+			*t = ProcessDeclVar(p.GetMatch(0), p.GetMatch(1), "", p.GetMatch(2), p.GetMatch(3), p.Seq(), token);
 			break;
 
 		case 6:
-			*t = ProcessDeclVar(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), "", token);
+			*t = ProcessDeclVar(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), "", p.Seq(), token);
 			break;
 
 		case 7:
-			*t = ProcessDeclVar(p.GetMatch(0), p.GetMatch(1), "", p.GetMatch(2), "", token);
+			*t = ProcessDeclVar(p.GetMatch(0), p.GetMatch(1), "", p.GetMatch(2), "", p.Seq(), token);
 			break;
 
 		case 8:
-			*t = ProcessSet(p.GetMatch(0), p.GetMatch(1), token);
+			*t = ProcessSet(p.GetMatch(0), p.GetMatch(1), p.Seq(), token);
 			break;
 
 		case 9:
@@ -448,6 +448,208 @@ new_Token *new_SyntaxTreeGenerator::ProcessScope(const mtlChars &scope, const ne
 	}
 	return token;
 }
+
+/*new_Token *new_SyntaxTreeGenerator::ProcessIntExpr(const mtlChars &expr, const new_Token *parent) const
+{
+	new_Token *token = new new_Token(expr, new_Token::INT_EXPR, parent);
+
+	Parser p(expr);
+	if (p.Match("%S,") == 0) {
+		new_Token **t = &token->sub;
+		do {
+			*t = ProcessIntExpr(p.GetMatch(0), token);
+			t = &(*t)->next;
+		} while (p.Match("%S, %| %S") > 0);
+	} else {
+		switch (p.Match("%s+%S %| %s-%S %| %S*%S %| %S/%S %| %S%%%S %| %S|%S %| %S&%S %| %S^%S %| ~%S %| %S<<%S %| %S>>%S %| (%S)%0 %| %s")) { // TODO: add && ||
+		case 0:
+			token->sub = ProcessMathOp(p.GetMatch(0), "+", p.GetMatch(1), token);
+			break;
+
+		case 1:
+			token->sub = ProcessMathOp(p.GetMatch(0), "-", p.GetMatch(1), token);
+			break;
+
+		case 2:
+			token->sub = ProcessMathOp(p.GetMatch(0), "*", p.GetMatch(1), token);
+			break;
+
+		case 3:
+			token->sub = ProcessMathOp(p.GetMatch(0), "/", p.GetMatch(1), token);
+			break;
+
+		case 4:
+			token->sub = ProcessMathOp(p.GetMatch(0), "%", p.GetMatch(1), token);
+			break;
+
+		case 5:
+			token->sub = ProcessMathOp(p.GetMatch(0), "|", p.GetMatch(1), token);
+			break;
+
+		case 6:
+			token->sub = ProcessMathOp(p.GetMatch(0), "&", p.GetMatch(1), token);
+			break;
+
+		case 7:
+			token->sub = ProcessMathOp(p.GetMatch(0), "^", p.GetMatch(1), token);
+			break;
+
+		case 8:
+			token->sub = ProcessMathOp("", "~", p.GetMatch(0), token);
+			break;
+
+		case 9:
+			token->sub = ProcessMathOp(p.GetMatch(0), "<<", p.GetMatch(1), token);
+			break;
+
+		case 10:
+			token->sub = ProcessMathOp(p.GetMatch(0), ">>", p.GetMatch(1), token);
+			break;
+
+		case 11:
+			token->sub = ProcessIntExpr(p.GetMatch(0), token);
+			break;
+
+		case 12:
+			delete token;
+			token = ProcessMemOp(p.GetMatch(0), token);
+			break;
+
+		default:
+			delete token;
+			token = ProcessError("[ProcessIntExpr] Syntax error", p.Rem(), token);
+			break;
+		}
+	}
+	return token;
+}
+
+new_Token *new_SyntaxTreeGenerator::ProcessFloatExpr(const mtlChars &expr, const new_Token *parent) const
+{
+	new_Token *token = new new_Token(expr, new_Token::FLOAT_EXPR, parent);
+
+	Parser p(expr);
+	if (p.Match("%S,") == 0) {
+		new_Token **t = &token->sub;
+		do {
+			*t = ProcessFloatExpr(p.GetMatch(0), token); // TODO: This can actually be a
+			t = &(*t)->next;
+		} while (p.Match("%S, %| %S") > 0);
+	} else {
+		switch (p.Match("%s+%S %| %s-%S %| %S*%S %| %S/%S %| %S%%%S %| %S|%S %| %S&%S %| %S^%S %| ~%S %| (%S)%0 %| %s")) { // TODO: add && ||
+		case 0:
+			token->sub = ProcessMathOp(p.GetMatch(0), "+", p.GetMatch(1), token);
+			break;
+
+		case 1:
+			token->sub = ProcessMathOp(p.GetMatch(0), "-", p.GetMatch(1), token);
+			break;
+
+		case 2:
+			token->sub = ProcessMathOp(p.GetMatch(0), "*", p.GetMatch(1), token);
+			break;
+
+		case 3:
+			token->sub = ProcessMathOp(p.GetMatch(0), "/", p.GetMatch(1), token);
+			break;
+
+		case 9:
+			token->sub = ProcessIntExpr(p.GetMatch(0), token);
+			break;
+
+		case 10:
+			delete token;
+			token = ProcessMemOp(p.GetMatch(0), token);
+			break;
+
+		default:
+			delete token;
+			token = ProcessError("[ProcessFloatExpr] Syntax error", p.Rem(), token);
+			break;
+		}
+	}
+	return token;
+}
+
+new_Token *new_SyntaxTreeGenerator::ProcessBoolExpr(const mtlChars &expr, const new_Token *parent) const
+{
+	new_Token *token = new new_Token(expr, new_Token::BOOL_EXPR, parent);
+
+	Parser p(expr);
+	if (p.Match("%S,") == 0) {
+		new_Token **t = &token->sub;
+		do {
+			*t = ProcessBoolExpr(p.GetMatch(0), token);
+			t = &(*t)->next;
+		} while (p.Match("%S, %| %S") > 0);
+	} else {
+		switch (p.Match("%S==%S %| %S!=%S %| %S<=%S %| %S<%S %| %S>=%S %| %S>%S %| %S||%S %| %S&&%S %| %S|%S %| %S&%S %| %S^%S %| !%S %| ~%S %| (%S)%0 %| %s")) { // TODO: add && ||
+		case 0:
+			token->sub = ProcessMathOp(p.GetMatch(0), "==", p.GetMatch(1), token);
+			break;
+
+		case 1:
+			token->sub = ProcessMathOp(p.GetMatch(0), "!=", p.GetMatch(1), token);
+			break;
+
+		case 2:
+			token->sub = ProcessMathOp(p.GetMatch(0), "<=", p.GetMatch(1), token);
+			break;
+
+		case 3:
+			token->sub = ProcessMathOp(p.GetMatch(0), "<", p.GetMatch(1), token);
+			break;
+
+		case 4:
+			token->sub = ProcessMathOp(p.GetMatch(0), ">=", p.GetMatch(1), token);
+			break;
+
+		case 5:
+			token->sub = ProcessMathOp(p.GetMatch(0), ">", p.GetMatch(1), token);
+			break;
+
+		case 6:
+			token->sub = ProcessMathOp(p.GetMatch(0), "||", p.GetMatch(1), token);
+			break;
+
+		case 7:
+			token->sub = ProcessMathOp(p.GetMatch(0), "&&", p.GetMatch(1), token);
+			break;
+
+		case 8:
+			token->sub = ProcessMathOp(p.GetMatch(0), "|", p.GetMatch(1), token);
+			break;
+
+		case 9:
+			token->sub = ProcessMathOp(p.GetMatch(0), "&", p.GetMatch(1), token);
+			break;
+
+		case 10:
+			token->sub = ProcessMathOp(p.GetMatch(0), "^", p.GetMatch(1), token);
+			break;
+
+		case 11:
+		case 12:
+			token->sub = ProcessMathOp("", "~", p.GetMatch(0), token);
+			break;
+
+		case 13:
+			token->sub = ProcessBoolExpr(p.GetMatch(0), token);
+			break;
+
+		case 14:
+			delete token;
+			token = ProcessMemOp(p.GetMatch(0), token);
+			break;
+
+		default:
+			delete token;
+			token = ProcessError("[ProcessBoolExpr] Syntax error", p.Rem(), token);
+			break;
+		}
+	}
+	return token;
+}*/
 
 new_Token *new_SyntaxTreeGenerator::ProcessExpr(const mtlChars &expr, const new_Token *parent) const
 {
@@ -717,10 +919,10 @@ new_Token *new_SyntaxTreeGenerator::ProcessDeclParam(new_Token **&token, const m
 			if (match >= 0 && (p.Consume(",") || p.IsEnd())) {
 				switch (match) {
 				case 0:
-					*token = ProcessDeclParamVar(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), parent_scope);
+					*token = ProcessDeclParamVar(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), p.Seq(), parent_scope);
 					break;
 				case 1:
-					*token = ProcessDeclParamVar(p.GetMatch(0), p.GetMatch(1), "", p.GetMatch(2), parent_scope);
+					*token = ProcessDeclParamVar(p.GetMatch(0), p.GetMatch(1), "", p.GetMatch(2), p.Seq(), parent_scope);
 					break;
 				}
 				token = &(*token)->next;
@@ -734,9 +936,9 @@ new_Token *new_SyntaxTreeGenerator::ProcessDeclParam(new_Token **&token, const m
 	return parent_scope;
 }
 
-new_Token *new_SyntaxTreeGenerator::ProcessDeclFn(const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &fn_name, const mtlChars &params, const new_Token *parent) const
+new_Token *new_SyntaxTreeGenerator::ProcessDeclFn(const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &fn_name, const mtlChars &params, const mtlChars &seq, const new_Token *parent) const
 {
-	new_Token *token = new new_Token("", new_Token::FN_DECL, parent);
+	new_Token *token = new new_Token(seq, new_Token::FN_DECL, parent);
 
 	// TODO: Do a search for the name
 	new_Token **t = &token->sub;
@@ -751,9 +953,9 @@ new_Token *new_SyntaxTreeGenerator::ProcessDeclFn(const mtlChars &type_name, con
 	return token;
 }
 
-new_Token *new_SyntaxTreeGenerator::ProcessDefFn(const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &fn_name, const mtlChars &params, const mtlChars &body, const new_Token *parent) const
+new_Token *new_SyntaxTreeGenerator::ProcessDefFn(const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &fn_name, const mtlChars &params, const mtlChars &body, const mtlChars &seq, const new_Token *parent) const
 {
-	new_Token *token = new new_Token("", new_Token::FN_DEF, parent);
+	new_Token *token = new new_Token(seq, new_Token::FN_DEF, parent);
 
 	token->ref = FindName(fn_name, parent);
 	// TODO; Assign token->ref->ref to token if not already set (and if token->ref->type == FN_DECL)
@@ -771,38 +973,26 @@ new_Token *new_SyntaxTreeGenerator::ProcessDefFn(const mtlChars &type_name, cons
 	return token;
 }
 
-new_Token *new_SyntaxTreeGenerator::ProcessSet(const mtlChars &lhs, const mtlChars &rhs, const new_Token *parent) const
+new_Token *new_SyntaxTreeGenerator::ProcessSet(const mtlChars &lhs, const mtlChars &rhs, const mtlChars &seq, const new_Token *parent) const
 {
-	new_Token *token = new new_Token("", new_Token::SET, parent);
+	new_Token *token = new new_Token(seq, new_Token::SET, parent);
 
 	new_Token **t = &token->sub;
 	*t = ProcessMemOp(lhs, token);
 	t = &(*t)->sub;
 	new_Token **rhs_tok = &(*t)->next;
 	while (*t != NULL && (*t)->type != new_Token::ERR) {
-		if ((*t)->type != new_Token::MEM_OP) {
+		if ((*t)->ref == NULL || (*t)->ref->type != new_Token::MEM_OP || !(*t)->ref->sub->str.Compare("var", true)) {
 			delete *t;
 			*t = ProcessError("[ProcessSet] Assigning an immutable", lhs, parent);
 		} else {
-			if ((*t)->ref != NULL && !(*t)->ref->sub->str.Compare("var", true)) {
-				delete *t;
-				*t = ProcessError("[ProcessSet] Assigning an immutable", lhs, parent);
-			}
-
-			// TODO; Implement feature and remove this error block
-			//else if ((*t)->next == NULL) {
-			//	*t = NULL;
-			//}
-			// End error block
-
-			else {
-				t = &(*t)->next;
-			}
+			t = &(*t)->next;
 		}
 	}
 
+	// Emit error if the last member variable of lhs is dected to be a struct in order to disable support for assigning structs
 	// TODO; Implement feature and remove this error block
-	if (*t != NULL && (*t)->ref != NULL && !IsBuiltInType((*t)->ref->sub->str)) {
+	if (*t != NULL && (*t)->ref != NULL && (*t)->ref->type == new_Token::MEM_OP && (*t)->ref->sub != NULL && (*t)->ref->sub->next != NULL && (*t)->ref->sub->next->type == new_Token::TYPE_NAME && !IsBuiltInType((*t)->ref->sub->next->str)) {
 		delete *t;
 		*t = ProcessError("[ProcessSet] Assigning a struct (not yet implemented)", lhs, parent);
 	}
@@ -822,23 +1012,23 @@ new_Token *new_SyntaxTreeGenerator::ProcessFile(const mtlChars &file_contents, c
 		p.ConsumeAll(";");
 		switch (p.Match("%w[%S]%w(%s); %| %w%w(%s); %| %w[%S]%w(%s){%s} %| %w%w(%s){%s} %| struct %w{%s} %| import\"%S\" %| %s")) {
 		case 0:
-			*t = ProcessDeclFn(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), token);
+			*t = ProcessDeclFn(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), p.Seq(), token);
 			break;
 
 		case 1:
-			*t = ProcessDeclFn(p.GetMatch(0), "", p.GetMatch(1), p.GetMatch(2), token);
+			*t = ProcessDeclFn(p.GetMatch(0), "", p.GetMatch(1), p.GetMatch(2), p.Seq(), token);
 			break;
 
 		case 2:
-			*t = ProcessDefFn(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), p.GetMatch(4), token);
+			*t = ProcessDefFn(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), p.GetMatch(4), p.Seq(), token);
 			break;
 
 		case 3:
-			*t = ProcessDefFn(p.GetMatch(0), "", p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), token);
+			*t = ProcessDefFn(p.GetMatch(0), "", p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), p.Seq(), token);
 			break;
 
 		case 4:
-			*t = ProcessDefType(p.GetMatch(0), p.GetMatch(1), token);
+			*t = ProcessDefType(p.GetMatch(0), p.GetMatch(1), p.Seq(), token);
 			break;
 
 		case 5:
