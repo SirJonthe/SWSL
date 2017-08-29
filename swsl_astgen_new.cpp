@@ -710,7 +710,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessExpr(const mtlChars &expr, const new_
 
 		case 11:
 			delete token;
-			token = ProcessMemOp(p.GetMatch(0), token);
+			token = ProcessMemOp(p.GetMatch(0), parent);
 			break;
 
 		default:
@@ -982,7 +982,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessSet(const mtlChars &lhs, const mtlCha
 	t = &(*t)->sub;
 	new_Token **rhs_tok = &(*t)->next;
 	while (*t != NULL && (*t)->type != new_Token::ERR) {
-		if ((*t)->ref == NULL || (*t)->ref->type != new_Token::MEM_OP || !(*t)->ref->sub->str.Compare("var", true)) {
+		if ((*t)->ref == NULL || (*t)->ref->type != new_Token::VAR_DECL || (*t)->ref->sub == NULL || (*t)->ref->sub->type != new_Token::TYPE_TRAIT || !(*t)->ref->sub->str.Compare("var", true)) {
 			delete *t;
 			*t = ProcessError("[ProcessSet] Assigning an immutable", lhs, parent);
 		} else {
@@ -991,7 +991,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessSet(const mtlChars &lhs, const mtlCha
 	}
 
 	// Emit error if the last member variable of lhs is dected to be a struct in order to disable support for assigning structs
-	// TODO; Implement feature and remove this error block
+	// TODO; Implement struct assignment feature and remove this error block
 	if (*t != NULL && (*t)->ref != NULL && (*t)->ref->type == new_Token::MEM_OP && (*t)->ref->sub != NULL && (*t)->ref->sub->next != NULL && (*t)->ref->sub->next->type == new_Token::TYPE_NAME && !IsBuiltInType((*t)->ref->sub->next->str)) {
 		delete *t;
 		*t = ProcessError("[ProcessSet] Assigning a struct (not yet implemented)", lhs, parent);
