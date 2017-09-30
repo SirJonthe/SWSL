@@ -22,6 +22,11 @@ Features
 * Implement intrinsic functions
 * Full struct assignment must be handled differently by individually assigning all variables using the masked move
     - Must be recursive to initialize nested structs
+* Automatic initialization unless explicitly assigned value "void" (exception for lit/imm which generate error when not explicitly initialized to a value)
+    - float a; // initialized to 0.0
+	- int b; // initialized to 0
+	- vec2 c; // recursively traverse structs and initialize to 0.0 or 0 (exception if struct contains lit/imm, then generate error)
+	- float x = void; // leave uninitialized, unsafe
 
 Error emissions
 * Emit error if float is assigned to an int or vice versa

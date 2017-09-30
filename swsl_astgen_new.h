@@ -21,7 +21,8 @@ struct new_Token
 		BOOL_EXPR  = SCOPE      << 1,
 		INT_EXPR   = BOOL_EXPR  << 1,
 		FLOAT_EXPR = INT_EXPR   << 1,
-		MATH_OP    = FLOAT_EXPR << 1,
+		LIST_EXPR  = FLOAT_EXPR << 1,
+		MATH_OP    = LIST_EXPR  << 1,
 		FN_OP      = MATH_OP    << 1,
 		MEM_OP     = FN_OP      << 1,
 		BOOL_OP    = MEM_OP     << 1,
@@ -30,9 +31,11 @@ struct new_Token
 		IF         = FLOAT_OP   << 1,
 		ELSE       = IF         << 1,
 		WHILE      = ELSE       << 1,
-		RET        = WHILE      << 1,
-		EXPR       = RET        << 1, // DEPRECATE IN FAVOR OF BOOL_EXPR / INT_EXPR / FLOAT_EXPR
-		SET        = EXPR       << 1  // DEPRECATE IN FAVOR OF MATH_OP
+		RET        = WHILE      << 1, // DEPRECATE IN FAVOR OF BOOL_EXPR / INT_EXPR / FLOAT_EXPR
+		BOOL_SET   = RET        << 1,
+		INT_SET    = BOOL_SET   << 1,
+		FLOAT_SET  = INT_SET    << 1,
+		LIST_SET   = FLOAT_SET  << 1
 	};
 
 	mtlString        buffer;
@@ -64,8 +67,8 @@ private:
 
 	public:
 		Parser(const mtlChars &buffer);
-		bool            IsEnd( void ) const;
-		int             Match(const mtlChars &expr);
+		bool     IsEnd( void ) const;
+		int      Match(const mtlChars &expr);
 		mtlChars GetMatch(int i) const;
 		mtlChars Seq( void ) const;
 		mtlChars Rem( void ) const;
@@ -81,18 +84,32 @@ private:
 	bool IsValidNameConvention(const mtlChars &name) const;
 	bool IsNewName(const mtlChars &name, const new_Token *parent) const;
 	bool IsValidName(const mtlChars &name, const new_Token *parent) const;
-	bool IsCTConst(const new_Token *expr, bool &result) const;
-	bool IsCTConst(const new_Token *expr) const;
+	bool IsCTConst(const new_Token *expr, unsigned int op_type, bool &result) const;
+	bool IsCTConst(const new_Token *expr, unsigned int op_type) const;
+	const new_Token *GetTypeFromDecl(const new_Token *decl) const;
+	const new_Token *GetTraitFromDecl(const new_Token *decl) const;
+	const new_Token *GetTypeFromName(const mtlChars &name, const new_Token *scope) const;
+	const new_Token *GetTraitFromName(const mtlChars &name, const new_Token *scope) const;
+	bool CreateTypeList(const mtlChars &type_name, mtlString &out, const new_Token *parent) const;
 
 private:
+	bool             EvalConstBoolExpr(const new_Token *token) const;
+	int              EvalConstIntExpr(const new_Token *token) const;
+	float            EvalConstFloatExpr(const new_Token *token) const;
+	new_Token       *ProcessListExpr(const mtlChars &expr, const mtlChars &arr_size, const mtlChars &list, const new_Token *parent) const;
+	new_Token       *ProcessBoolExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const;
+	new_Token       *ProcessIntExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const;
+	new_Token       *ProcessFloatExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const;
 	new_Token       *ProcessMemOp(const mtlChars &op, const new_Token *parent) const;
 	new_Token       *ProcessMemOpMember(Parser &p, const new_Token *parent) const;
-	new_Token       *ProcessMathOp(const mtlChars &lhs, const mtlChars &op, const mtlChars &rhs, const new_Token *parent) const;
+	new_Token       *ProcessMathOp(const mtlChars &lhs, const mtlChars &op, const mtlChars &rhs, unsigned int op_type, const new_Token *parent) const;
 	new_Token       *ProcessSet(const mtlChars &lhs, const mtlChars &rhs, const mtlChars &seq, const new_Token *parent) const;
 	new_Token       *ProcessIf(const mtlChars &cond, const mtlChars &body, const new_Token *parent, Parser &p) const;
 	new_Token       *ProcessWhile(const mtlChars &cond, const mtlChars &body, const mtlChars &seq, const new_Token *parent) const;
 	new_Token       *ProcessRet(const mtlChars &expr, const new_Token *parent) const;
-	new_Token       *ProcessConstExpr(const mtlChars &expr, const new_Token *parent) const;
+	new_Token       *ProcessConstBoolExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const;
+	new_Token       *ProcessConstIntExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const;
+	new_Token       *ProcessConstFloatExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const;
 	new_Token       *ProcessArraySize(const mtlChars &arr_size, const new_Token *parent) const;
 	new_Token       *ProcessType(const mtlChars &type_name, const new_Token *parent) const;
 	new_Token       *ProcessTrait(const mtlChars &trait, const new_Token *parent) const;

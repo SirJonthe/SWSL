@@ -178,7 +178,7 @@ bool new_SyntaxTreeGenerator::IsValidName(const mtlChars &name, const new_Token 
 		IsNewName(name, parent);
 }
 
-bool new_SyntaxTreeGenerator::IsCTConst(const new_Token *expr, bool &result) const
+bool new_SyntaxTreeGenerator::IsCTConst(const new_Token *expr, unsigned int op_type, bool &result) const
 {
 	if (!result)                               { return false; }
 	if (expr == NULL)                          { return true; }
@@ -187,9 +187,9 @@ bool new_SyntaxTreeGenerator::IsCTConst(const new_Token *expr, bool &result) con
 	case new_Token::BOOL_EXPR:
 	case new_Token::INT_EXPR:
 	case new_Token::FLOAT_EXPR:
-	case new_Token::EXPR:
+	case new_Token::LIST_EXPR:
 		{
-			result = result && IsCTConst(expr->sub, result) && IsCTConst(expr->next, result);
+			result = result && IsCTConst(expr->sub, op_type, result) && IsCTConst(expr->next, op_type, result);
 			break;
 		}
 	case new_Token::MEM_OP:
@@ -209,10 +209,10 @@ bool new_SyntaxTreeGenerator::IsCTConst(const new_Token *expr, bool &result) con
 	case new_Token::BOOL_OP:
 	case new_Token::INT_OP:
 	case new_Token::FLOAT_OP:
-		result = true;
+		result = (op_type & expr->type) > 0;
 		break;
 	case new_Token::MATH_OP:
-		result = result && IsCTConst(expr->next, result);
+		result = result && IsCTConst(expr->next, op_type, result);
 		break;
 	case new_Token::FN_OP:
 	case new_Token::ERR:
@@ -223,10 +223,51 @@ bool new_SyntaxTreeGenerator::IsCTConst(const new_Token *expr, bool &result) con
 	return result;
 }
 
-bool new_SyntaxTreeGenerator::IsCTConst(const new_Token *expr) const
+bool new_SyntaxTreeGenerator::IsCTConst(const new_Token *expr, unsigned int op_type) const
 {
 	bool result = true;
-	return IsCTConst(expr, result);
+	return IsCTConst(expr, op_type, result);
+}
+
+const new_Token *new_SyntaxTreeGenerator::GetTypeFromDecl(const new_Token *decl) const
+{
+	if (decl != NULL && (decl->type == new_Token::VAR_DECL || decl->type == new_Token::FN_DECL || decl->type == new_Token::FN_DEF)) {
+		decl = decl->sub;
+		while (decl != NULL && decl->type != new_Token::TYPE_NAME) {
+			decl = decl->next;
+		}
+		if (decl != NULL && decl->type == new_Token::TYPE_NAME) {
+			if (!IsBuiltInType(decl->str)) {
+				decl = decl->ref;
+			}
+			return decl;
+		}
+	}
+	return NULL;
+}
+
+const new_Token *new_SyntaxTreeGenerator::GetTraitFromDecl(const new_Token *decl) const
+{
+	if (decl != NULL && (decl->type == new_Token::VAR_DECL || decl->type == new_Token::FN_DECL || decl->type == new_Token::FN_DEF)) {
+		decl = decl->sub;
+		while (decl != NULL && decl->type != new_Token::TYPE_TRAIT) {
+			decl = decl->next;
+		}
+		if (decl != NULL && decl->type == new_Token::TYPE_TRAIT) {
+			return decl;
+		}
+	}
+	return NULL;
+}
+
+const new_Token *new_SyntaxTreeGenerator::GetTypeFromName(const mtlChars &name, const new_Token *scope) const
+{
+	return GetTypeFromDecl(FindName(name, scope));
+}
+
+const new_Token *new_SyntaxTreeGenerator::GetTraitFromName(const mtlChars &name, const new_Token *scope) const
+{
+	return GetTraitFromDecl(FindName(name, scope));
 }
 
 new_Token *new_SyntaxTreeGenerator::ProcessDefType(const mtlChars &type_name, const mtlChars &decls, const mtlChars &seq, const new_Token *parent) const
@@ -236,7 +277,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessDefType(const mtlChars &type_name, co
 	new_Token **t = &token->sub;
 	*t = ProcessNewName(type_name, token);
 	t = &(*t)->next;
-	*t = new new_Token("", new_Token::SCOPE, token);
+	*t = new new_Token(decls, new_Token::SCOPE, token);
 	t = &(*t)->sub;
 	Parser p(decls);
 	while (!p.IsEnd()) {
@@ -356,12 +397,12 @@ new_Token *new_SyntaxTreeGenerator::ProcessDeclVar(const mtlChars &trait, const 
 	*t = ProcessArraySize(arr_size, token);
 	t = &(*t)->next;
 	*t = ProcessNewName(var_name, token);
-	if (expr.GetTrimmed().GetSize() > 0) {
+	if (!expr.Compare("void", true)) {
 		t = &(*t)->next;
 		*t = ProcessExpr(expr, token);
 	} else if (trait_token->str.Compare("imm", true) || trait_token->str.Compare("lit", true)) {
 		delete token;
-		token = ProcessError("[ProcessDeclVar] Immutable and literals must be initialized at declaration", "", parent);
+		token = ProcessError("[ProcessDeclVar] Immutable and literals must be initialized at declaration", seq, parent);
 	}
 	return token;
 }
@@ -390,17 +431,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessScope(const mtlChars &scope, const ne
 	while (!p.IsEnd()) {
 		p.ConsumeAll(";");
 
-		//*t =
-		//	TryProcessScope(p, token) ||
-		//	TryProcessIf(p, token) ||
-		//	TryProcessWhile(p, token) ||
-		//	TryProcessRet(p, token) ||
-		//	TryProcessDeclVar(p, token) ||
-		//	TryProcessExpr(p, token) ||
-		//	ProcessError("[ProcessScope] Syntax error", p.Rem(), token);
-		//t = &(*t)->next;
-
-		switch (p.Match("{%s} %| if(%S){%s} %| while(%S){%s} %| return %s; %| %?(var %| imm %| lit)%w[%S]%w=%S; %| %?(var %| imm %| lit)%w%w=%S; %| %?(var %| imm %| lit)%w[%S]%w; %| %?(var %| imm %| lit)%w%w; %| %S=%S; %| %S; %| %s")) {
+		switch (p.Match("{%s} %| if(%S){%s} %| while(%S){%s} %| return %s; %| %?(var %| imm %| lit)%w[%S]%w=%S; %| %?(var %| imm %| lit)%w%w=%S; %| %S=%S; %| %S; %| %s")) {
 		case 0:
 			*t = ProcessScope(p.GetMatch(0), token);
 			break;
@@ -426,18 +457,10 @@ new_Token *new_SyntaxTreeGenerator::ProcessScope(const mtlChars &scope, const ne
 			break;
 
 		case 6:
-			*t = ProcessDeclVar(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), "", p.Seq(), token);
-			break;
-
-		case 7:
-			*t = ProcessDeclVar(p.GetMatch(0), p.GetMatch(1), "", p.GetMatch(2), "", p.Seq(), token);
-			break;
-
-		case 8:
 			*t = ProcessSet(p.GetMatch(0), p.GetMatch(1), p.Seq(), token);
 			break;
 
-		case 9:
+		case 7:
 			*t = ProcessExpr(p.GetMatch(0), token);
 			break;
 
@@ -449,273 +472,374 @@ new_Token *new_SyntaxTreeGenerator::ProcessScope(const mtlChars &scope, const ne
 	return token;
 }
 
-/*new_Token *new_SyntaxTreeGenerator::ProcessIntExpr(const mtlChars &expr, const new_Token *parent) const
+// if (BOOL_EXPR)
+// search first for logical operators - BOOL_EXPR(BOOL_EXPR && BOOL_EXPR || BOOL_EXPR)
+// search for comparators - BOOL_EXPR(INT_EXPR < INT_EXPR)
+// search for mathematical operations - INT_EXPR(INT_EXPR + INT_EXPR)
+
+bool new_SyntaxTreeGenerator::CreateTypeList(const mtlChars &type_name, mtlString &out, const new_Token *parent) const
+{
+	out.Free();
+	if (IsBuiltInType(type_name)) {
+		out.Copy(type_name);
+	} else {
+		const new_Token *token = FindName(type_name, parent);
+		if (token == NULL || token->type != new_Token::TYPE_DEF) {
+			return false;
+		}
+		token = token->sub;
+		while (token != NULL) {
+			if (token->type == new_Token::SCOPE) {
+				token = token->sub;
+				break;
+			}
+			token = token->next;
+		}
+		while (token != NULL) {
+			if (token->type == new_Token::VAR_DECL) {
+				const new_Token *type = GetTypeFromDecl(token);
+				const new_Token *size = GetSizeFromDecl(token);
+				if (type != NULL && size != NULL) {
+					out.Append(type->str);
+					out.Append("[");
+					out.Append(size->str);
+					out.Append("]");
+				} else {
+					out.Free();
+					return false;
+				}
+			} else {
+				out.Free();
+				return false;
+			}
+			if (token->next != NULL) {
+				out.Append(", ");
+			}
+			token = token->next;
+		}
+	}
+
+	return true;
+}
+
+// all list items have size, 0 if non-array
+// all expression processing now has to take array string
+	// if non-0 then () is expected around the expression
+new_Token *new_SyntaxTreeGenerator::ProcessListExpr(const mtlChars &expr, const mtlChars &arr_size, const mtlChars &list, const new_Token *parent) const
+{
+	// list has format
+		// int[0], float[0], bool[2], Color3[0], int[4, 5, 1]
+		// 0 means "no-array"
+
+	new_Token *token = new new_Token(expr, new_Token::LIST_EXPR, parent);
+	new_Token **t = &(token->sub);
+	Parser ep(expr);
+	Parser ap(arr_size);
+	if (ap.Match("0%0") != 0) {
+		if (ep.Match("(%S)%0") == 0) {
+			int arr_size = 0;
+			if (ap.Match("%i") == 0 && ap.GetMatch(0).ToInt(arr_size)) {
+				mtlChars rem = (ap.Match(",") == 0) ? ap.Rem() : "0";
+				for (int i = 0; i < arr_size; ++i) {
+					*t = ProcessListExpr(ep.GetMatch(0), rem, list, token);
+					t = &(*t)->next;
+				}
+			} else {
+				delete token;
+				token = ProcessError("[ProcessListExpr] Bad array size", expr, parent);
+			}
+		} else {
+			delete token;
+			token = ProcessError("[ProcessListExpr] Array not surrounded by braces", expr, parent);
+		}
+	} else {
+		Parser lp(list);
+		while (!ep.IsEnd() && !lp.IsEnd() && token->type != new_Token::ERR) {
+			switch (ep.Match("%S, %| %S")) {
+			case 0:
+			case 1:
+				switch (lp.Match("bool[%S] %| int[%S] %| float[%S] %| %w[%S]")) { // TODO: Parse arrays correctly
+				case 0:
+					*t = ProcessBoolExpr(ep.GetMatch(0), lp.GetMatch(0), token);
+					break;
+
+				case 1:
+					*t = ProcessIntExpr(ep.GetMatch(0), lp.GetMatch(0), token);
+					break;
+
+				case 2:
+					*t = ProcessFloatExpr(ep.GetMatch(0), lp.GetMatch(0), token);
+					break;
+
+				case 3:
+				{
+					mtlString type_list;
+					if (CreateTypeList(lp.GetMatch(0), type_list, token)) {
+						*t = ProcessListExpr(ep.GetMatch(0), lp.GetMatch(1), type_list, token);
+					} else {
+						delete token;
+						token = ProcessError("[ProcessListExpr] Unknown list parameter", lp.GetMatch(0), parent);
+					}
+					break;
+				}
+
+				default:
+					delete token;
+					token = ProcessError("[ProcessListExpr] Unknown list parameter", lp.Rem(), parent);
+					break;
+				}
+				lp.Match(",");
+				break;
+
+			default:
+				delete token;
+				token = ProcessError("[ProcessListExpr] Syntax error", expr, parent);
+				break;
+			}
+			t = &(*t)->next;
+		}
+		if (lp.IsEnd() != ep.IsEnd()) {
+			delete token;
+			token = ProcessError("[ProcessListExpr] List parameter mismatch", expr, parent);
+		}
+	}
+	return token;
+}
+
+new_Token *new_SyntaxTreeGenerator::ProcessIntExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const
 {
 	new_Token *token = new new_Token(expr, new_Token::INT_EXPR, parent);
 
 	Parser p(expr);
-	if (p.Match("%S,") == 0) {
-		new_Token **t = &token->sub;
-		do {
-			*t = ProcessIntExpr(p.GetMatch(0), token);
-			t = &(*t)->next;
-		} while (p.Match("%S, %| %S") > 0);
+	Parser ap(arr_size);
+	if (ap.Match("0%0") != 0) {
+		if (p.Match("(%S)%0") == 0) {
+			int arr_size = 0;
+			if (ap.Match("%i") == 0 && ap.GetMatch(0).ToInt(arr_size)) {
+				new_Token **t = &token->sub;
+				mtlChars rem = (ap.Match(",") == 0) ? ap.Rem() : "0";
+				for (int i = 0; i < arr_size; ++i) {
+					*t = ProcessIntExpr(p.GetMatch(0), rem, token);
+					t = &(*t)->next;
+				}
+			} else {
+				delete token;
+				token = ProcessError("[ProcessIntExpr] Bad array size", expr, parent);
+			}
+		} else {
+			delete token;
+			token = ProcessError("[ProcessIntExpr] Array not surrounded by braces", expr, parent);
+		}
 	} else {
-		switch (p.Match("%s+%S %| %s-%S %| %S*%S %| %S/%S %| %S%%%S %| %S|%S %| %S&%S %| %S^%S %| ~%S %| %S<<%S %| %S>>%S %| (%S)%0 %| %s")) { // TODO: add && ||
+		switch (p.Match("%s+%S %| %s-%S %| %S*%S %| %S/%S %| %S%%%S %| %S|%S %| %S&%S %| %S^%S %| ~%S %| %S<<%S %| %S>>%S %| (%S)%0 %| %s")) {
 		case 0:
-			token->sub = ProcessMathOp(p.GetMatch(0), "+", p.GetMatch(1), token);
+			token->sub = ProcessMathOp(p.GetMatch(0), "ADD", p.GetMatch(1), new_Token::INT_OP, token);
 			break;
 
 		case 1:
-			token->sub = ProcessMathOp(p.GetMatch(0), "-", p.GetMatch(1), token);
+			token->sub = ProcessMathOp(p.GetMatch(0), "SUB", p.GetMatch(1), new_Token::INT_OP, token);
 			break;
 
 		case 2:
-			token->sub = ProcessMathOp(p.GetMatch(0), "*", p.GetMatch(1), token);
+			token->sub = ProcessMathOp(p.GetMatch(0), "MUL", p.GetMatch(1), new_Token::INT_OP, token);
 			break;
 
 		case 3:
-			token->sub = ProcessMathOp(p.GetMatch(0), "/", p.GetMatch(1), token);
+			token->sub = ProcessMathOp(p.GetMatch(0), "DIV", p.GetMatch(1), new_Token::INT_OP, token);
 			break;
 
 		case 4:
-			token->sub = ProcessMathOp(p.GetMatch(0), "%", p.GetMatch(1), token);
+			token->sub = ProcessMathOp(p.GetMatch(0), "MOD", p.GetMatch(1), new_Token::INT_OP, token);
 			break;
 
 		case 5:
-			token->sub = ProcessMathOp(p.GetMatch(0), "|", p.GetMatch(1), token);
+			token->sub = ProcessMathOp(p.GetMatch(0), "OR", p.GetMatch(1), new_Token::INT_OP, token);
 			break;
 
 		case 6:
-			token->sub = ProcessMathOp(p.GetMatch(0), "&", p.GetMatch(1), token);
+			token->sub = ProcessMathOp(p.GetMatch(0), "AND", p.GetMatch(1), new_Token::INT_OP, token);
 			break;
 
 		case 7:
-			token->sub = ProcessMathOp(p.GetMatch(0), "^", p.GetMatch(1), token);
+			token->sub = ProcessMathOp(p.GetMatch(0), "XOR", p.GetMatch(1), new_Token::INT_OP, token);
 			break;
 
 		case 8:
-			token->sub = ProcessMathOp("", "~", p.GetMatch(0), token);
+			token->sub = ProcessMathOp("", "NOT", p.GetMatch(0), new_Token::INT_OP, token);
 			break;
 
 		case 9:
-			token->sub = ProcessMathOp(p.GetMatch(0), "<<", p.GetMatch(1), token);
+			token->sub = ProcessMathOp(p.GetMatch(0), "LSHIFT", p.GetMatch(1), new_Token::INT_OP, token);
 			break;
 
 		case 10:
-			token->sub = ProcessMathOp(p.GetMatch(0), ">>", p.GetMatch(1), token);
+			token->sub = ProcessMathOp(p.GetMatch(0), "RSHIFT", p.GetMatch(1), new_Token::INT_OP, token);
 			break;
 
 		case 11:
-			token->sub = ProcessIntExpr(p.GetMatch(0), token);
+			token->sub = ProcessIntExpr(p.GetMatch(0), "0", token);
 			break;
 
 		case 12:
-			delete token;
-			token = ProcessMemOp(p.GetMatch(0), token);
-			break;
-
-		default:
-			delete token;
-			token = ProcessError("[ProcessIntExpr] Syntax error", p.Rem(), token);
-			break;
-		}
-	}
-	return token;
-}
-
-new_Token *new_SyntaxTreeGenerator::ProcessFloatExpr(const mtlChars &expr, const new_Token *parent) const
-{
-	new_Token *token = new new_Token(expr, new_Token::FLOAT_EXPR, parent);
-
-	Parser p(expr);
-	if (p.Match("%S,") == 0) {
-		new_Token **t = &token->sub;
-		do {
-			*t = ProcessFloatExpr(p.GetMatch(0), token); // TODO: This can actually be a
-			t = &(*t)->next;
-		} while (p.Match("%S, %| %S") > 0);
-	} else {
-		switch (p.Match("%s+%S %| %s-%S %| %S*%S %| %S/%S %| %S%%%S %| %S|%S %| %S&%S %| %S^%S %| ~%S %| (%S)%0 %| %s")) { // TODO: add && ||
-		case 0:
-			token->sub = ProcessMathOp(p.GetMatch(0), "+", p.GetMatch(1), token);
-			break;
-
-		case 1:
-			token->sub = ProcessMathOp(p.GetMatch(0), "-", p.GetMatch(1), token);
-			break;
-
-		case 2:
-			token->sub = ProcessMathOp(p.GetMatch(0), "*", p.GetMatch(1), token);
-			break;
-
-		case 3:
-			token->sub = ProcessMathOp(p.GetMatch(0), "/", p.GetMatch(1), token);
-			break;
-
-		case 9:
-			token->sub = ProcessIntExpr(p.GetMatch(0), token);
-			break;
-
-		case 10:
-			delete token;
-			token = ProcessMemOp(p.GetMatch(0), token);
-			break;
-
-		default:
-			delete token;
-			token = ProcessError("[ProcessFloatExpr] Syntax error", p.Rem(), token);
-			break;
-		}
-	}
-	return token;
-}
-
-new_Token *new_SyntaxTreeGenerator::ProcessBoolExpr(const mtlChars &expr, const new_Token *parent) const
-{
-	new_Token *token = new new_Token(expr, new_Token::BOOL_EXPR, parent);
-
-	Parser p(expr);
-	if (p.Match("%S,") == 0) {
-		new_Token **t = &token->sub;
-		do {
-			*t = ProcessBoolExpr(p.GetMatch(0), token);
-			t = &(*t)->next;
-		} while (p.Match("%S, %| %S") > 0);
-	} else {
-		switch (p.Match("%S==%S %| %S!=%S %| %S<=%S %| %S<%S %| %S>=%S %| %S>%S %| %S||%S %| %S&&%S %| %S|%S %| %S&%S %| %S^%S %| !%S %| ~%S %| (%S)%0 %| %s")) { // TODO: add && ||
-		case 0:
-			token->sub = ProcessMathOp(p.GetMatch(0), "==", p.GetMatch(1), token);
-			break;
-
-		case 1:
-			token->sub = ProcessMathOp(p.GetMatch(0), "!=", p.GetMatch(1), token);
-			break;
-
-		case 2:
-			token->sub = ProcessMathOp(p.GetMatch(0), "<=", p.GetMatch(1), token);
-			break;
-
-		case 3:
-			token->sub = ProcessMathOp(p.GetMatch(0), "<", p.GetMatch(1), token);
-			break;
-
-		case 4:
-			token->sub = ProcessMathOp(p.GetMatch(0), ">=", p.GetMatch(1), token);
-			break;
-
-		case 5:
-			token->sub = ProcessMathOp(p.GetMatch(0), ">", p.GetMatch(1), token);
-			break;
-
-		case 6:
-			token->sub = ProcessMathOp(p.GetMatch(0), "||", p.GetMatch(1), token);
-			break;
-
-		case 7:
-			token->sub = ProcessMathOp(p.GetMatch(0), "&&", p.GetMatch(1), token);
-			break;
-
-		case 8:
-			token->sub = ProcessMathOp(p.GetMatch(0), "|", p.GetMatch(1), token);
-			break;
-
-		case 9:
-			token->sub = ProcessMathOp(p.GetMatch(0), "&", p.GetMatch(1), token);
-			break;
-
-		case 10:
-			token->sub = ProcessMathOp(p.GetMatch(0), "^", p.GetMatch(1), token);
-			break;
-
-		case 11:
-		case 12:
-			token->sub = ProcessMathOp("", "~", p.GetMatch(0), token);
-			break;
-
-		case 13:
-			token->sub = ProcessBoolExpr(p.GetMatch(0), token);
-			break;
-
-		case 14:
-			delete token;
-			token = ProcessMemOp(p.GetMatch(0), token);
-			break;
-
-		default:
-			delete token;
-			token = ProcessError("[ProcessBoolExpr] Syntax error", p.Rem(), token);
-			break;
-		}
-	}
-	return token;
-}*/
-
-new_Token *new_SyntaxTreeGenerator::ProcessExpr(const mtlChars &expr, const new_Token *parent) const
-{
-	new_Token *token = new new_Token(expr, new_Token::EXPR, parent);
-
-	Parser p(expr);
-	if (p.Match("%S,") == 0) {
-		new_Token **t = &token->sub;
-		do {
-			*t = ProcessExpr(p.GetMatch(0), token);
-			t = &(*t)->next;
-		} while (p.Match("%S, %| %S") > 0);
-	} else {
-		switch (p.Match("%s+%S %| %s-%S %| %S*%S %| %S/%S %| %S==%S %| %S!=%S %| %S<=%S %| %S<%S %| %S>=%S %| %S>%S %| (%S)%0 %| %s")) { // TODO: add && ||
-		case 0:
-			token->sub = ProcessMathOp(p.GetMatch(0), "+", p.GetMatch(1), token);
-			break;
-
-		case 1:
-			token->sub = ProcessMathOp(p.GetMatch(0), "-", p.GetMatch(1), token);
-			break;
-
-		case 2:
-			token->sub = ProcessMathOp(p.GetMatch(0), "*", p.GetMatch(1), token);
-			break;
-
-		case 3:
-			token->sub = ProcessMathOp(p.GetMatch(0), "/", p.GetMatch(1), token);
-			break;
-
-		case 4:
-			token->sub = ProcessMathOp(p.GetMatch(0), "==", p.GetMatch(1), token);
-			break;
-
-		case 5:
-			token->sub = ProcessMathOp(p.GetMatch(0), "!=", p.GetMatch(1), token);
-			break;
-
-		case 6:
-			token->sub = ProcessMathOp(p.GetMatch(0), "<=", p.GetMatch(1), token);
-			break;
-
-		case 7:
-			token->sub = ProcessMathOp(p.GetMatch(0), "<", p.GetMatch(1), token);
-			break;
-
-		case 8:
-			token->sub = ProcessMathOp(p.GetMatch(0), ">=", p.GetMatch(1), token);
-			break;
-
-		case 9:
-			token->sub = ProcessMathOp(p.GetMatch(0), ">", p.GetMatch(1), token);
-			break;
-
-		case 10:
-			token->sub = ProcessExpr(p.GetMatch(0), token);
-			break;
-
-		case 11:
 			delete token;
 			token = ProcessMemOp(p.GetMatch(0), parent);
 			break;
 
 		default:
 			delete token;
-			token = ProcessError("[ProcessExpr] Syntax error", p.Rem(), token);
+			token = ProcessError("[ProcessIntExpr] Syntax error", p.Rem(), parent);
+			break;
+		}
+	}
+	return token;
+}
+
+new_Token *new_SyntaxTreeGenerator::ProcessFloatExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const
+{
+	new_Token *token = new new_Token(expr, new_Token::FLOAT_EXPR, parent);
+
+	Parser p(expr);
+	Parser ap(arr_size);
+	if (ap.Match("0%0") != 0) {
+		if (p.Match("(%S)%0") == 0) {
+			int arr_size = 0;
+			if (ap.Match("%i") == 0 && ap.GetMatch(0).ToInt(arr_size)) {
+				new_Token **t = &token->sub;
+				mtlChars rem = (ap.Match(",") == 0) ? ap.Rem() : "0";
+				for (int i = 0; i < arr_size; ++i) {
+					*t = ProcessFloatExpr(p.GetMatch(0), rem, token);
+					t = &(*t)->next;
+				}
+			} else {
+				delete token;
+				token = ProcessError("[ProcessFloatExpr] Bad array size", expr, parent);
+			}
+		} else {
+			delete token;
+			token = ProcessError("[ProcessFloatExpr] Array not surrounded by braces", expr, parent);
+		}
+	} else {
+		switch (p.Match("%s+%S %| %s-%S %| %S*%S %| %S/%S %| (%S)%0 %| %s")) {
+		case 0:
+			token->sub = ProcessMathOp(p.GetMatch(0), "ADD", p.GetMatch(1), new_Token::FLOAT_OP, token);
+			break;
+
+		case 1:
+			token->sub = ProcessMathOp(p.GetMatch(0), "SUB", p.GetMatch(1), new_Token::FLOAT_OP, token);
+			break;
+
+		case 2:
+			token->sub = ProcessMathOp(p.GetMatch(0), "MUL", p.GetMatch(1), new_Token::FLOAT_OP, token);
+			break;
+
+		case 3:
+			token->sub = ProcessMathOp(p.GetMatch(0), "DIV", p.GetMatch(1), new_Token::FLOAT_OP, token);
+			break;
+
+		case 4:
+			token->sub = ProcessFloatExpr(p.GetMatch(0), "0", token);
+			break;
+
+		case 5:
+			delete token;
+			token = ProcessMemOp(p.GetMatch(0), parent);
+			break;
+
+		default:
+			delete token;
+			token = ProcessError("[ProcessFloatExpr] Syntax error", p.Rem(), parent);
+			break;
+		}
+	}
+	return token;
+}
+
+new_Token *new_SyntaxTreeGenerator::ProcessBoolExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const
+{
+	new_Token *token = new new_Token(expr, new_Token::BOOL_EXPR, parent);
+
+	Parser p(expr);
+	Parser ap(arr_size);
+	if (ap.Match("0%0") != 0) {
+		if (p.Match("(%S)%0") == 0) {
+			int arr_size = 0;
+			if (ap.Match("%i") == 0 && ap.GetMatch(0).ToInt(arr_size)) {
+				new_Token **t = &token->sub;
+				mtlChars rem = (ap.Match(",") == 0) ? ap.Rem() : "0";
+				for (int i = 0; i < arr_size; ++i) {
+					*t = ProcessBoolExpr(p.GetMatch(0), rem, token);
+					t = &(*t)->next;
+				}
+			} else {
+				delete token;
+				token = ProcessError("[ProcessBoolExpr] Bad array size", expr, parent);
+			}
+		} else {
+			delete token;
+			token = ProcessError("[ProcessBoolExpr] Array not surrounded by braces", expr, parent);
+		}
+	} else {
+		switch (p.Match("%S==%S %| %S!=%S %| %S<=%S %| %S<%S %| %S>=%S %| %S>%S %| %S||%S %| %S&&%S %| %S|%S %| %S&%S %| %S^%S %| ~%S %| (%S)%0 %| %s")) { // TODO: add && ||
+		case 0:
+			token->sub = ProcessMathOp(p.GetMatch(0), "EQUAL", p.GetMatch(1), new_Token::BOOL_OP|new_Token::INT_OP|new_Token::FLOAT_OP, token);
+			break;
+
+		case 1:
+			token->sub = ProcessMathOp(p.GetMatch(0), "NOT_EQUAL", p.GetMatch(1), new_Token::BOOL_OP|new_Token::INT_OP|new_Token::FLOAT_OP, token);
+			break;
+
+		case 2:
+			token->sub = ProcessMathOp(p.GetMatch(0), "LESS_EQUAL", p.GetMatch(1), new_Token::INT_OP|new_Token::FLOAT_OP, token);
+			break;
+
+		case 3:
+			token->sub = ProcessMathOp(p.GetMatch(0), "LESS", p.GetMatch(1), new_Token::INT_OP|new_Token::FLOAT_OP, token);
+			break;
+
+		case 4:
+			token->sub = ProcessMathOp(p.GetMatch(0), "GREATER_EQUAL", p.GetMatch(1), new_Token::INT_OP|new_Token::FLOAT_OP, token);
+			break;
+
+		case 5:
+			token->sub = ProcessMathOp(p.GetMatch(0), "GREATER", p.GetMatch(1), new_Token::INT_OP|new_Token::FLOAT_OP, token);
+			break;
+
+		case 6:
+			token->sub = ProcessMathOp(p.GetMatch(0), "LOGICAL_OR", p.GetMatch(1), new_Token::BOOL_OP, token);
+			break;
+
+		case 7:
+			token->sub = ProcessMathOp(p.GetMatch(0), "LOGICAL_AND", p.GetMatch(1), new_Token::BOOL_OP, token);
+			break;
+
+		case 8:
+			token->sub = ProcessMathOp(p.GetMatch(0), "OR", p.GetMatch(1), new_Token::BOOL_OP, token);
+			break;
+
+		case 9:
+			token->sub = ProcessMathOp(p.GetMatch(0), "AND", p.GetMatch(1), new_Token::BOOL_OP, token);
+			break;
+
+		case 10:
+			token->sub = ProcessMathOp(p.GetMatch(0), "XOR", p.GetMatch(1), new_Token::BOOL_OP, token);
+			break;
+
+		case 11:
+			token->sub = ProcessMathOp("", "NOT", p.GetMatch(0), new_Token::BOOL_OP, token);
+			break;
+
+		case 12:
+			token->sub = ProcessBoolExpr(p.GetMatch(0), "0", token);
+			break;
+
+		case 13:
+			delete token;
+			token = ProcessMemOp(p.GetMatch(0), parent);
+			break;
+
+		default:
+			delete token;
+			token = ProcessError("[ProcessBoolExpr] Syntax error", p.Rem(), parent);
 			break;
 		}
 	}
@@ -735,7 +859,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessMemOp(const mtlChars &op, const new_T
 		break;
 
 	case 2:
-		token = new new_Token(var.Seq(), new_Token::FLOAT_OP, parent);
+		token = (!var.Seq().FindFirstChar(mtlWhitespacesStr) >= 0) ? new new_Token(var.Seq(), new_Token::FLOAT_OP, parent) : ProcessError("[ProcessMemOp] Whitespaces in floating poing value", var.Seq(), parent);
 		break;
 
 	case 3:
@@ -836,7 +960,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessMemOpMember(new_SyntaxTreeGenerator::
 	return token;
 }
 
-new_Token *new_SyntaxTreeGenerator::ProcessMathOp(const mtlChars &lhs, const mtlChars &op, const mtlChars &rhs, const new_Token *parent) const
+new_Token *new_SyntaxTreeGenerator::ProcessMathOp(const mtlChars &lhs, const mtlChars &op, const mtlChars &rhs, unsigned int op_type, const new_Token *parent) const
 {
 	new_Token *token = new new_Token(op, new_Token::MATH_OP, parent);
 
@@ -891,12 +1015,180 @@ new_Token *new_SyntaxTreeGenerator::ProcessRefMemName(const mtlChars &name, cons
 	return token;
 }
 
-new_Token *new_SyntaxTreeGenerator::ProcessConstExpr(const mtlChars &expr, const new_Token *parent) const
+bool new_SyntaxTreeGenerator::EvalConstBoolExpr(const new_Token *token) const
 {
-	new_Token *token = ProcessExpr(expr, parent);
-	if (!IsCTConst(token)) {
+	bool ret_val = false;
+	if (token == NULL || token->str.Compare("")) { return ret_val; }
+	switch (token->type) {
+	case new_Token::BOOL_OP:
+		token->str.ToBool(ret_val);
+		break;
+	case new_Token::BOOL_EXPR:
+		// we might need to eval int and float here as well
+		{
+			mtlChars op = token->sub->str;
+			if (op.Compare("EQUAL")) {
+				switch (token->sub->next->type) {
+				case new_Token::BOOL_EXPR:
+				case new_Token::BOOL_OP:
+					ret_val = EvalConstBoolExpr(token->sub->next) == EvalConstBoolExpr(token->sub->next->next);
+					break;
+				case new_Token::INT_EXPR:
+				case new_Token::INT_OP:
+					ret_val = EvalConstIntExpr(token->sub->next) == EvalConstIntExpr(token->sub->next->next);
+					break;
+				case new_Token::FLOAT_EXPR:
+				case new_Token::FLOAT_OP:
+					ret_val = EvalConstFloatExpr(token->sub->next) == EvalConstFloatExpr(token->sub->next->next);
+					break;
+				default: break;
+				}
+			} else if (op.Compare("NOT_EQUAL")) {
+				switch (token->sub->next->type) {
+				case new_Token::BOOL_EXPR:
+				case new_Token::BOOL_OP:
+					ret_val = EvalConstBoolExpr(token->sub->next) != EvalConstBoolExpr(token->sub->next->next);
+					break;
+				case new_Token::INT_EXPR:
+				case new_Token::INT_OP:
+					ret_val = EvalConstIntExpr(token->sub->next) != EvalConstIntExpr(token->sub->next->next);
+					break;
+				case new_Token::FLOAT_EXPR:
+				case new_Token::FLOAT_OP:
+					ret_val = EvalConstFloatExpr(token->sub->next) != EvalConstFloatExpr(token->sub->next->next);
+					break;
+				default: break;
+				}
+			} else if (op.Compare("LESS_EQUAL")) {
+				switch (token->sub->next->type) {
+				case new_Token::BOOL_EXPR:
+				case new_Token::BOOL_OP:
+					ret_val = EvalConstBoolExpr(token->sub->next) <= EvalConstBoolExpr(token->sub->next->next);
+					break;
+				case new_Token::INT_EXPR:
+				case new_Token::INT_OP:
+					ret_val = EvalConstIntExpr(token->sub->next) <= EvalConstIntExpr(token->sub->next->next);
+					break;
+				case new_Token::FLOAT_EXPR:
+				case new_Token::FLOAT_OP:
+					ret_val = EvalConstFloatExpr(token->sub->next) <= EvalConstFloatExpr(token->sub->next->next);
+					break;
+				default: break;
+				}
+			} else if (op.Compare("LESS")) {
+				switch (token->sub->next->type) {
+				case new_Token::BOOL_EXPR:
+				case new_Token::BOOL_OP:
+					ret_val = EvalConstBoolExpr(token->sub->next) < EvalConstBoolExpr(token->sub->next->next);
+					break;
+				case new_Token::INT_EXPR:
+				case new_Token::INT_OP:
+					ret_val = EvalConstIntExpr(token->sub->next) < EvalConstIntExpr(token->sub->next->next);
+					break;
+				case new_Token::FLOAT_EXPR:
+				case new_Token::FLOAT_OP:
+					ret_val = EvalConstFloatExpr(token->sub->next) < EvalConstFloatExpr(token->sub->next->next);
+					break;
+				default: break;
+				}
+			} else if (op.Compare("GREATER_EQUAL")) {
+				switch (token->sub->next->type) {
+				case new_Token::BOOL_EXPR:
+				case new_Token::BOOL_OP:
+					ret_val = EvalConstBoolExpr(token->sub->next) >= EvalConstBoolExpr(token->sub->next->next);
+					break;
+				case new_Token::INT_EXPR:
+				case new_Token::INT_OP:
+					ret_val = EvalConstIntExpr(token->sub->next) >= EvalConstIntExpr(token->sub->next->next);
+					break;
+				case new_Token::FLOAT_EXPR:
+				case new_Token::FLOAT_OP:
+					ret_val = EvalConstFloatExpr(token->sub->next) >= EvalConstFloatExpr(token->sub->next->next);
+					break;
+				default: break;
+				}
+			} else if (op.Compare("GREATER")) {
+				switch (token->sub->next->type) {
+				case new_Token::BOOL_EXPR:
+				case new_Token::BOOL_OP:
+					ret_val = EvalConstBoolExpr(token->sub->next) > EvalConstBoolExpr(token->sub->next->next);
+					break;
+				case new_Token::INT_EXPR:
+				case new_Token::INT_OP:
+					ret_val = EvalConstIntExpr(token->sub->next) > EvalConstIntExpr(token->sub->next->next);
+					break;
+				case new_Token::FLOAT_EXPR:
+				case new_Token::FLOAT_OP:
+					ret_val = EvalConstFloatExpr(token->sub->next) > EvalConstFloatExpr(token->sub->next->next);
+					break;
+				default: break;
+				}
+			} else if (op.Compare("LOGICAL_AND")) {
+				ret_val = EvalConstBoolExpr(token->sub->next) && EvalConstBoolExpr(token->sub->next->next);
+			} else if (op.Compare("LOGICAL_OR")) {
+				ret_val = EvalConstBoolExpr(token->sub->next) || EvalConstBoolExpr(token->sub->next->next);
+			} else if (op.Compare("OR")) {
+				ret_val = EvalConstBoolExpr(token->sub->next) | EvalConstBoolExpr(token->sub->next->next);
+			} else if (op.Compare("AND")) {
+				ret_val = EvalConstBoolExpr(token->sub->next) & EvalConstBoolExpr(token->sub->next->next);
+			} else if (op.Compare("XOR")) {
+				ret_val = EvalConstBoolExpr(token->sub->next) ^ EvalConstBoolExpr(token->sub->next->next);
+			} else if (op.Compare("NOT")) {
+				ret_val = !EvalConstBoolExpr(token->sub->next->next);
+			}
+		}
+		break;
+	}
+	return ret_val;
+}
+
+new_Token *new_SyntaxTreeGenerator::ProcessConstBoolExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const
+{
+	new_Token *token = ProcessBoolExpr(expr, arr_size, parent);
+	if (!IsCTConst(token, new_Token::BOOL_OP) || token->CountDescend(new_Token::ERR) > 0) {
 		delete token;
-		token = ProcessError("[ProcessConstExpr] Expression not compile-time constant", expr, parent);
+		token = ProcessError("[ProcessConstBoolExpr] Expression not compile-time constant", expr, parent);
+	} else {
+		// evaluate vlaue
+		bool b_val = EvalConstBoolExpr(token);
+		delete token;
+		mtlString str_val;
+		str_val.FromBool(b_val);
+		token = new new_Token(str_val, new_Token::BOOL_OP, parent);
+	}
+	return token;
+}
+
+new_Token *new_SyntaxTreeGenerator::ProcessConstIntExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const
+{
+	new_Token *token = ProcessIntExpr(expr, arr_size, parent);
+	if (!IsCTConst(token, new_Token::INT_OP) || token->CountDescend(new_Token::ERR) > 0) {
+		delete token;
+		token = ProcessError("[ProcessConstIntExpr] Expression not compile-time constant", expr, parent);
+	} else {
+		// evaluate vlaue
+		int i_val = EvalConstIntExpr(token);
+		delete token;
+		mtlString str_val;
+		str_val.FromInt(i_val);
+		token = new new_Token(str_val, new_Token::INT_OP, parent);
+	}
+	return token;
+}
+
+new_Token *new_SyntaxTreeGenerator::ProcessConstFloatExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const
+{
+	new_Token *token = ProcessFloatExpr(expr, arr_size, parent);
+	if (!IsCTConst(token, new_Token::FLOAT_OP) || token->CountDescend(new_Token::ERR) > 0) {
+		delete token;
+		token = ProcessError("[ProcessConstFloatExpr] Expression not compile-time constant", expr, parent);
+	} else {
+		// evaluate vlaue
+		float fl_val = EvalConstFloatExpr(token);
+		delete token;
+		mtlString str_val;
+		str_val.FromFloat(fl_val);
+		token = new new_Token(str_val, new_Token::FLOAT_OP, parent);
 	}
 	return token;
 }
@@ -904,7 +1196,27 @@ new_Token *new_SyntaxTreeGenerator::ProcessConstExpr(const mtlChars &expr, const
 new_Token *new_SyntaxTreeGenerator::ProcessArraySize(const mtlChars &arr_size, const new_Token *parent) const
 {
 	// TODO: Make sure arr_size evals to > 0
-	return ProcessConstExpr(arr_size.GetTrimmed().GetSize() > 0 ? arr_size : "1", parent);
+	new_Token *token = NULL;
+	if (arr_size.GetTrimmed().GetSize() > 0) {
+		token = new new_Token(arr_size, new_Token::LIST_EXPR, parent);
+		new_Token **t = &token->sub;
+		Parser p(arr_size);
+		while (!p.IsEnd()) {
+			switch (p.Match("%S, %| %S")) {
+			case 0:
+			case 1:
+				*t = ProcessConstIntExpr(p.GetMatch(0), "0", token);
+				break;
+			default:
+				*t = ProcessError("[ProcessArraySize] Syntax error", p.Rem(), token);
+				break;
+			}
+			t = &((*t)->next);
+		}
+	} else {
+		token = new new_Token("0", new_Token::INT_OP, parent); // non-arrays get a size of 0
+	}
+	return token;
 }
 
 new_Token *new_SyntaxTreeGenerator::ProcessDeclParam(new_Token **&token, const mtlChars &params, const new_Token *parent) const
@@ -932,6 +1244,8 @@ new_Token *new_SyntaxTreeGenerator::ProcessDeclParam(new_Token **&token, const m
 				break;
 			}
 		}
+	} else {
+		parent_scope->str = "";
 	}
 	return parent_scope;
 }
@@ -975,7 +1289,24 @@ new_Token *new_SyntaxTreeGenerator::ProcessDefFn(const mtlChars &type_name, cons
 
 new_Token *new_SyntaxTreeGenerator::ProcessSet(const mtlChars &lhs, const mtlChars &rhs, const mtlChars &seq, const new_Token *parent) const
 {
-	new_Token *token = new new_Token(seq, new_Token::SET, parent);
+	// TODO; Declarations must be explicitly (not) initialized
+		// float a = 1.0;
+		// float b = void; // uninitialized
+
+	new_Token *token = NULL;
+
+	const new_Token *type = GetTypeFromName(lhs, parent);
+	if (type == NULL) {
+		return ProcessError("[ProcessSet] ", seq, parent);
+	} else if (token->str.Compare("bool", true) && token->next->str.Compare("0")) {
+		token = new new_Token(seq, new_Token::BOOL_SET, parent);
+	} else if (token->str.Compare("int", true) && token->next->str.Compare("0")) {
+		token = new new_Token(seq, new_Token::INT_SET, parent);
+	} else if (token->str.Compare("float", true) && token->next->str.Compare("0")) {
+		token = new new_Token(seq, new_Token::FLOAT_SET, parent);
+	} else {
+		token = new new_Token(seq, new_Token::LIST_SET, parent);
+	}
 
 	new_Token **t = &token->sub;
 	*t = ProcessMemOp(lhs, token);
@@ -998,7 +1329,21 @@ new_Token *new_SyntaxTreeGenerator::ProcessSet(const mtlChars &lhs, const mtlCha
 	}
 	// End error block
 
-	*rhs_tok = ProcessExpr(rhs, token);
+	switch (token->type) {
+	case new_Token::BOOL_SET:
+		*rhs_tok = ProcessBoolExpr(rhs, token);
+		break;
+	case new_Token::INT_SET:
+		*rhs_tok = ProcessIntExpr(rhs, token);
+		break;
+	case new_Token::FLOAT_SET:
+		*rhs_tok = ProcessFloatExpr(rhs, token);
+		break;
+	case new_Token::LIST_SET:
+		*rhs_tok = ProcessListExpr(rhs, type->str, token);
+		break;
+	default: break;
+	}
 	return token;
 }
 
