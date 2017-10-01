@@ -1,11 +1,5 @@
 #include "swsl_astgen_new.h"
 
-// float assignment expects MEM_OP FLOAT_EXPR
-// int assignment expects MEM_OP INT_EXPR
-// bool assignment expexts MEM_OP BOOL_EXPR
-// bool operations expects == != < > <= >= expects INT_EXPR MATH_OP INT_EXPR / FLOAT_EXPR MATH_OP FLOAT_EXPR / BOOL_EXPR MATH_OP BOOL_EXPR
-// bool operations AND and OR expects BOOL_EXPR MATH_OP BOOL_EXPR
-
 #define _built_in_n 4
 #define _reserved_n 16
 #define _intrin_n 15
@@ -260,6 +254,20 @@ const new_Token *new_SyntaxTreeGenerator::GetTraitFromDecl(const new_Token *decl
 	return NULL;
 }
 
+const new_Token *new_SyntaxTreeGenerator::GetSizeFromDecl(const new_Token *decl) const
+{
+	if (decl != NULL && (decl->type == new_Token::VAR_DECL || decl->type == new_Token::FN_DECL || decl->type == new_Token::FN_DEF)) {
+		decl = decl->sub;
+		while (decl != NULL && decl->type != new_Token::LIST_EXPR) {
+			decl = decl->next;
+		}
+		if (decl != NULL && decl->type == new_Token::LIST_EXPR) {
+			return decl;
+		}
+	}
+	return NULL;
+}
+
 const new_Token *new_SyntaxTreeGenerator::GetTypeFromName(const mtlChars &name, const new_Token *scope) const
 {
 	return GetTypeFromDecl(FindName(name, scope));
@@ -268,6 +276,11 @@ const new_Token *new_SyntaxTreeGenerator::GetTypeFromName(const mtlChars &name, 
 const new_Token *new_SyntaxTreeGenerator::GetTraitFromName(const mtlChars &name, const new_Token *scope) const
 {
 	return GetTraitFromDecl(FindName(name, scope));
+}
+
+const new_Token *new_SyntaxTreeGenerator::GetSizeFromName(const mtlChars &name, const new_Token *scope) const
+{
+	return GetSizeFromDecl(FindName(name, scope));
 }
 
 new_Token *new_SyntaxTreeGenerator::ProcessDefType(const mtlChars &type_name, const mtlChars &decls, const mtlChars &seq, const new_Token *parent) const
@@ -332,7 +345,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessIf(const mtlChars &cond, const mtlCha
 	new_Token *token = new new_Token(p.Seq(), new_Token::IF, parent);
 
 	new_Token **t = &token->sub;
-	*t = ProcessExpr(cond, token);
+	*t = ProcessBoolExpr(cond, token);
 	t = &(*t)->next;
 	*t = ProcessScope(body, token);
 	t = &(*t)->next;
@@ -355,7 +368,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessWhile(const mtlChars &cond, const mtl
 	new_Token *token = new new_Token(seq, new_Token::WHILE, parent);
 
 	new_Token **t = &token->sub;
-	*t = ProcessExpr(cond, token);
+	*t = ProcessBoolExpr(cond, token);
 	t = &(*t)->next;
 	*t = ProcessScope(body, token);
 	return token;
@@ -363,7 +376,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessWhile(const mtlChars &cond, const mtl
 
 new_Token *new_SyntaxTreeGenerator::ProcessRet(const mtlChars &expr, const new_Token *parent) const
 {
-	new_Token *token = new new_Token(expr, new_Token::WHILE, parent);
+	new_Token *token = new new_Token(expr, new_Token::RET, parent);
 
 	const new_Token *p = parent;
 	while (p != NULL && p->type != new_Token::FN_DEF) {
@@ -378,28 +391,39 @@ new_Token *new_SyntaxTreeGenerator::ProcessRet(const mtlChars &expr, const new_T
 		} else {
 			token->next = expr.GetSize() > 0 ? ProcessExpr(expr, token) : NULL;
 		}
-	} else {
-		delete token;
-		return ProcessError("[ProcessRet] Unknown", "Return in global scope?", parent);
 	}
 	return token;
 }
 
 new_Token *new_SyntaxTreeGenerator::ProcessDeclVar(const mtlChars &trait, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &var_name, const mtlChars &expr, const mtlChars &seq, const new_Token *parent) const
 {
+	// TODO -> Eval const
+
 	new_Token *token = new new_Token(seq, new_Token::VAR_DECL, parent);
 
 	new_Token **t = &token->sub;
 	new_Token *trait_token = *t = ProcessTrait(trait, token);
 	t = &(*t)->next;
-	*t = ProcessType(type_name, token);
+	new_Token *type_token = *t = ProcessType(type_name, token);
 	t = &(*t)->next;
-	*t = ProcessArraySize(arr_size, token);
+	new_Token *size_token = *t = ProcessArraySize(arr_size, token);
 	t = &(*t)->next;
 	*t = ProcessNewName(var_name, token);
 	if (!expr.Compare("void", true)) {
 		t = &(*t)->next;
-		*t = ProcessExpr(expr, token);
+		if (type_token->type != new_Token::TYPE_NAME && size_token->type == new_Token::LIST_EXPR) {
+			if (type_token->str.Compare("bool", true)) {
+				*t = trait_token->type == (new_Token::TYPE_TRAIT && trait_token->str.Compare("lit", true)) ? ProcessConstBoolExpr(expr, size_token->str, token) : ProcessBoolExpr(expr, size_token->str, token);
+			} else if (type_token->str.Compare("int", true)) {
+				*t = trait_token->type == (new_Token::TYPE_TRAIT && trait_token->str.Compare("lit", true)) ? ProcessConstIntExpr(expr, size_token->str, token) : ProcessIntExpr(expr, size_token->str, token);
+			} else if (type_token->str.Compare("float", true)) {
+				*t = trait_token->type == (new_Token::TYPE_TRAIT && trait_token->str.Compare("lit", true)) ? ProcessConstFloatExpr(expr, size_token->str, token) : ProcessFloatExpr(expr, size_token->str, token);
+			} else {
+				*t = ProcessListExpr(expr, size_token->str, token);
+			}
+		} else {
+			*t = ProcessError("[ProcessDeclVar] Undetermined expression type", expr, token);
+		}
 	} else if (trait_token->str.Compare("imm", true) || trait_token->str.Compare("lit", true)) {
 		delete token;
 		token = ProcessError("[ProcessDeclVar] Immutable and literals must be initialized at declaration", seq, parent);
@@ -461,11 +485,13 @@ new_Token *new_SyntaxTreeGenerator::ProcessScope(const mtlChars &scope, const ne
 			break;
 
 		case 7:
-			*t = ProcessExpr(p.GetMatch(0), token);
+			//*t = ProcessExpr(p.GetMatch(0), token);
+			*t = ProcessError("[ProcessScope] Unimplemented feature (determine type of non-lhs expression)", p.GetMatch(0), token);
 			break;
 
 		default:
 			*t = ProcessError("[ProcessScope] Syntax error", p.Rem(), token);
+			break;
 		}
 		t = &(*t)->next;
 	}
@@ -495,6 +521,52 @@ bool new_SyntaxTreeGenerator::CreateTypeList(const mtlChars &type_name, mtlStrin
 			}
 			token = token->next;
 		}
+		if (token != NULL) {
+			token = token->sub;
+			while (token != NULL) {
+				if (token->type == new_Token::VAR_DECL) {
+					const new_Token *type = GetTypeFromDecl(token);
+					const new_Token *size = GetSizeFromDecl(token);
+					if (type != NULL && size != NULL) {
+						out.Append(type->str);
+						out.Append("[");
+						out.Append(size->str);
+						out.Append("]");
+					} else {
+						out.Free();
+						return false;
+					}
+				} else {
+					out.Free();
+					return false;
+				}
+				if (token->next != NULL) {
+					out.Append(", ");
+				}
+				token = token->next;
+			}
+		}
+	}
+	return true;
+}
+
+bool new_SyntaxTreeGenerator::CreateParamList(const mtlChars &fn_name, mtlString &out, const new_Token *parent) const
+{
+	out.Free();
+	const new_Token *token = FindName(fn_name, parent);
+	if (token == NULL || (token->type != new_Token::FN_DECL && token->type != new_Token::FN_DEF)) {
+		return false;
+	}
+	token = token->sub;
+	while (token != NULL) {
+		if (token->type == new_Token::SCOPE) {
+			token = token->sub;
+			break;
+		}
+		token = token->next;
+	}
+	if (token != NULL) {
+		token = token->sub;
 		while (token != NULL) {
 			if (token->type == new_Token::VAR_DECL) {
 				const new_Token *type = GetTypeFromDecl(token);
@@ -518,8 +590,35 @@ bool new_SyntaxTreeGenerator::CreateTypeList(const mtlChars &type_name, mtlStrin
 			token = token->next;
 		}
 	}
-
 	return true;
+}
+
+new_Token::Type new_SyntaxTreeGenerator::GetTypeID(const mtlChars &name, const new_Token *scope) const
+{
+	new_Token::Type id = new_Token::ERR;
+	if (name.Compare("void", true)) {
+		id = new_Token::VOID;
+	} else if (name.Compare("bool", true)) {
+		id = new_Token::BOOL;
+	} else if (name.Compare("int", true)) {
+		id = new_Token::INT;
+	} else if (name.Compare("float", true)) {
+		id = new_Token::FLOAT;
+	} else {
+		const new_Token *t = FindName(name, scope);
+		if (t != NULL) {
+			if (t->type & (new_Token::FN_DECL|new_Token::FN_DEF|new_Token::VAR_DECL|new_Token::TYPE_DEF) > 0) {
+				t = t->sub;
+				while (t != NULL || t->type != new_Token::TYPE_NAME) {
+					t = t->next;
+				}
+				if (t->type == new_Token::TYPE_NAME) {
+					id = new_Token::LIST;
+				}
+			}
+		}
+	}
+	return id;
 }
 
 // all list items have size, 0 if non-array
@@ -606,6 +705,11 @@ new_Token *new_SyntaxTreeGenerator::ProcessListExpr(const mtlChars &expr, const 
 	return token;
 }
 
+new_Token *new_SyntaxTreeGenerator::ProcessListExpr(const mtlChars &expr, const mtlChars &list, const new_Token *parent) const
+{
+	return ProcessListExpr(expr, "0", list, parent);
+}
+
 new_Token *new_SyntaxTreeGenerator::ProcessIntExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const
 {
 	new_Token *token = new new_Token(expr, new_Token::INT_EXPR, parent);
@@ -677,7 +781,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessIntExpr(const mtlChars &expr, const m
 			break;
 
 		case 11:
-			token->sub = ProcessIntExpr(p.GetMatch(0), "0", token);
+			token->sub = ProcessIntExpr(p.GetMatch(0), token);
 			break;
 
 		case 12:
@@ -692,6 +796,11 @@ new_Token *new_SyntaxTreeGenerator::ProcessIntExpr(const mtlChars &expr, const m
 		}
 	}
 	return token;
+}
+
+new_Token *new_SyntaxTreeGenerator::ProcessIntExpr(const mtlChars &expr, const new_Token *parent) const
+{
+	return ProcessIntExpr(expr, "0", parent);
 }
 
 new_Token *new_SyntaxTreeGenerator::ProcessFloatExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const
@@ -737,7 +846,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessFloatExpr(const mtlChars &expr, const
 			break;
 
 		case 4:
-			token->sub = ProcessFloatExpr(p.GetMatch(0), "0", token);
+			token->sub = ProcessFloatExpr(p.GetMatch(0), token);
 			break;
 
 		case 5:
@@ -752,6 +861,11 @@ new_Token *new_SyntaxTreeGenerator::ProcessFloatExpr(const mtlChars &expr, const
 		}
 	}
 	return token;
+}
+
+new_Token *new_SyntaxTreeGenerator::ProcessFloatExpr(const mtlChars &expr, const new_Token *parent) const
+{
+	return ProcessFloatExpr(expr, "0", parent);
 }
 
 new_Token *new_SyntaxTreeGenerator::ProcessBoolExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const
@@ -829,7 +943,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessBoolExpr(const mtlChars &expr, const 
 			break;
 
 		case 12:
-			token->sub = ProcessBoolExpr(p.GetMatch(0), "0", token);
+			token->sub = ProcessBoolExpr(p.GetMatch(0), token);
 			break;
 
 		case 13:
@@ -846,9 +960,15 @@ new_Token *new_SyntaxTreeGenerator::ProcessBoolExpr(const mtlChars &expr, const 
 	return token;
 }
 
+new_Token *new_SyntaxTreeGenerator::ProcessBoolExpr(const mtlChars &expr, const new_Token *parent) const
+{
+	return ProcessBoolExpr(expr, "0", parent);
+}
+
 new_Token *new_SyntaxTreeGenerator::ProcessMemOp(const mtlChars &op, const new_Token *parent) const
 {
 	new_Token *token = NULL;
+	mtlString arr_size;
 
 	Parser var(op);
 	switch (var.Match("true%0 %| false%0 %| %i.%i%0 %| %i%0 %| %w%0 %| %w. %| %w[%S]%0 %| %w[%S]. %| %w(%s)%0 %| %w(%s). %| %w(%s)[%S]%0 %| %w(%s)[%S]. %| %s")) {
@@ -880,14 +1000,14 @@ new_Token *new_SyntaxTreeGenerator::ProcessMemOp(const mtlChars &op, const new_T
 	case 6:
 		token = new new_Token(var.Seq(), new_Token::MEM_OP, parent);
 		token->sub = ProcessRefName(var.GetMatch(0), token);
-		token->sub->next = ProcessExpr(var.GetMatch(1), token);
+		token->sub->next = ProcessIntExpr(var.GetMatch(1), GetSizeFromName(token->sub->next->str, token), token);
 		break;
 
 	case 7:
 		token = new new_Token(var.Seq(), new_Token::MEM_OP, parent);
 		token->sub = ProcessRefName(var.GetMatch(0), token);
 		token->sub->next = ProcessMemOpMember(var, token);
-		token->sub->next->next = ProcessExpr(var.GetMatch(1), token);
+		token->sub->next->next = ProcessIntExpr(var.GetMatch(1), GetSizeFromName(token->sub->next->str, token), token);
 		break;
 
 	case 8:
@@ -964,8 +1084,39 @@ new_Token *new_SyntaxTreeGenerator::ProcessMathOp(const mtlChars &lhs, const mtl
 {
 	new_Token *token = new new_Token(op, new_Token::MATH_OP, parent);
 
-	token->next = ProcessExpr(lhs, parent);
-	token->next->next = ProcessExpr(rhs, parent);
+	if (op_type & new_Token::BOOL_OP > 0) {
+		token->next = ProcessBoolExpr(lhs, parent);
+	}
+	if (op_type & new_Token::INT_OP > 0 && (token->next == NULL || token->next->type == new_Token::ERR)) {
+		delete token->next;
+		token->next = ProcessIntExpr(lhs, parent);
+	}
+	if (op_type & new_Token::FLOAT_OP > 0 && (token->next == NULL || token->next->type == new_Token::ERR)) {
+		delete token->next;
+		token->next = ProcessFloatExpr(lhs, parent);
+	}
+
+	if (token->next != NULL) {
+		switch (token->next->type) {
+		case new_Token::BOOL_OP:
+			token->next->next = ProcessBoolExpr(rhs, parent);
+			break;
+		case new_Token::INT_OP:
+			token->next->next = ProcessIntExpr(rhs, parent);
+			break;
+		case new_Token::FLOAT_OP:
+			token->next->next = ProcessFloatExpr(rhs, parent);
+			break;
+		default:
+			break;
+		}
+	}
+
+	if ((token->next == NULL || token->next->type & op_type == 0) || (token->next->next == NULL || token->next->next->type & op_type == 0)) {
+		delete token;
+		token = ProcessError("[ProcessMathOp] Unexpected/mismatched type(s)", rhs, parent);
+	}
+
 	return token;
 }
 
@@ -1159,6 +1310,11 @@ new_Token *new_SyntaxTreeGenerator::ProcessConstBoolExpr(const mtlChars &expr, c
 	return token;
 }
 
+new_Token *new_SyntaxTreeGenerator::ProcessConstBoolExpr(const mtlChars &expr, const new_Token *parent) const
+{
+	return ProcessConstBoolExpr(expr, "0", parent);
+}
+
 new_Token *new_SyntaxTreeGenerator::ProcessConstIntExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const
 {
 	new_Token *token = ProcessIntExpr(expr, arr_size, parent);
@@ -1174,6 +1330,11 @@ new_Token *new_SyntaxTreeGenerator::ProcessConstIntExpr(const mtlChars &expr, co
 		token = new new_Token(str_val, new_Token::INT_OP, parent);
 	}
 	return token;
+}
+
+new_Token *new_SyntaxTreeGenerator::ProcessConstIntExpr(const mtlChars &expr, const new_Token *parent) const
+{
+	return ProcessConstIntExpr(expr, "0", parent);
 }
 
 new_Token *new_SyntaxTreeGenerator::ProcessConstFloatExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const
@@ -1193,6 +1354,11 @@ new_Token *new_SyntaxTreeGenerator::ProcessConstFloatExpr(const mtlChars &expr, 
 	return token;
 }
 
+new_Token *new_SyntaxTreeGenerator::ProcessConstFloatExpr(const mtlChars &expr, const new_Token *parent) const
+{
+	return ProcessConstFloatExpr(expr, "0", parent);
+}
+
 new_Token *new_SyntaxTreeGenerator::ProcessArraySize(const mtlChars &arr_size, const new_Token *parent) const
 {
 	// TODO: Make sure arr_size evals to > 0
@@ -1205,7 +1371,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessArraySize(const mtlChars &arr_size, c
 			switch (p.Match("%S, %| %S")) {
 			case 0:
 			case 1:
-				*t = ProcessConstIntExpr(p.GetMatch(0), "0", token);
+				*t = ProcessConstIntExpr(p.GetMatch(0), token);
 				break;
 			default:
 				*t = ProcessError("[ProcessArraySize] Syntax error", p.Rem(), token);
@@ -1329,20 +1495,26 @@ new_Token *new_SyntaxTreeGenerator::ProcessSet(const mtlChars &lhs, const mtlCha
 	}
 	// End error block
 
-	switch (token->type) {
-	case new_Token::BOOL_SET:
-		*rhs_tok = ProcessBoolExpr(rhs, token);
-		break;
-	case new_Token::INT_SET:
-		*rhs_tok = ProcessIntExpr(rhs, token);
-		break;
-	case new_Token::FLOAT_SET:
-		*rhs_tok = ProcessFloatExpr(rhs, token);
-		break;
-	case new_Token::LIST_SET:
-		*rhs_tok = ProcessListExpr(rhs, type->str, token);
-		break;
-	default: break;
+	const new_Token *arr_size = GetSizeFromName(lhs, parent);
+	if (arr_size != NULL && arr_size->type == new_Token::LIST_EXPR) {
+		switch (token->type) {
+		case new_Token::BOOL_SET:
+			*rhs_tok = ProcessBoolExpr(rhs, arr_size->str, token);
+			break;
+		case new_Token::INT_SET:
+			*rhs_tok = ProcessIntExpr(rhs, arr_size->str, token);
+			break;
+		case new_Token::FLOAT_SET:
+			*rhs_tok = ProcessFloatExpr(rhs, arr_size->str, token);
+			break;
+		case new_Token::LIST_SET:
+			*rhs_tok = ProcessListExpr(rhs, arr_size->str, type->str, token);
+			break;
+		default: break;
+		}
+	} else {
+		delete token;
+		token = ProcessError("[ProcessSet] Unknown size", lhs, parent);
 	}
 	return token;
 }

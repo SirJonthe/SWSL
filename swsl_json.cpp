@@ -37,15 +37,15 @@ bool SerializeToJSON(const new_Token *tree, std::ofstream &fout, int tab)
 	case new_Token::BOOL_OP:
 		fout << "BOOL_OP";
 		break;
+	case new_Token::BOOL_SET:
+		fout << "BOOL_SET";
+		break;
 	case new_Token::ELSE:
 		fout << "ELSE";
 		break;
 	default:
 	case new_Token::ERR:
 		fout << "ERR";
-		break;
-	case new_Token::EXPR:
-		fout << "EXPR";
 		break;
 	case new_Token::FILE:
 		fout << "FILE";
@@ -55,6 +55,9 @@ bool SerializeToJSON(const new_Token *tree, std::ofstream &fout, int tab)
 		break;
 	case new_Token::FLOAT_OP:
 		fout << "FLOAT_OP";
+		break;
+	case new_Token::FLOAT_SET:
+		fout << "FLOAT_SET";
 		break;
 	case new_Token::FN_DECL:
 		fout << "FN_DECL";
@@ -74,17 +77,23 @@ bool SerializeToJSON(const new_Token *tree, std::ofstream &fout, int tab)
 	case new_Token::INT_OP:
 		fout << "INT_OP";
 		break;
+	case new_Token::INT_SET:
+		fout << "INT_SET";
+		break;
 	case new_Token::MATH_OP:
 		fout << "MATH_OP";
 		break;
 	case new_Token::MEM_OP:
 		fout << "MEM_OP";
 		break;
+	case new_Token::LIST_EXPR:
+		fout << "LIST_EXPR";
+		break;
+	case new_Token::LIST_SET:
+		fout << "LIST_SET";
+		break;
 	case new_Token::RET:
 		fout << "RET";
-		break;
-	case new_Token::SET:
-		fout << "SET";
 		break;
 	case new_Token::SCOPE:
 		fout << "SCOPE";
