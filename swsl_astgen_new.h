@@ -9,102 +9,48 @@ struct new_Token
 	enum Type
 	{
 		ERR        = 1,
-		FILE       = ERR        << 1,
+
+		SCOPE      = ERR        << 1,
+		FILE       = SCOPE      << 1,
+
 		TYPE_NAME  = FILE       << 1,
 		USR_NAME   = TYPE_NAME  << 1,
+
 		FN_DECL    = USR_NAME   << 1,
 		VAR_DECL   = FN_DECL    << 1,
+
 		TYPE_TRAIT = VAR_DECL   << 1,
+
 		FN_DEF     = TYPE_TRAIT << 1,
 		TYPE_DEF   = FN_DEF     << 1,
-		SCOPE      = TYPE_DEF   << 1,
-		BOOL_EXPR  = SCOPE      << 1,
-		INT_EXPR   = BOOL_EXPR  << 1,
-		FLOAT_EXPR = INT_EXPR   << 1,
-		LIST_EXPR  = FLOAT_EXPR << 1,
-		MATH_OP    = LIST_EXPR  << 1,
-		FN_OP      = MATH_OP    << 1,
-		MEM_OP     = FN_OP      << 1,
-		BOOL_OP    = MEM_OP     << 1,
-		INT_OP     = BOOL_OP    << 1,
-		FLOAT_OP   = INT_OP     << 1,
-		IF         = FLOAT_OP   << 1,
+
+		IF         = TYPE_DEF   << 1,
 		ELSE       = IF         << 1,
 		WHILE      = ELSE       << 1,
 		RET        = WHILE      << 1,
-		BOOL_SET   = RET        << 1,
+
+		BOOL_EXPR  = RET        << 1,
+		INT_EXPR   = BOOL_EXPR  << 1,
+		FLOAT_EXPR = INT_EXPR   << 1,
+		LIST_EXPR  = FLOAT_EXPR << 1,
+
+		MATH_OP    = LIST_EXPR  << 1,
+		MEM_OP     = MATH_OP    << 1,
+		FN_OP      = MEM_OP     << 1,
+		BOOL_OP    = FN_OP      << 1,
+		INT_OP     = BOOL_OP    << 1,
+		FLOAT_OP   = INT_OP     << 1,
+		LIST_OP    = FLOAT_OP   << 1,
+
+		BOOL_SET   = LIST_OP    << 1,
 		INT_SET    = BOOL_SET   << 1,
 		FLOAT_SET  = INT_SET    << 1,
-		LIST_SET   = FLOAT_SET  << 1,
-		VOID,
-		BOOL,
-		INT,
-		FLOAT,
-		LIST
+		LIST_SET   = FLOAT_SET  << 1
 	};
-
-	// COLLAPSE ALL BOOL_*, INT_*, FLOAT_*, LIST_* TO BOOL, INT, FLOAT, LIST ???
-
-	// Composite information in types can be passed and give more information with fewer
-	// Con: unsure how to handle translating from SWSL -> C++
-	// lit int a = 5 + b;
-	// lit int a = LIT|INT|DECL
-		// lit = TRAIT
-		// int = TYPE|INT
-		// a = LIT|INT|NAME
-		// 5 + b = EXPR|INT|LIT
-			// + = OP|INT|LIT
-			// 5 = VAL|LIT|INT
-			// b = VAL|LIT|INT
-	// var float[2, 2] b = (5, 3 + I * x), (0, 3);
-	// var float[2, 2] b = (5.4, 3.3 + I * x), (0.1, 3.0) = DECL
-		// var = TRAIT
-		// float = TYPE|FLOAT
-		// [2, 2] = LIST|EXPR|INT|LIT|VAL
-			// 2 = INT|LIT
-			// 2 = INT|LIT
-		// b = INT|NAME|VAR
-		// = = OP|INT|VAR
-		// (5.4, 3.3 + I * x), (0.1, 3.0) = EXPR|LIST|VAR
-			// 5.4, 3.3 + I * x
-				// 5.4 = LIT|FLOAT
-				// 3.3 + I * x = EXPR|FLOAT|VAR
-					// * = OP|FLOAT|VAR
-					// I = LIT|FLOAT
-					// x = VAR|FLOAT
-					// + = OP|FLOAT|VAR
-					// 3.3 = LIT|FLOAT
-			// 0.1, 3.0
-
-	// ref - var, imm, lit
-	// val - lit
-	// fn - var, imm
-	//
-
-	/*enum Type
-	{
-		ERR = 1,
-		DECL = ERR << 1,
-		DEF = DECL << 1,
-		FN = DEF << 1,
-		MEM = FN << 1,
-		LIT = MEM << 1,
-		IMM = LIT << 1,
-		VAR = IMM << 1,
-		BOOL = VAR << 1,
-		INT = BOOL << 1,
-		FLOAT = INT << 1,
-		LIST = FLOAT << 1,
-		IF = LIST << 1,
-		WHILE = IF << 1,
-		RET = WHILE << 1,
-		OP = RET << 1,
-	};*/
 
 	mtlString        buffer;
 	mtlChars         str;
 	Type             type;
-	unsigned int     data;
 	const new_Token *parent;
 	new_Token       *sub; // composite tokens are split into sub tokens
 	new_Token       *next;
@@ -144,7 +90,6 @@ private:
 	bool IsReserved(const mtlChars &name) const;
 	bool IsBuiltInType(const mtlChars &name) const;
 	bool IsKeyword(const mtlChars &name) const;
-	bool IsUnusedReserved(const mtlChars &name) const;
 	bool IsValidNameConvention(const mtlChars &name) const;
 	bool IsNewName(const mtlChars &name, const new_Token *parent) const;
 	bool IsValidName(const mtlChars &name, const new_Token *parent) const;
@@ -161,9 +106,9 @@ private:
 	new_Token::Type GetTypeID(const mtlChars &name, const new_Token *scope) const;
 
 private:
-	bool             EvalConstBoolExpr(const new_Token *token) const;
-	int              EvalConstIntExpr(const new_Token *token) const;
-	float            EvalConstFloatExpr(const new_Token *token) const;
+	bool             EvalConstBoolExpr(const new_Token *token, bool &out) const;
+	bool             EvalConstIntExpr(const new_Token *token, int &out) const;
+	bool             EvalConstFloatExpr(const new_Token *token, float &out) const;
 	new_Token       *ProcessListExpr(const mtlChars &expr, const mtlChars &arr_size, const mtlChars &list, const new_Token *parent) const;
 	new_Token       *ProcessListExpr(const mtlChars &expr, const mtlChars &list, const new_Token *parent) const;
 	new_Token       *ProcessBoolExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const;

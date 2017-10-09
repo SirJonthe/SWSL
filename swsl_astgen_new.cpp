@@ -1,7 +1,6 @@
 #include "swsl_astgen_new.h"
 
 #define _built_in_n 4
-#define _reserved_n 16
 #define _intrin_n 15
 #define _keywords_n 11
 enum {
@@ -11,7 +10,6 @@ enum {
 	Typename_Float
 };
 static const mtlChars _built_in_types[_built_in_n] = { "void", "bool", "int", "float" };
-static const mtlChars _reserved[_reserved_n]       = { "min", "max", "abs", "round", "trunc", "floor", "ceil", "sin", "cos", "tan", "asin", "acos", "atan", "sqrt", "pow", "fixed" };
 static const mtlChars _intrin[_intrin_n]           = { "min", "max", "abs", "round", "trunc", "floor", "ceil", "sin", "cos", "tan", "asin", "acos", "atan", "sqrt", "pow" };
 static const mtlChars _keywords[_keywords_n]       = { "lit", "imm", "var", "if", "else", "while", "return", "true", "false", "import", "struct" };
 
@@ -85,7 +83,6 @@ bool new_SyntaxTreeGenerator::IsReserved(const mtlChars &name) const
 {
 	if (IsBuiltInType(name))    { return true; }
 	if (IsKeyword(name))        { return true; }
-	if (IsUnusedReserved(name)) { return true; }
 	return false;
 }
 
@@ -101,14 +98,6 @@ bool new_SyntaxTreeGenerator::IsKeyword(const mtlChars &name) const
 {
 	for (int i = 0; i < _keywords_n; ++i) {
 		if (name.Compare(_keywords[i], true)) { return true; }
-	}
-	return false;
-}
-
-bool new_SyntaxTreeGenerator::IsUnusedReserved(const mtlChars &name) const
-{
-	for (int i = 0; i < _reserved_n; ++i) {
-		if (name.Compare(_reserved[i], true)) { return true; }
 	}
 	return false;
 }
@@ -378,19 +367,46 @@ new_Token *new_SyntaxTreeGenerator::ProcessRet(const mtlChars &expr, const new_T
 {
 	new_Token *token = new new_Token(expr, new_Token::RET, parent);
 
-	const new_Token *p = parent;
-	while (p != NULL && p->type != new_Token::FN_DEF) {
-		p = p->parent;
+	const new_Token *fn_def = parent;
+	while (fn_def != NULL && fn_def->type != new_Token::FN_DEF) {
+		fn_def = fn_def->parent;
 	}
-
-	if (p != NULL && p->type == new_Token::FN_DEF) {
-		bool is_void = token->sub->next->type == new_Token::TYPE_NAME && token->sub->next->str.Compare("void", true);
-		if (is_void && expr.GetSize() > 0) {
-			delete token;
-			return ProcessError("[ProcessRet] Return from void", expr, parent);
+	if (fn_def != NULL) {
+		const new_Token *fn_type = GetTypeFromDecl(fn_def);
+		if (fn_type != NULL) {
+			if (expr.GetSize() == 0 || (expr.GetSize() > 0 && fn_type->str.Compare("void", true))) {
+				delete token;
+				return ProcessError("[ProcessRet] Not returning value/returning value from void", expr, parent);
+			} else {
+				const new_Token *fn_size = GetSizeFromDecl(fn_def);
+				if (fn_size != NULL) {
+					if (fn_type->str.Compare("bool", true)) {
+						token->next = ProcessBoolExpr(expr, fn_size->str, token);
+					} else if (fn_type->str.Compare("int", true)) {
+						token->next = ProcessIntExpr(expr, fn_size->str, token);
+					} else if (fn_type->str.Compare("float", true)) {
+						token->next = ProcessFloatExpr(expr, fn_size->str, token);
+					} else {
+						mtlString list;
+						if (CreateTypeList(fn_type->str, list, token)) {
+							token->next = ProcessListExpr(expr, fn_size->str, token);
+						} else {
+							delete token;
+							token = ProcessError("[ProcessRet] Undetermined return type", expr, parent);
+						}
+					}
+				} else {
+					delete token;
+					token = ProcessError("[ProcessRet] Undetermined return type size", expr, parent);
+				}
+			}
 		} else {
-			token->next = expr.GetSize() > 0 ? ProcessExpr(expr, token) : NULL;
+			delete token;
+			token = ProcessError("[ProcessRet] Undetermined return type", expr, parent);
 		}
+	} else {
+		delete token;
+		token = ProcessError("[ProcessRet] Undetermined function definition", expr, parent);
 	}
 	return token;
 }
@@ -596,29 +612,231 @@ bool new_SyntaxTreeGenerator::CreateParamList(const mtlChars &fn_name, mtlString
 new_Token::Type new_SyntaxTreeGenerator::GetTypeID(const mtlChars &name, const new_Token *scope) const
 {
 	new_Token::Type id = new_Token::ERR;
-	if (name.Compare("void", true)) {
-		id = new_Token::VOID;
-	} else if (name.Compare("bool", true)) {
-		id = new_Token::BOOL;
-	} else if (name.Compare("int", true)) {
-		id = new_Token::INT;
-	} else if (name.Compare("float", true)) {
-		id = new_Token::FLOAT;
-	} else {
-		const new_Token *t = FindName(name, scope);
-		if (t != NULL) {
-			if (t->type & (new_Token::FN_DECL|new_Token::FN_DEF|new_Token::VAR_DECL|new_Token::TYPE_DEF) > 0) {
-				t = t->sub;
-				while (t != NULL || t->type != new_Token::TYPE_NAME) {
-					t = t->next;
-				}
-				if (t->type == new_Token::TYPE_NAME) {
-					id = new_Token::LIST;
-				}
-			}
-		}
-	}
+	//if (name.Compare("void", true)) {
+	//	id = new_Token::VOID_TYPE;
+	//} else if (name.Compare("bool", true)) {
+	//	id = new_Token::BOOL_TYPE;
+	//} else if (name.Compare("int", true)) {
+	//	id = new_Token::INT_TYPE;
+	//} else if (name.Compare("float", true)) {
+	//	id = new_Token::FLOAT_TYPE;
+	//} else {
+	//	const new_Token *t = FindName(name, scope);
+	//	if (t != NULL) {
+	//		if (t->type & (new_Token::FN_DECL|new_Token::FN_DEF|new_Token::VAR_DECL|new_Token::TYPE_DEF) > 0) {
+	//			t = t->sub;
+	//			while (t != NULL || t->type != new_Token::TYPE_NAME) {
+	//				t = t->next;
+	//			}
+	//			if (t->type == new_Token::TYPE_NAME) {
+	//				id = new_Token::LIST_TYPE;
+	//			}
+	//		}
+	//	}
+	//}
 	return id;
+}
+
+bool new_SyntaxTreeGenerator::EvalConstBoolExpr(const new_Token *token, bool &out) const
+{
+	//"EQUAL", new_Token::BOOL_OP|new_Token::INT_OP|new_Token::FLOAT_OP
+	//"NOT_EQUAL", new_Token::BOOL_OP|new_Token::INT_OP|new_Token::FLOAT_OP
+	//"LESS_EQUAL", new_Token::INT_OP|new_Token::FLOAT_OP
+	//"LESS", new_Token::INT_OP|new_Token::FLOAT_OP
+	//"GREATER_EQUAL", new_Token::INT_OP|new_Token::FLOAT_OP
+	//"GREATER", new_Token::INT_OP|new_Token::FLOAT_OP
+	//"LOGICAL_OR", new_Token::BOOL_OP
+	//"LOGICAL_AND", new_Token::BOOL_OP
+	//"OR", new_Token::BOOL_OP
+	//"AND", new_Token::BOOL_OP
+	//"XOR", new_Token::BOOL_OP
+	//"NOT", new_Token::BOOL_OP
+
+	if (token == NULL) { return true; }
+	if (token->type == new_Token::ERR) { return false; }
+	if (token->type == new_Token::BOOL_OP) { return token->str.ToBool(out); }
+
+	if (token->type == new_Token::MATH_OP) {
+		bool  blhs = false, brhs = false;
+		int   ilhs = 0, irhs = 0;
+		float flhs = 0.0f, frhs = 0.0f;
+		if (token->str.Compare("equal")) {
+			if (EvalConstIntExpr(token->sub->next, ilhs) && EvalConstIntExpr(token->sub->next->next, irhs)) {
+				out = ilhs == irhs;
+			} else if (EvalConstFloatExpr(token->sub->next, flhs) && EvalConstFloatExpr(token->sub->next->next, frhs)) {
+				out = flhs == frhs;
+			} else {
+				return false;
+			}
+		} else if (token->str.Compare("not_equal")) {
+			if (EvalConstIntExpr(token->sub->next, ilhs) && EvalConstIntExpr(token->sub->next->next, irhs)) {
+				out = ilhs != irhs;
+			} else if (EvalConstFloatExpr(token->sub->next, flhs) && EvalConstFloatExpr(token->sub->next->next, frhs)) {
+				out = flhs != frhs;
+			} else {
+				return false;
+			}
+		} else if (token->str.Compare("less_equal")) {
+			if (EvalConstIntExpr(token->sub->next, ilhs) && EvalConstIntExpr(token->sub->next->next, irhs)) {
+				out = ilhs <= irhs;
+			} else if (EvalConstFloatExpr(token->sub->next, flhs) && EvalConstFloatExpr(token->sub->next->next, frhs)) {
+				out = flhs <= frhs;
+			} else {
+				return false;
+			}
+		} else if (token->str.Compare("less")) {
+			if (EvalConstIntExpr(token->sub->next, ilhs) && EvalConstIntExpr(token->sub->next->next, irhs)) {
+				out = ilhs < irhs;
+			} else if (EvalConstFloatExpr(token->sub->next, flhs) && EvalConstFloatExpr(token->sub->next->next, frhs)) {
+				out = flhs < frhs;
+			} else {
+				return false;
+			}
+		} else if (token->str.Compare("greater_equal")) {
+			if (EvalConstIntExpr(token->sub->next, ilhs) && EvalConstIntExpr(token->sub->next->next, irhs)) {
+				out = ilhs >= irhs;
+			} else if (EvalConstFloatExpr(token->sub->next, flhs) && EvalConstFloatExpr(token->sub->next->next, frhs)) {
+				out = flhs >= frhs;
+			} else {
+				return false;
+			}
+		} else if (token->str.Compare("greater")) {
+			if (EvalConstIntExpr(token->sub->next, ilhs) && EvalConstIntExpr(token->sub->next->next, irhs)) {
+				out = ilhs > irhs;
+			} else if (EvalConstFloatExpr(token->sub->next, flhs) && EvalConstFloatExpr(token->sub->next->next, frhs)) {
+				out = flhs > frhs;
+			} else {
+				return false;
+			}
+		} else if (token->str.Compare("logical_or")) {
+			if (EvalConstBoolExpr(token->sub->next, blhs) && EvalConstBoolExpr(token->sub->next->next, brhs)) {
+				out = blhs || brhs;
+			} else {
+				return false;
+			}
+		} else if (token->str.Compare("logical_and")) {
+			if (EvalConstBoolExpr(token->sub->next, blhs) && EvalConstBoolExpr(token->sub->next->next, brhs)) {
+				out = blhs && brhs;
+			} else {
+				return false;
+			}
+		} else if (token->str.Compare("or")) {
+			if (EvalConstBoolExpr(token->sub->next, blhs) && EvalConstBoolExpr(token->sub->next->next, brhs)) {
+				out = blhs | brhs;
+			} else {
+				return false;
+			}
+		} else if (token->str.Compare("and")) {
+			if (EvalConstBoolExpr(token->sub->next, blhs) && EvalConstBoolExpr(token->sub->next->next, brhs)) {
+				out = blhs & brhs;
+			} else {
+				return false;
+			}
+		} else if (token->str.Compare("xor")) {
+			if (EvalConstBoolExpr(token->sub->next, blhs) && EvalConstBoolExpr(token->sub->next->next, brhs)) {
+				out = blhs ^ brhs;
+			} else {
+				return false;
+			}
+		} else if (token->str.Compare("not")) {
+			if (EvalConstBoolExpr(token->sub->next, blhs) && EvalConstBoolExpr(token->sub->next->next, brhs)) {
+				out = ~brhs;
+			} else {
+				return false;
+			}
+		} else {
+			return false;
+		}
+		return true;
+	} else if (token->type == new_Token::BOOL_EXPR && EvalConstBoolExpr(token->sub, out)) {
+		return true;
+	}
+	return false;
+}
+
+bool new_SyntaxTreeGenerator::EvalConstIntExpr(const new_Token *token, int &out) const
+{
+	//"ADD", new_Token::INT_OP
+	//"SUB", new_Token::INT_OP
+	//"MUL", new_Token::INT_OP
+	//"DIV", new_Token::INT_OP
+	//"MOD", new_Token::INT_OP
+	//"OR", new_Token::INT_OP
+	//"AND", new_Token::INT_OP
+	//"XOR", new_Token::INT_OP
+	//"NOT", new_Token::INT_OP
+	//"LSHIFT", new_Token::INT_OP
+	//"RSHIFT", new_Token::INT_OP
+
+	if (token == NULL) { return true; }
+	if (token->type == new_Token::ERR) { return false; }
+	if (token->type == new_Token::INT_OP) { return token->str.ToInt(out); }
+
+	int lhs = 0, rhs = 0;
+
+	if (token->type == new_Token::MATH_OP && EvalConstIntExpr(token->sub->next, lhs) && EvalConstIntExpr(token->sub->next->next, rhs)) {
+		if (token->str.Compare("add")) {
+			out = lhs + rhs;
+		} else if (token->str.Compare("sub")) {
+			out = lhs - rhs;
+		} else if (token->str.Compare("mul")) {
+			out = lhs * rhs;
+		} else if (token->str.Compare("div")) {
+			out = lhs / rhs;
+		} else if (token->str.Compare("mod")) {
+			out = lhs % rhs;
+		} else if (token->str.Compare("or")) {
+			out = lhs | rhs;
+		} else if (token->str.Compare("and")) {
+			out = lhs & rhs;
+		} else if (token->str.Compare("xor")) {
+			out = lhs ^ rhs;
+		} else if (token->str.Compare("not")) {
+			out = ~rhs;
+		} else if (token->str.Compare("lshift")) {
+			out = lhs << rhs;
+		} else if (token->str.Compare("rshift")) {
+			out = lhs >> rhs;
+		} else {
+			return false;
+		}
+		return true;
+	} else if (token->type == new_Token::INT_EXPR && EvalConstIntExpr(token->sub, out)) {
+		return true;
+	}
+	return false;
+}
+
+bool new_SyntaxTreeGenerator::EvalConstFloatExpr(const new_Token *token, float &out) const
+{
+	//"ADD", new_Token::FLOAT_OP
+	//"SUB", new_Token::FLOAT_OP
+	//"MUL", new_Token::FLOAT_OP
+	//"DIV", new_Token::FLOAT_OP
+
+	if (token == NULL) { return true; }
+	if (token->type == new_Token::ERR) { return false; }
+	if (token->type == new_Token::FLOAT_OP) { return token->str.ToFloat(out); }
+
+	float lhs = 0.0f, rhs = 0.0f;
+
+	if (token->type == new_Token::MATH_OP && EvalConstFloatExpr(token->sub->next, lhs) && EvalConstFloatExpr(token->sub->next->next, rhs)) {
+		if (token->str.Compare("add")) {
+			out = lhs + rhs;
+		} else if (token->str.Compare("sub")) {
+			out = lhs - rhs;
+		} else if (token->str.Compare("mul")) {
+			out = lhs * rhs;
+		} else if (token->str.Compare("div")) {
+			out = lhs / rhs;
+		} else {
+			return false;
+		}
+		return true;
+	} else if (token->type == new_Token::FLOAT_EXPR && EvalConstFloatExpr(token->sub, out)) {
+		return true;
+	}
+	return false;
 }
 
 // all list items have size, 0 if non-array
@@ -1000,43 +1218,59 @@ new_Token *new_SyntaxTreeGenerator::ProcessMemOp(const mtlChars &op, const new_T
 	case 6:
 		token = new new_Token(var.Seq(), new_Token::MEM_OP, parent);
 		token->sub = ProcessRefName(var.GetMatch(0), token);
-		token->sub->next = ProcessIntExpr(var.GetMatch(1), GetSizeFromName(token->sub->next->str, token), token);
+		token->sub->next = ProcessIntExpr(var.GetMatch(1), GetSizeFromName(token->sub->next->str, token)->str, token);
 		break;
 
 	case 7:
 		token = new new_Token(var.Seq(), new_Token::MEM_OP, parent);
 		token->sub = ProcessRefName(var.GetMatch(0), token);
 		token->sub->next = ProcessMemOpMember(var, token);
-		token->sub->next->next = ProcessIntExpr(var.GetMatch(1), GetSizeFromName(token->sub->next->str, token), token);
+		token->sub->next->next = ProcessIntExpr(var.GetMatch(1), GetSizeFromName(token->sub->next->str, token)->str, token);
 		break;
 
 	case 8:
+	{
 		token = new new_Token(var.Seq(), new_Token::FN_OP, parent);
 		token->sub = ProcessRefName(var.GetMatch(0), token);
-		token->sub->next = ProcessExpr(var.GetMatch(1), token);
+		mtlString list;
+		CreateParamList(var.GetMatch(0), list, parent);
+		token->sub->next = ProcessListExpr(var.GetMatch(1), list, token);
 		break;
+	}
 
 	case 9:
+	{
 		token = new new_Token(var.Seq(), new_Token::FN_OP, parent);
 		token->sub = ProcessRefName(var.GetMatch(0), token);
-		token->sub->next = ProcessExpr(var.GetMatch(1), token);
+		mtlString list;
+		CreateParamList(var.GetMatch(0), list, parent);
+		token->sub->next = ProcessListExpr(var.GetMatch(1), list, token);
 		token->sub->next->next = ProcessMemOpMember(var, token);
 		break;
+	}
 
 	case 10:
+	{
 		token = new new_Token(var.Seq(), new_Token::FN_OP, parent);
 		token->sub = ProcessRefName(var.GetMatch(0), token);
-		token->sub->next = ProcessExpr(var.GetMatch(1), token);
-		token->sub->next->next = ProcessExpr(var.GetMatch(2), token);
+		mtlString list;
+		CreateParamList(var.GetMatch(0), list, parent);
+		token->sub->next = ProcessListExpr(var.GetMatch(1), list, token);
+		token->sub->next->next = ProcessIntExpr(var.GetMatch(2), token);
 		break;
+	}
 
 	case 11:
+	{
 		token = new new_Token(var.Seq(), new_Token::FN_OP, parent);
 		token->sub = ProcessRefName(var.GetMatch(0), token);
-		token->sub->next = ProcessExpr(var.GetMatch(1), token);
-		token->sub->next->next = ProcessExpr(var.GetMatch(2), token);
+		mtlString list;
+		CreateParamList(var.GetMatch(0), list, parent);
+		token->sub->next = ProcessListExpr(var.GetMatch(1), list, token);
+		token->sub->next->next = ProcessIntExpr(var.GetMatch(2), token);
 		token->sub->next->next->next = ProcessMemOpMember(var, token);
 		break;
+	}
 
 	default:
 		token = ProcessError("[ProcessMemOp] Syntax error", var.Rem(), parent);
@@ -1062,17 +1296,23 @@ new_Token *new_SyntaxTreeGenerator::ProcessMemOpMember(new_SyntaxTreeGenerator::
 		break;
 
 	case 2:
+	{
 		token = new new_Token(var.Seq(), new_Token::MEM_OP, parent);
 		token->sub = ProcessRefMemName(var.GetMatch(0), token);
-		token->sub->next = ProcessExpr(var.GetMatch(1), token);
+		const new_Token *arr_size = GetSizeFromDecl(token->sub->ref);
+		token->sub->next = ProcessIntExpr(var.GetMatch(1), arr_size != NULL ? arr_size->str : "0", token);
 		break;
+	}
 
 	case 3:
+	{
 		token = new new_Token(var.Seq(), new_Token::MEM_OP, parent);
 		token->sub = ProcessRefMemName(var.GetMatch(0), token);
-		token->sub->next = ProcessExpr(var.GetMatch(1), token);
+		const new_Token *arr_size = GetSizeFromDecl(token->sub->ref);
+		token->sub->next = ProcessIntExpr(var.GetMatch(1), arr_size != NULL ? arr_size->str : "0", token);
 		token->sub->next->next = ProcessMemOpMember(var, token);
 		break;
+	}
 
 	default:
 		token = ProcessError("[ProcessMemOpMember] Syntax error", var.Rem(), parent);
@@ -1166,133 +1406,6 @@ new_Token *new_SyntaxTreeGenerator::ProcessRefMemName(const mtlChars &name, cons
 	return token;
 }
 
-bool new_SyntaxTreeGenerator::EvalConstBoolExpr(const new_Token *token) const
-{
-	bool ret_val = false;
-	if (token == NULL || token->str.Compare("")) { return ret_val; }
-	switch (token->type) {
-	case new_Token::BOOL_OP:
-		token->str.ToBool(ret_val);
-		break;
-	case new_Token::BOOL_EXPR:
-		// we might need to eval int and float here as well
-		{
-			mtlChars op = token->sub->str;
-			if (op.Compare("EQUAL")) {
-				switch (token->sub->next->type) {
-				case new_Token::BOOL_EXPR:
-				case new_Token::BOOL_OP:
-					ret_val = EvalConstBoolExpr(token->sub->next) == EvalConstBoolExpr(token->sub->next->next);
-					break;
-				case new_Token::INT_EXPR:
-				case new_Token::INT_OP:
-					ret_val = EvalConstIntExpr(token->sub->next) == EvalConstIntExpr(token->sub->next->next);
-					break;
-				case new_Token::FLOAT_EXPR:
-				case new_Token::FLOAT_OP:
-					ret_val = EvalConstFloatExpr(token->sub->next) == EvalConstFloatExpr(token->sub->next->next);
-					break;
-				default: break;
-				}
-			} else if (op.Compare("NOT_EQUAL")) {
-				switch (token->sub->next->type) {
-				case new_Token::BOOL_EXPR:
-				case new_Token::BOOL_OP:
-					ret_val = EvalConstBoolExpr(token->sub->next) != EvalConstBoolExpr(token->sub->next->next);
-					break;
-				case new_Token::INT_EXPR:
-				case new_Token::INT_OP:
-					ret_val = EvalConstIntExpr(token->sub->next) != EvalConstIntExpr(token->sub->next->next);
-					break;
-				case new_Token::FLOAT_EXPR:
-				case new_Token::FLOAT_OP:
-					ret_val = EvalConstFloatExpr(token->sub->next) != EvalConstFloatExpr(token->sub->next->next);
-					break;
-				default: break;
-				}
-			} else if (op.Compare("LESS_EQUAL")) {
-				switch (token->sub->next->type) {
-				case new_Token::BOOL_EXPR:
-				case new_Token::BOOL_OP:
-					ret_val = EvalConstBoolExpr(token->sub->next) <= EvalConstBoolExpr(token->sub->next->next);
-					break;
-				case new_Token::INT_EXPR:
-				case new_Token::INT_OP:
-					ret_val = EvalConstIntExpr(token->sub->next) <= EvalConstIntExpr(token->sub->next->next);
-					break;
-				case new_Token::FLOAT_EXPR:
-				case new_Token::FLOAT_OP:
-					ret_val = EvalConstFloatExpr(token->sub->next) <= EvalConstFloatExpr(token->sub->next->next);
-					break;
-				default: break;
-				}
-			} else if (op.Compare("LESS")) {
-				switch (token->sub->next->type) {
-				case new_Token::BOOL_EXPR:
-				case new_Token::BOOL_OP:
-					ret_val = EvalConstBoolExpr(token->sub->next) < EvalConstBoolExpr(token->sub->next->next);
-					break;
-				case new_Token::INT_EXPR:
-				case new_Token::INT_OP:
-					ret_val = EvalConstIntExpr(token->sub->next) < EvalConstIntExpr(token->sub->next->next);
-					break;
-				case new_Token::FLOAT_EXPR:
-				case new_Token::FLOAT_OP:
-					ret_val = EvalConstFloatExpr(token->sub->next) < EvalConstFloatExpr(token->sub->next->next);
-					break;
-				default: break;
-				}
-			} else if (op.Compare("GREATER_EQUAL")) {
-				switch (token->sub->next->type) {
-				case new_Token::BOOL_EXPR:
-				case new_Token::BOOL_OP:
-					ret_val = EvalConstBoolExpr(token->sub->next) >= EvalConstBoolExpr(token->sub->next->next);
-					break;
-				case new_Token::INT_EXPR:
-				case new_Token::INT_OP:
-					ret_val = EvalConstIntExpr(token->sub->next) >= EvalConstIntExpr(token->sub->next->next);
-					break;
-				case new_Token::FLOAT_EXPR:
-				case new_Token::FLOAT_OP:
-					ret_val = EvalConstFloatExpr(token->sub->next) >= EvalConstFloatExpr(token->sub->next->next);
-					break;
-				default: break;
-				}
-			} else if (op.Compare("GREATER")) {
-				switch (token->sub->next->type) {
-				case new_Token::BOOL_EXPR:
-				case new_Token::BOOL_OP:
-					ret_val = EvalConstBoolExpr(token->sub->next) > EvalConstBoolExpr(token->sub->next->next);
-					break;
-				case new_Token::INT_EXPR:
-				case new_Token::INT_OP:
-					ret_val = EvalConstIntExpr(token->sub->next) > EvalConstIntExpr(token->sub->next->next);
-					break;
-				case new_Token::FLOAT_EXPR:
-				case new_Token::FLOAT_OP:
-					ret_val = EvalConstFloatExpr(token->sub->next) > EvalConstFloatExpr(token->sub->next->next);
-					break;
-				default: break;
-				}
-			} else if (op.Compare("LOGICAL_AND")) {
-				ret_val = EvalConstBoolExpr(token->sub->next) && EvalConstBoolExpr(token->sub->next->next);
-			} else if (op.Compare("LOGICAL_OR")) {
-				ret_val = EvalConstBoolExpr(token->sub->next) || EvalConstBoolExpr(token->sub->next->next);
-			} else if (op.Compare("OR")) {
-				ret_val = EvalConstBoolExpr(token->sub->next) | EvalConstBoolExpr(token->sub->next->next);
-			} else if (op.Compare("AND")) {
-				ret_val = EvalConstBoolExpr(token->sub->next) & EvalConstBoolExpr(token->sub->next->next);
-			} else if (op.Compare("XOR")) {
-				ret_val = EvalConstBoolExpr(token->sub->next) ^ EvalConstBoolExpr(token->sub->next->next);
-			} else if (op.Compare("NOT")) {
-				ret_val = !EvalConstBoolExpr(token->sub->next->next);
-			}
-		}
-		break;
-	}
-	return ret_val;
-}
-
 new_Token *new_SyntaxTreeGenerator::ProcessConstBoolExpr(const mtlChars &expr, const mtlChars &arr_size, const new_Token *parent) const
 {
 	new_Token *token = ProcessBoolExpr(expr, arr_size, parent);
@@ -1301,11 +1414,15 @@ new_Token *new_SyntaxTreeGenerator::ProcessConstBoolExpr(const mtlChars &expr, c
 		token = ProcessError("[ProcessConstBoolExpr] Expression not compile-time constant", expr, parent);
 	} else {
 		// evaluate vlaue
-		bool b_val = EvalConstBoolExpr(token);
+		bool b_val = false;
 		delete token;
-		mtlString str_val;
-		str_val.FromBool(b_val);
-		token = new new_Token(str_val, new_Token::BOOL_OP, parent);
+		if (EvalConstBoolExpr(token, b_val)) {
+			mtlString str_val;
+			str_val.FromBool(b_val);
+			token = new new_Token(str_val, new_Token::BOOL_OP, parent);
+		} else {
+			token = ProcessError("[ProcessConstBoolExor] Cannot evaluate compile-time constant expression", expr, parent);
+		}
 	}
 	return token;
 }
@@ -1323,11 +1440,15 @@ new_Token *new_SyntaxTreeGenerator::ProcessConstIntExpr(const mtlChars &expr, co
 		token = ProcessError("[ProcessConstIntExpr] Expression not compile-time constant", expr, parent);
 	} else {
 		// evaluate vlaue
-		int i_val = EvalConstIntExpr(token);
+		int i_val = 0;
 		delete token;
-		mtlString str_val;
-		str_val.FromInt(i_val);
-		token = new new_Token(str_val, new_Token::INT_OP, parent);
+		if (EvalConstIntExpr(token, i_val)) {
+			mtlString str_val;
+			str_val.FromInt(i_val);
+			token = new new_Token(str_val, new_Token::INT_OP, parent);
+		} else {
+			token = ProcessError("[ProcessConstIntExpr] Cannot evaluate compile-time constant expression", expr, parent);
+		}
 	}
 	return token;
 }
@@ -1345,11 +1466,15 @@ new_Token *new_SyntaxTreeGenerator::ProcessConstFloatExpr(const mtlChars &expr, 
 		token = ProcessError("[ProcessConstFloatExpr] Expression not compile-time constant", expr, parent);
 	} else {
 		// evaluate vlaue
-		float fl_val = EvalConstFloatExpr(token);
+		float fl_val = 0.0f;
 		delete token;
-		mtlString str_val;
-		str_val.FromFloat(fl_val);
-		token = new new_Token(str_val, new_Token::FLOAT_OP, parent);
+		if (EvalConstFloatExpr(token, fl_val)) {
+			mtlString str_val;
+			str_val.FromFloat(fl_val);
+			token = new new_Token(str_val, new_Token::FLOAT_OP, parent);
+		} else {
+			token = ProcessError("[ProcessConstFloatExpr] Cannot evaluate compile-time constant expression", expr, parent);
+		}
 	}
 	return token;
 }
