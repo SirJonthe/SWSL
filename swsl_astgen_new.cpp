@@ -247,10 +247,10 @@ const new_Token *new_SyntaxTreeGenerator::GetSizeFromDecl(const new_Token *decl)
 {
 	if (decl != NULL && (decl->type == new_Token::VAR_DECL || decl->type == new_Token::FN_DECL || decl->type == new_Token::FN_DEF)) {
 		decl = decl->sub;
-		while (decl != NULL && decl->type != new_Token::LIST_EXPR) {
+		while (decl != NULL && (decl->type != new_Token::LIST_EXPR && decl->type != new_Token::INT_OP && decl->type != new_Token::INT_EXPR)) {
 			decl = decl->next;
 		}
-		if (decl != NULL && decl->type == new_Token::LIST_EXPR) {
+		if (decl != NULL && (decl->type == new_Token::LIST_EXPR || decl->type == new_Token::INT_OP || decl->type == new_Token::INT_EXPR)) {
 			return decl;
 		}
 	}
@@ -429,11 +429,11 @@ new_Token *new_SyntaxTreeGenerator::ProcessDeclVar(const mtlChars &trait, const 
 		t = &(*t)->next;
 		if (type_token->type != new_Token::TYPE_NAME && size_token->type == new_Token::LIST_EXPR) {
 			if (type_token->str.Compare("bool", true)) {
-				*t = trait_token->type == (new_Token::TYPE_TRAIT && trait_token->str.Compare("lit", true)) ? ProcessConstBoolExpr(expr, size_token->str, token) : ProcessBoolExpr(expr, size_token->str, token);
+				*t = (trait_token->type == new_Token::TYPE_TRAIT && trait_token->str.Compare("lit", true)) ? ProcessConstBoolExpr(expr, size_token->str, token) : ProcessBoolExpr(expr, size_token->str, token);
 			} else if (type_token->str.Compare("int", true)) {
-				*t = trait_token->type == (new_Token::TYPE_TRAIT && trait_token->str.Compare("lit", true)) ? ProcessConstIntExpr(expr, size_token->str, token) : ProcessIntExpr(expr, size_token->str, token);
+				*t = (trait_token->type == new_Token::TYPE_TRAIT && trait_token->str.Compare("lit", true)) ? ProcessConstIntExpr(expr, size_token->str, token) : ProcessIntExpr(expr, size_token->str, token);
 			} else if (type_token->str.Compare("float", true)) {
-				*t = trait_token->type == (new_Token::TYPE_TRAIT && trait_token->str.Compare("lit", true)) ? ProcessConstFloatExpr(expr, size_token->str, token) : ProcessFloatExpr(expr, size_token->str, token);
+				*t = (trait_token->type == new_Token::TYPE_TRAIT && trait_token->str.Compare("lit", true)) ? ProcessConstFloatExpr(expr, size_token->str, token) : ProcessFloatExpr(expr, size_token->str, token);
 			} else {
 				*t = ProcessListExpr(expr, size_token->str, token);
 			}
@@ -740,7 +740,7 @@ bool new_SyntaxTreeGenerator::EvalConstBoolExpr(const new_Token *token, bool &ou
 			}
 		} else if (token->str.Compare("not")) {
 			if (EvalConstBoolExpr(token->sub->next, blhs) && EvalConstBoolExpr(token->sub->next->next, brhs)) {
-				out = ~brhs;
+				out = !brhs;
 			} else {
 				return false;
 			}
@@ -953,13 +953,13 @@ new_Token *new_SyntaxTreeGenerator::ProcessIntExpr(const mtlChars &expr, const m
 			token = ProcessError("[ProcessIntExpr] Array not surrounded by braces", expr, parent);
 		}
 	} else {
-		switch (p.Match("%s+%S %| %s-%S %| %S*%S %| %S/%S %| %S%%%S %| %S|%S %| %S&%S %| %S^%S %| ~%S %| %S<<%S %| %S>>%S %| (%S)%0 %| %s")) {
+		switch (p.Match("%S+%S %| %s-%S %| %S*%S %| %S/%S %| %S%%%S %| %S|%S %| %S&%S %| %S^%S %| ~%S %| %S<<%S %| %S>>%S %| (%S)%0 %| %s")) {
 		case 0:
 			token->sub = ProcessMathOp(p.GetMatch(0), "ADD", p.GetMatch(1), new_Token::INT_OP, token);
 			break;
 
 		case 1:
-			token->sub = ProcessMathOp(p.GetMatch(0), "SUB", p.GetMatch(1), new_Token::INT_OP, token);
+			token->sub = ProcessMathOp(p.GetMatch(0).GetSize() > 0 ? p.GetMatch(0) : "0", "SUB", p.GetMatch(1), new_Token::INT_OP, token);
 			break;
 
 		case 2:
@@ -1046,13 +1046,13 @@ new_Token *new_SyntaxTreeGenerator::ProcessFloatExpr(const mtlChars &expr, const
 			token = ProcessError("[ProcessFloatExpr] Array not surrounded by braces", expr, parent);
 		}
 	} else {
-		switch (p.Match("%s+%S %| %s-%S %| %S*%S %| %S/%S %| (%S)%0 %| %s")) {
+		switch (p.Match("%S+%S %| %s-%S %| %S*%S %| %S/%S %| (%S)%0 %| %s")) {
 		case 0:
 			token->sub = ProcessMathOp(p.GetMatch(0), "ADD", p.GetMatch(1), new_Token::FLOAT_OP, token);
 			break;
 
 		case 1:
-			token->sub = ProcessMathOp(p.GetMatch(0), "SUB", p.GetMatch(1), new_Token::FLOAT_OP, token);
+			token->sub = ProcessMathOp(p.GetMatch(0).GetSize() > 0 ? p.GetMatch(0) : "0.0", "SUB", p.GetMatch(1), new_Token::FLOAT_OP, token);
 			break;
 
 		case 2:
@@ -1197,7 +1197,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessMemOp(const mtlChars &op, const new_T
 		break;
 
 	case 2:
-		token = (!var.Seq().FindFirstChar(mtlWhitespacesStr) >= 0) ? new new_Token(var.Seq(), new_Token::FLOAT_OP, parent) : ProcessError("[ProcessMemOp] Whitespaces in floating poing value", var.Seq(), parent);
+		token = (var.Seq().FindFirstChar(mtlWhitespacesStr) < 0) ? new new_Token(var.Seq(), new_Token::FLOAT_OP, parent) : ProcessError("[ProcessMemOp] Whitespaces in floating poing value", var.Seq(), parent);
 		break;
 
 	case 3:
@@ -1324,14 +1324,14 @@ new_Token *new_SyntaxTreeGenerator::ProcessMathOp(const mtlChars &lhs, const mtl
 {
 	new_Token *token = new new_Token(op, new_Token::MATH_OP, parent);
 
-	if (op_type & new_Token::BOOL_OP > 0) {
+	if ((op_type & new_Token::BOOL_OP) > 0) {
 		token->next = ProcessBoolExpr(lhs, parent);
 	}
-	if (op_type & new_Token::INT_OP > 0 && (token->next == NULL || token->next->type == new_Token::ERR)) {
+	if ((op_type & new_Token::INT_OP) > 0 && (token->next == NULL || token->next->type == new_Token::ERR)) {
 		delete token->next;
 		token->next = ProcessIntExpr(lhs, parent);
 	}
-	if (op_type & new_Token::FLOAT_OP > 0 && (token->next == NULL || token->next->type == new_Token::ERR)) {
+	if ((op_type & new_Token::FLOAT_OP) > 0 && (token->next == NULL || token->next->type == new_Token::ERR)) {
 		delete token->next;
 		token->next = ProcessFloatExpr(lhs, parent);
 	}
@@ -1352,7 +1352,7 @@ new_Token *new_SyntaxTreeGenerator::ProcessMathOp(const mtlChars &lhs, const mtl
 		}
 	}
 
-	if ((token->next == NULL || token->next->type & op_type == 0) || (token->next->next == NULL || token->next->next->type & op_type == 0)) {
+	if ((token->next == NULL || (token->next->type & op_type) == 0) || (token->next->next == NULL || (token->next->next->type & op_type) == 0)) {
 		delete token;
 		token = ProcessError("[ProcessMathOp] Unexpected/mismatched type(s)", rhs, parent);
 	}
@@ -1516,37 +1516,35 @@ new_Token *new_SyntaxTreeGenerator::ProcessDeclParam(new_Token **&token, const m
 	*token = new new_Token(params, new_Token::SCOPE, parent);
 	new_Token *parent_scope = *token;
 	token = &(*token)->sub;
-	if (p.Match("void%0") < 0) {
-		while (!p.IsEnd()) {
-			const int match = p.Match("%?(var %| imm)%w[%S]%w %| %?(var %| imm)%w%w");
-			if (match >= 0 && (p.Consume(",") || p.IsEnd())) {
-				switch (match) {
-				case 0:
-					*token = ProcessDeclParamVar(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), p.Seq(), parent_scope);
-					break;
-				case 1:
-					*token = ProcessDeclParamVar(p.GetMatch(0), p.GetMatch(1), "", p.GetMatch(2), p.Seq(), parent_scope);
-					break;
-				}
-				token = &(*token)->next;
-			} else {
-				*token = ProcessError("[ProcessDeclParam] Syntax error", p.Rem(), parent_scope);
-				token = &(*token)->next;
+	while (!p.IsEnd()) {
+		const int match = p.Match("%?(var %| imm)%w[%S]%w %| %?(var %| imm)%w%w");
+		if (match >= 0 && (p.Consume(",") || p.IsEnd())) {
+			switch (match) {
+			case 0:
+				*token = ProcessDeclParamVar(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), p.Seq(), parent_scope);
+				break;
+			case 1:
+				*token = ProcessDeclParamVar(p.GetMatch(0), p.GetMatch(1), "", p.GetMatch(2), p.Seq(), parent_scope);
 				break;
 			}
+			token = &(*token)->next;
+		} else {
+			*token = ProcessError("[ProcessDeclParam] Syntax error", p.Rem(), parent_scope);
+			token = &(*token)->next;
+			break;
 		}
-	} else {
-		parent_scope->str = "";
 	}
 	return parent_scope;
 }
 
-new_Token *new_SyntaxTreeGenerator::ProcessDeclFn(const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &fn_name, const mtlChars &params, const mtlChars &seq, const new_Token *parent) const
+new_Token *new_SyntaxTreeGenerator::ProcessDeclFn(const mtlChars &type_trait, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &fn_name, const mtlChars &params, const mtlChars &seq, const new_Token *parent) const
 {
 	new_Token *token = new new_Token(seq, new_Token::FN_DECL, parent);
 
 	// TODO: Do a search for the name
 	new_Token **t = &token->sub;
+	*t = ProcessTrait(type_trait, token);
+	t = &(*t)->next;
 	*t = ProcessType(type_name, token);
 	t = &(*t)->next;
 	*t = ProcessArraySize(arr_size, token);
@@ -1558,13 +1556,15 @@ new_Token *new_SyntaxTreeGenerator::ProcessDeclFn(const mtlChars &type_name, con
 	return token;
 }
 
-new_Token *new_SyntaxTreeGenerator::ProcessDefFn(const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &fn_name, const mtlChars &params, const mtlChars &body, const mtlChars &seq, const new_Token *parent) const
+new_Token *new_SyntaxTreeGenerator::ProcessDefFn(const mtlChars &type_trait, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &fn_name, const mtlChars &params, const mtlChars &body, const mtlChars &seq, const new_Token *parent) const
 {
 	new_Token *token = new new_Token(seq, new_Token::FN_DEF, parent);
 
 	token->ref = FindName(fn_name, parent);
 	// TODO; Assign token->ref->ref to token if not already set (and if token->ref->type == FN_DECL)
 	new_Token **t = &token->sub;
+	*t = ProcessTrait(type_trait, token);
+	t = &(*t)->next;
 	*t = ProcessType(type_name, token);
 	t = &(*t)->next;
 	*t = ProcessArraySize(arr_size, token);
@@ -1652,21 +1652,21 @@ new_Token *new_SyntaxTreeGenerator::ProcessFile(const mtlChars &file_contents, c
 	new_Token **t = &token->sub;
 	while (!p.IsEnd()) {
 		p.ConsumeAll(";");
-		switch (p.Match("%w[%S]%w(%s); %| %w%w(%s); %| %w[%S]%w(%s){%s} %| %w%w(%s){%s} %| struct %w{%s} %| import\"%S\" %| %s")) {
+		switch (p.Match("%?(imm%|var)%w[%S]%w(%s); %| %?(imm%|var)%w%w(%s); %| %?(imm%|var)%w[%S]%w(%s){%s} %| %?(imm%|var)%w%w(%s){%s} %| struct %w{%s} %| import\"%S\" %| %s")) {
 		case 0:
-			*t = ProcessDeclFn(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), p.Seq(), token);
+			*t = ProcessDeclFn(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), p.GetMatch(4), p.Seq(), token);
 			break;
 
 		case 1:
-			*t = ProcessDeclFn(p.GetMatch(0), "", p.GetMatch(1), p.GetMatch(2), p.Seq(), token);
+			*t = ProcessDeclFn(p.GetMatch(0), p.GetMatch(1), "", p.GetMatch(2), p.GetMatch(3), p.Seq(), token);
 			break;
 
 		case 2:
-			*t = ProcessDefFn(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), p.GetMatch(4), p.Seq(), token);
+			*t = ProcessDefFn(p.GetMatch(0), p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), p.GetMatch(4), p.GetMatch(5), p.Seq(), token);
 			break;
 
 		case 3:
-			*t = ProcessDefFn(p.GetMatch(0), "", p.GetMatch(1), p.GetMatch(2), p.GetMatch(3), p.Seq(), token);
+			*t = ProcessDefFn(p.GetMatch(0), p.GetMatch(1), "", p.GetMatch(2), p.GetMatch(3), p.GetMatch(4), p.Seq(), token);
 			break;
 
 		case 4:

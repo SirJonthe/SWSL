@@ -142,8 +142,8 @@ private:
 	const new_Token *FindName(const mtlChars &name, const new_Token *token) const;
 	new_Token       *ProcessDeclParam(new_Token **&token, const mtlChars &param, const new_Token *parent) const;
 	//new_Token       *ProcessExpr(const mtlChars &expr, const new_Token *parent) const;
-	new_Token       *ProcessDeclFn(const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &fn_name, const mtlChars &params, const mtlChars &seq, const new_Token *parent) const;
-	new_Token       *ProcessDefFn(const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &fn_name, const mtlChars &params, const mtlChars &body, const mtlChars &seq, const new_Token *parent) const;
+	new_Token       *ProcessDeclFn(const mtlChars &type_trait, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &fn_name, const mtlChars &params, const mtlChars &seq, const new_Token *parent) const;
+	new_Token       *ProcessDefFn(const mtlChars &type_trait, const mtlChars &type_name, const mtlChars &arr_size, const mtlChars &fn_name, const mtlChars &params, const mtlChars &body, const mtlChars &seq, const new_Token *parent) const;
 	new_Token       *ProcessDefType(const mtlChars &type_name, const mtlChars &decls, const mtlChars &seq, const new_Token *parent) const;
 	new_Token       *ProcessFile(const mtlChars &file_contents, const new_Token *parent) const;
 	void             RemoveComments(mtlString &code) const;
