@@ -19,7 +19,7 @@ CONFIG -= qt
 #	-pthread
 
 SOURCES += \
-	main.cpp \
+    main.cpp \
     swsl_gfx.cpp \
     swsl_buffers.cpp \
     MiniLib/MGL/mglCamera.cpp \
@@ -37,7 +37,7 @@ SOURCES += \
     MiniLib/MTL/mtlMathParser.cpp \
     MiniLib/MTL/mtlParser.cpp \
     MiniLib/MTL/mtlRandom.cpp \
-	MiniLib/MTL/mtlString.cpp \
+    MiniLib/MTL/mtlString.cpp \
     swsl_shader.cpp \
     MiniLib/MTL/mtlPath.cpp \
     swsl_astgen.cpp \

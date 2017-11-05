@@ -8,54 +8,52 @@ struct new_Token
 {
 	enum Type
 	{
-		ERR        = 1,
+		ERR,
 
-		SCOPE      = ERR        << 1,
-		FILE       = SCOPE      << 1,
+		SCOPE,
+		FILE,
 
-		TYPE_NAME  = FILE       << 1,
-		USR_NAME   = TYPE_NAME  << 1,
+		TYPE_NAME,
+		USR_NAME,
 
-		FN_DECL    = USR_NAME   << 1,
-		VAR_DECL   = FN_DECL    << 1,
+		FN_DECL,
+		VAR_DECL,
 
-		TYPE_TRAIT = VAR_DECL   << 1,
+		TYPE_TRAIT,
 
-		FN_DEF     = TYPE_TRAIT << 1,
-		TYPE_DEF   = FN_DEF     << 1,
+		FN_DEF,
+		TYPE_DEF,
 
-		IF         = TYPE_DEF   << 1,
-		ELSE       = IF         << 1,
-		WHILE      = ELSE       << 1,
-		RET        = WHILE      << 1,
+		IF,
+		ELSE,
+		WHILE,
+		RET,
 
-		BOOL_EXPR  = RET        << 1,
-		INT_EXPR   = BOOL_EXPR  << 1,
-		FLOAT_EXPR = INT_EXPR   << 1,
-		LIST_EXPR  = FLOAT_EXPR << 1,
+		SET,
+		EXPR,
+		OPERATE,
+		OPERAND
+	};
 
-		MATH_OP    = LIST_EXPR  << 1,
-		MEM_OP     = MATH_OP    << 1,
-		FN_OP      = MEM_OP     << 1,
-		BOOL_OP    = FN_OP      << 1,
-		INT_OP     = BOOL_OP    << 1,
-		FLOAT_OP   = INT_OP     << 1,
-		LIST_OP    = FLOAT_OP   << 1,
-
-		BOOL_SET   = LIST_OP    << 1,
-		INT_SET    = BOOL_SET   << 1,
-		FLOAT_SET  = INT_SET    << 1,
-		LIST_SET   = FLOAT_SET  << 1
+	enum EvalType
+	{
+		NONE  = 1,
+		BOOL  = NONE  << 1,
+		INT   = BOOL  << 1,
+		FLOAT = INT   << 1,
+		LIST  = FLOAT << 1
 	};
 
 	mtlString        buffer;
 	mtlChars         str;
 	Type             type;
+	EvalType         eval_type;
 	const new_Token *parent;
 	new_Token       *sub; // composite tokens are split into sub tokens
 	new_Token       *next;
 	const new_Token *ref; // references back to something, do not delete
 
+	new_Token(const mtlChars &str_, Type type_, EvalType eval_type_, const new_Token *parent_);
 	new_Token(const mtlChars &str_, Type type_, const new_Token *parent_);
 	~new_Token( void );
 	int CountAscend(unsigned int type_mask) const;
@@ -93,7 +91,7 @@ private:
 	bool IsValidNameConvention(const mtlChars &name) const;
 	bool IsNewName(const mtlChars &name, const new_Token *parent) const;
 	bool IsValidName(const mtlChars &name, const new_Token *parent) const;
-	bool IsCTConst(const new_Token *expr, unsigned int op_type, bool &result) const;
+	bool IsCTConst(const new_Token *expr, bool &result) const;
 	bool IsCTConst(const new_Token *expr, unsigned int op_type) const;
 	const new_Token *GetTypeFromDecl(const new_Token *decl) const;
 	const new_Token *GetTraitFromDecl(const new_Token *decl) const;
@@ -106,6 +104,8 @@ private:
 	new_Token::Type GetTypeID(const mtlChars &name, const new_Token *scope) const;
 
 private:
+	bool             IsExpr(const new_Token *token, unsigned int eval_type) const;
+	bool             IsExpr(const new_Token *token) const;
 	bool             EvalConstBoolExpr(const new_Token *token, bool &out) const;
 	bool             EvalConstIntExpr(const new_Token *token, int &out) const;
 	bool             EvalConstFloatExpr(const new_Token *token, float &out) const;
